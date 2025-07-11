@@ -1,0 +1,879 @@
+1st app.py:
+app.py(chat part):
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from openai import OpenAI
+from dotenv import load_dotenv
+import os
+import traceback
+
+# Load environment
+load_dotenv()
+a4f_api_key = os.getenv("A4F_API_KEY")
+openai_key = os.getenv("OPENAI_API_KEY")
+
+if not a4f_api_key or not openai_key:
+    raise ValueError("❌ A4F_API_KEY or OPENAI_API_KEY not found in .env")
+
+client = OpenAI(api_key=a4f_api_key, base_url="https://api.a4f.co/v1")
+oa_client = OpenAI(api_key=openai_key)
+
+app = Flask(__name__)
+CORS(app)
+
+STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
+
+##################################
+# 🔮 Spiral Core Functions
+##################################
+
+def detect_intent(entry):
+    prompt = (
+        "You are a gatekeeper. Is this journal entry about personal reflection, values, or growth (Spiral Dynamics)? "
+        "Or is it just casual talk?\n\n"
+        "Reply with one word only: 'spiral' or 'chat'.\n\n"
+        f"Entry: \"{entry}\""
+    )
+    response = client.chat.completions.create(
+        model="provider-3/gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,
+    )
+    return "spiral" if "spiral" in response.choices[0].message.content.lower() else "chat"
+
+def classify_stage(entry):
+    prompt = (
+        f"Analyze the user's entry and return only the Spiral Dynamics stage (one of: {', '.join(STAGES)}). "
+        f"Respond only with the stage name.\n\n"
+        f"Entry: \"{entry}\""
+    )
+    response = client.chat.completions.create(
+        model="provider-3/gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.6,
+    )
+    return response.choices[0].message.content.strip()
+
+def generate_reflective_question(entry, reply_to=None):
+    context = f"\nReplying to: \"{reply_to}\"" if reply_to else ""
+    prompt = (
+        f"You are a Spiral Dynamics mentor. Based on the user's thoughts{context}, "
+        f"ask one deep, emotionally resonant question. "
+        f"Don't mention Spiral Dynamics. Don't explain anything. Just ask the question.\n\n"
+        f"User message: \"{entry}\""
+    )
+    response = client.chat.completions.create(
+        model="provider-3/gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.85,
+    )
+    return response.choices[0].message.content.strip()
+
+def generate_growth_prompt(entry, stage):
+    prompt = (
+        f"User is currently reflecting at Spiral Dynamics stage: {stage}. "
+        f"Based on this short journal entry, give one brief nudge or thought that could help them evolve. "
+        f"Don't say it's a growth tip. Don't label it. Just give a sentence that feels natural and empowering.\n\n"
+        f"Entry: \"{entry}\""
+    )
+    response = client.chat.completions.create(
+        model="provider-3/gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.8,
+    )
+    return response.choices[0].message.content.strip()
+
+def check_evolution(last_stage, current_stage):
+    try:
+        if STAGES.index(current_stage) > STAGES.index(last_stage):
+            return f"🌱 Beautiful shift! You've evolved to {current_stage} — keep growing 🌟"
+    except:
+        pass
+    return None
+
+##################################
+# 🧠 Text-based Reflection
+##################################
+
+@app.route("/merged", methods=["POST"])
+def merged_reflection():
+    try:
+        data = request.get_json()
+        entry = data.get("text", "").strip()
+        last_stage = data.get("last_stage", "").strip()
+        reply_to = data.get("reply_to", "").strip()
+
+        if not entry:
+            return jsonify({"error": "Missing journaling input."}), 400
+
+        intent = detect_intent(entry)
+
+        if intent == "chat":
+            message = f"User: {reply_to}\n\nUser response: {entry}" if reply_to else entry
+            reply = client.chat.completions.create(
+                model="provider-3/gpt-4o",
+                messages=[{"role": "user", "content": f"You are a kind friend. Respond casually to: {message}"}],
+                temperature=0.7,
+            )
+            return jsonify({
+                "mode": "chat",
+                "response": reply.choices[0].message.content.strip()
+            })
+
+        stage = classify_stage(entry)
+        question = generate_reflective_question(entry, reply_to)
+        evolution_msg = check_evolution(last_stage, stage)
+        growth = generate_growth_prompt(entry, stage)
+
+        return jsonify({
+            "mode": "spiral",
+            "stage": stage,
+            "question": question,
+            "evolution": evolution_msg,
+            "growth": growth
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+##################################
+# 🔊 Voice-based Reflection
+##################################
+
+@app.route("/transcribe_audio", methods=["POST"])
+def transcribe_and_reflect():
+    try:
+        if "file" not in request.files:
+            return jsonify({"error": "No audio file provided"}), 400
+
+        audio_file = request.files["file"]
+
+        whisper_response = oa_client.audio.transcriptions.create(
+            model="whisper-1",
+            file=(audio_file.filename, audio_file.stream, audio_file.mimetype)
+        )
+
+        transcript = whisper_response.text.strip()
+        print(f"🎤 Transcript: {transcript}")
+
+        # Proceed to Spiral logic
+        intent = detect_intent(transcript)
+
+        if intent == "chat":
+            reply = client.chat.completions.create(
+                model="provider-3/gpt-4o",
+                messages=[{"role": "user", "content": f"You are a kind friend. Respond casually to: {transcript}"}],
+                temperature=0.7,
+            )
+            return jsonify({
+                "mode": "chat",
+                "transcription": transcript,
+                "response": reply.choices[0].message.content.strip()
+            })
+
+        stage = classify_stage(transcript)
+        question = generate_reflective_question(transcript)
+        growth = generate_growth_prompt(transcript, stage)
+
+        return jsonify({
+            "mode": "spiral",
+            "transcription": transcript,
+            "stage": stage,
+            "question": question,
+            "growth": growth
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+##################################
+# Run Server
+##################################
+
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
+
+
+2nd app.py:
+app.py(offline transcribe part):
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from openai import OpenAI
+from dotenv import load_dotenv
+import os
+import whisper
+import traceback
+# Setup
+load_dotenv()
+a4f_api_key = os.getenv("A4F_API_KEY")
+if not a4f_api_key:
+    raise ValueError("❌ A4F_API_KEY not found in .env")
+
+client = OpenAI(api_key=a4f_api_key, base_url="https://api.a4f.co/v1")
+
+app = Flask(__name__)
+CORS(app)
+
+whisper_model = whisper.load_model("base")
+STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
+
+# ───────────────────── Spiral Functions ───────────────────── #
+def detect_intent(entry):
+    prompt = (
+        "You are a gatekeeper. Is this journal entry about personal reflection, values, or growth (Spiral Dynamics)? "
+        "Or is it just casual talk?\n\n"
+        "Reply with one word only: 'spiral' or 'chat'.\n\n"
+        f"Entry: \"{entry}\""
+    )
+    response = client.chat.completions.create(
+        model="provider-3/gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,
+    )
+    return "spiral" if "spiral" in response.choices[0].message.content.lower() else "chat"
+
+def classify_stage(entry):
+    prompt = (
+        f"Analyze the user's entry and return only the Spiral Dynamics stage (one of: {', '.join(STAGES)}). "
+        f"Respond only with the stage name.\n\n"
+        f"Entry: \"{entry}\""
+    )
+    response = client.chat.completions.create(
+        model="provider-3/gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.6,
+    )
+    return response.choices[0].message.content.strip()
+
+def generate_reflective_question(entry, reply_to=None):
+    context = f"\nReplying to: \"{reply_to}\"" if reply_to else ""
+    prompt = (
+        f"You are a Spiral Dynamics mentor. Based on the user's thoughts{context}, "
+        f"ask one deep, emotionally resonant question. "
+        f"Don't mention Spiral Dynamics. Don't explain anything. Just ask the question.\n\n"
+        f"User message: \"{entry}\""
+    )
+    response = client.chat.completions.create(
+        model="provider-3/gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.85,
+    )
+    return response.choices[0].message.content.strip()
+
+def generate_growth_prompt(entry, stage):
+    prompt = (
+        f"User is currently reflecting at Spiral Dynamics stage: {stage}. "
+        f"Based on this short journal entry, give one brief nudge or thought that could help them evolve. "
+        f"Don't say it's a growth tip. Don't label it. Just give a sentence that feels natural and empowering.\n\n"
+        f"Entry: \"{entry}\""
+    )
+    response = client.chat.completions.create(
+        model="provider-3/gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.8,
+    )
+    return response.choices[0].message.content.strip()
+
+def check_evolution(last_stage, current_stage):
+    try:
+        if STAGES.index(current_stage) > STAGES.index(last_stage):
+            return f"🌱 Beautiful shift! You've evolved to {current_stage} — keep growing 🌟"
+    except:
+        pass
+    return None
+
+# ───────────────────── Combined Whisper + GPT Route ───────────────────── #
+@app.route("/reflect_transcription", methods=["POST"])
+def reflect_from_audio():
+    try:
+        if "file" not in request.files:
+            return jsonify({"error": "Missing audio file"}), 400
+
+        audio_file = request.files["file"]
+        last_stage = request.form.get("last_stage", "")
+        reply_to = request.form.get("reply_to", "")
+
+        # Save temp file
+        temp_path = "temp_audio.wav"
+        audio_file.save(temp_path)
+
+        # Whisper transcription
+        result = whisper_model.transcribe(temp_path)
+        entry = result["text"].strip()
+
+        os.remove(temp_path)  # clean up
+
+        if not entry:
+            return jsonify({"error": "No speech detected."}), 400
+
+        # Intent check
+        intent = detect_intent(entry)
+        if intent == "chat":
+            reply = client.chat.completions.create(
+                model="provider-3/gpt-4o",
+                messages=[{
+                    "role": "user",
+                    "content": f"You are a kind friend. Respond casually to: {entry}"
+                }],
+                temperature=0.7,
+            )
+            return jsonify({
+                "mode": "chat",
+                "transcription": entry,
+                "response": reply.choices[0].message.content.strip()
+            })
+
+        # Spiral mode
+        stage = classify_stage(entry)
+        question = generate_reflective_question(entry, reply_to)
+        evolution = check_evolution(last_stage, stage)
+        growth = generate_growth_prompt(entry, stage)
+
+        return jsonify({
+            "mode": "spiral",
+            "transcription": entry,
+            "stage": stage,
+            "question": question,
+            "growth": growth,
+            "evolution": evolution
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# ───────────────────── Server Run ───────────────────── #
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
+
+
+voice_journal.dart:
+import 'dart:io';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:record/record.dart' as record;
+import 'package:path/path.dart' as path;
+
+class VoiceJournalScreen extends StatefulWidget {
+  const VoiceJournalScreen({super.key});
+
+  @override
+  State<VoiceJournalScreen> createState() => _VoiceJournalScreenState();
+}
+
+class _VoiceJournalScreenState extends State<VoiceJournalScreen> {
+  final record.AudioRecorder _recorder = record.AudioRecorder();
+  bool _isRecording = false;
+  String? _transcription;
+  String? _spiralStage;
+  String? _growth;
+  String? _question;
+
+  @override
+  void initState() {
+    super.initState();
+    _requestPermissions();
+  }
+
+  Future<void> _requestPermissions() async {
+    final statuses = await [
+      Permission.microphone,
+      Permission.storage,
+    ].request();
+
+    if (statuses[Permission.microphone] != PermissionStatus.granted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Microphone permission required")),
+      );
+    }
+  }
+
+  Future<String> _getTempFilePath() async {
+    final dir = await getTemporaryDirectory();
+    return path.join(dir.path, 'journal.wav');
+  }
+
+  Future<void> _startRecording() async {
+    final filePath = await _getTempFilePath();
+
+    final hasPermission = await _recorder.hasPermission();
+    if (!hasPermission) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Microphone permission denied")),
+      );
+      return;
+    }
+
+    try {
+      await _recorder.start(
+        const record.RecordConfig(
+          encoder: record.AudioEncoder.wav,
+          bitRate: 128000,
+          sampleRate: 16000,
+        ),
+        path: filePath,
+      );
+      setState(() {
+        _isRecording = true;
+        _transcription = null;
+        _spiralStage = null;
+        _growth = null;
+        _question = null;
+      });
+    } catch (e) {
+      debugPrint("❌ Failed to start recording: $e");
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    try {
+      final filePath = await _recorder.stop();
+      setState(() => _isRecording = false);
+
+      if (filePath != null) {
+        await _sendToBackend(File(filePath));
+      }
+    } catch (e) {
+      debugPrint("❌ Failed to stop recording: $e");
+    }
+  }
+
+  Future<void> _sendToBackend(File file) async {
+    final uri = Uri.parse("http://192.168.127.126:5000/reflect_transcription"); // change IP
+
+    final request = http.MultipartRequest('POST', uri)
+      ..files.add(await http.MultipartFile.fromPath('file', file.path));
+
+    try {
+      final response = await request.send();
+      final respStr = await response.stream.bytesToString();
+      final jsonResp = json.decode(respStr);
+
+      if (response.statusCode == 200) {
+        setState(() {
+          _transcription = jsonResp['transcription'];
+          _spiralStage = jsonResp['stage'];
+          _growth = jsonResp['growth'];
+          _question = jsonResp['question'];
+        });
+      } else {
+        setState(() {
+          _transcription = "Error: ${response.statusCode}";
+        });
+      }
+    } catch (e) {
+      debugPrint("❌ Error sending to backend: $e");
+      setState(() {
+        _transcription = "Failed to send audio.";
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _recorder.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("🎙 Voice Journal")),
+      body: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: ListView(
+          children: [
+            ElevatedButton.icon(
+              icon: Icon(_isRecording ? Icons.stop : Icons.mic),
+              label: Text(_isRecording ? "Stop Recording" : "Start Recording"),
+              onPressed: _isRecording ? _stopRecording : _startRecording,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _isRecording ? Colors.red : Colors.green,
+              ),
+            ),
+            const SizedBox(height: 30),
+            if (_transcription != null)
+              Text("📝 Transcription:\n$_transcription", style: const TextStyle(fontSize: 16)),
+            if (_spiralStage != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 16.0),
+                child: Text("🌈 Spiral Stage: $_spiralStage", style: const TextStyle(fontSize: 16)),
+              ),
+            if (_growth != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text("🌱 Growth Prompt: $_growth", style: const TextStyle(fontSize: 16)),
+              ),
+            if (_question != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text("🧠 Reflective Question: $_question", style: const TextStyle(fontSize: 16)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+merged_reflect_screen.dart:
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../data/bg_data.dart';
+import '../main.dart';
+
+class MergedReflectScreen extends StatefulWidget {
+  const MergedReflectScreen({super.key});
+
+  @override
+  State<MergedReflectScreen> createState() => _MergedReflectScreenState();
+}
+
+class _MergedReflectScreenState extends State<MergedReflectScreen> {
+  final _controller = TextEditingController();
+  final user = FirebaseAuth.instance.currentUser;
+  final firestore = FirebaseFirestore.instance;
+  bool isLoading = false;
+  List<Map<String, dynamic>> messages = [];
+  String? lastStage;
+  Map<String, dynamic>? selectedMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMessages();
+  }
+
+  Future<void> _loadMessages() async {
+    final snapshot = await firestore
+        .collection('users')
+        .doc(user!.uid)
+        .collection('mergedMessages')
+        .orderBy('timestamp')
+        .get();
+
+    setState(() {
+      messages = snapshot.docs
+          .map((doc) => doc.data()..['id'] = doc.id)
+          .cast<Map<String, dynamic>>()
+          .toList();
+
+      for (final msg in messages.reversed) {
+        if (msg['type'] == 'spiral' && msg['stage'] != null && msg['stage'] != '') {
+          lastStage = msg['stage'];
+          break;
+        }
+      }
+    });
+  }
+
+  Future<void> sendEntry(String entry) async {
+    if (entry.trim().isEmpty) return;
+
+    setState(() => isLoading = true);
+    final url = Uri.parse("http://192.168.127.126:5000/merged");
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "text": entry,
+          "last_stage": lastStage ?? "",
+          "reply_to": selectedMessage != null
+              ? (selectedMessage!['question'] ??
+              selectedMessage!['response'] ??
+              selectedMessage!['user'] ??
+              selectedMessage!['message'] ??
+              "")
+              : "",
+        }),
+      );
+
+      final now = DateTime.now();
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        final base = {
+          'user': entry,
+          'timestamp': now,
+          if (selectedMessage != null)
+            'reply_to': selectedMessage!['question'] ??
+                selectedMessage!['response'] ??
+                selectedMessage!['user'] ??
+                selectedMessage!['message'],
+        };
+
+        if (data['mode'] == 'chat') {
+          final msg = {
+            ...base,
+            'type': 'chat',
+            'response': data['response'],
+          };
+          await _storeMessage(msg);
+        } else if (data['mode'] == 'spiral') {
+          final newStage = data['stage'];
+          lastStage = newStage;
+
+          final msg = {
+            ...base,
+            'type': 'spiral',
+            'stage': newStage,
+            'question': data['question'],
+            'evolution': data['evolution'],
+            'growth': data['growth'],
+          };
+          await _storeMessage(msg);
+        }
+
+        selectedMessage = null;
+      } else {
+        setState(() => messages.add({
+          'type': 'error',
+          'message': 'Server error: ${response.statusCode} – ${response.reasonPhrase}',
+          'timestamp': now,
+        }));
+      }
+    } catch (e) {
+      setState(() => messages.add({
+        'type': 'error',
+        'message': 'Network error: ${e.toString()}',
+        'timestamp': DateTime.now(),
+      }));
+    } finally {
+      setState(() {
+        isLoading = false;
+        _controller.clear();
+      });
+    }
+  }
+
+  Future<void> _storeMessage(Map<String, dynamic> msg) async {
+    await firestore
+        .collection('users')
+        .doc(user!.uid)
+        .collection('mergedMessages')
+        .add(msg);
+    setState(() => messages.add(msg));
+  }
+
+  Widget buildChatBubble(Map<String, dynamic> msg) {
+    final timestamp = msg['timestamp'] is Timestamp
+        ? (msg['timestamp'] as Timestamp).toDate()
+        : DateTime.now();
+
+    final List<Widget> chatWidgets = [];
+    final replyText = msg['reply_to'] != null ? "↪️ ${msg['reply_to']}" : null;
+
+    // User message
+    chatWidgets.add(
+      GestureDetector(
+        onLongPress: () => setState(() => selectedMessage = msg),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue[200],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (replyText != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      replyText,
+                      style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 12, color: Colors.black87),
+                    ),
+                  ),
+                Text(msg['user'], style: const TextStyle(color: Colors.black)),
+                Text(DateFormat('hh:mm a').format(timestamp), style: const TextStyle(fontSize: 10)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // Response
+    if (msg['type'] == 'chat') {
+      chatWidgets.add(
+        GestureDetector(
+          onLongPress: () => setState(() => selectedMessage = msg),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(msg['response']),
+            ),
+          ),
+        ),
+      );
+    } else if (msg['type'] == 'spiral') {
+      chatWidgets.add(
+        GestureDetector(
+          onLongPress: () => setState(() => selectedMessage = msg),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.orange[100],
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("🌀 Stage: ${msg['stage']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 6),
+                  Text("❓ ${msg['question']}", style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 14)),
+                  if (msg['growth'] != null) ...[
+                    const SizedBox(height: 8),
+                    Text(msg['growth'], style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic, color: Colors.green)),
+                  ],
+                  if (msg['evolution'] != null) ...[
+                    const SizedBox(height: 8),
+                    Text(msg['evolution'], style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    } else if (msg['type'] == 'error') {
+      chatWidgets.add(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red[100],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text("❌ ${msg['message']}", style: const TextStyle(color: Colors.red)),
+          ),
+        ),
+      );
+    }
+
+    return Column(children: chatWidgets);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Reflect & Chat")),
+      body: ValueListenableBuilder<int>(
+        valueListenable: selectedBgIndex,
+        builder: (context, index, _) {
+          return Container(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage(bgList[index]),
+                fit: BoxFit.cover,
+              ),
+            ),
+            child: Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) => buildChatBubble(messages[index]),
+                  ),
+                ),
+                if (selectedMessage != null)
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            "↪️ ${selectedMessage!['question'] ?? selectedMessage!['response'] ?? selectedMessage!['user'] ?? selectedMessage!['message']}",
+                            style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => setState(() => selectedMessage = null),
+                        )
+                      ],
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _controller,
+                          maxLines: 2,
+                          minLines: 1,
+                          decoration: InputDecoration(
+                            hintText: "Type a message...",
+                            filled: true,
+                            fillColor: Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(30),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: isLoading
+                            ? null
+                            : () {
+                          final text = _controller.text.trim();
+                          if (text.isNotEmpty) sendEntry(text);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          shape: const CircleBorder(),
+                          padding: const EdgeInsets.all(14),
+                        ),
+                        child: isLoading
+                            ? const CircularProgressIndicator(strokeWidth: 2)
+                            : const Icon(Icons.send),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+

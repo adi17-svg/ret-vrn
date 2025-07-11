@@ -1,0 +1,4147 @@
+# 1st
+# # # # from flask import Flask, request, jsonify
+# # # # from flask_cors import CORS
+# # # # import openai
+# # # # import os
+# # # # from dotenv import load_dotenv
+
+# # # # load_dotenv()
+
+# # # # app = Flask(__name__)
+# # # # CORS(app)
+
+# # # # # Correct way to set API key in openai>=1.0.0
+# # # # client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# # # # @app.route("/classify", methods=["POST"])
+# # # # def classify():
+# # # #     data = request.get_json()
+# # # #     text = data.get("text", "")
+
+# # # #     if not text:
+# # # #         return jsonify({"error": "No text provided."}), 400
+
+# # # #     try:
+# # # #         prompt = f"""
+# # # # You are an expert in Spiral Dynamics. Analyze the following journal entry and determine the Spiral Dynamics stage it represents (e.g., Beige, Purple, Red, Blue, Orange, Green, Yellow, Turquoise). Then provide a brief explanation.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Classification and Explanation:
+# # # # """
+
+# # # #         chat_completion = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[
+# # # #                 {"role": "system", "content": "You are an expert in Spiral Dynamics and psychology."},
+# # # #                 {"role": "user", "content": prompt}
+# # # #             ],
+# # # #             temperature=0.7
+# # # #         )
+
+# # # #         reply = chat_completion.choices[0].message.content.strip()
+# # # #         return jsonify({"reply": reply})
+
+# # # #     except Exception as e:
+# # # #         return jsonify({"error": str(e)}), 500
+
+# # # # if __name__ == "__main__":
+# # # #     app.run(host="0.0.0.0", port=5000, debug=True)
+
+
+
+# 2nd
+# # # # from flask import Flask, request, jsonify
+# # # # from flask_cors import CORS
+# # # # import openai
+# # # # import os
+# # # # from dotenv import load_dotenv
+
+# # # # load_dotenv()
+
+# # # # app = Flask(__name__)
+# # # # CORS(app)
+
+# # # # openai.api_key = os.getenv("OPENAI_API_KEY")
+
+
+# # # # @app.route("/classify", methods=["POST"])
+# # # # def classify():
+# # # #     data = request.get_json()
+# # # #     text = data.get("text", "")
+
+# # # #     if not text:
+# # # #         return jsonify({"error": "Text is required"}), 400
+
+# # # #     try:
+# # # #         # 1. Classify Spiral Dynamics stage
+# # # #         classification_prompt = f"""You are an expert in Spiral Dynamics. Based on the user's journal entry below, identify which stage (Beige, Purple, Red, Blue, Orange, Green, Yellow, or Turquoise) it most reflects, and give a one-line reason.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Stage: <stage>
+# # # # Reason: <one-line reason>
+# # # # """
+
+# # # #         classification_response = openai.ChatCompletion.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": classification_prompt}],
+# # # #             temperature=0.5,
+# # # #         )
+
+# # # #         classification_result = classification_response['choices'][0]['message']['content'].strip()
+
+# # # #         # 2. Generate a reflective question based on the same input
+# # # #         reflection_prompt = f"""Based on the following journal entry, ask a deep reflective question that could help the user evolve to the next level of consciousness in Spiral Dynamics.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Reflective Question:"""
+
+# # # #         question_response = openai.ChatCompletion.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": reflection_prompt}],
+# # # #             temperature=0.7,
+# # # #         )
+
+# # # #         reflective_question = question_response['choices'][0]['message']['content'].strip()
+
+# # # #         # Final combined response
+# # # #         reply = f"{classification_result}\n\nReflective Question: {reflective_question}"
+
+# # # #         return jsonify({"reply": reply})
+
+# # # #     except Exception as e:
+# # # #         return jsonify({"error": str(e)}), 500
+
+
+# # # # if __name__ == "__main__":
+# # # #     app.run(debug=True, host="0.0.0.0")
+
+# 3rd
+# # # # from flask import Flask, request, jsonify
+# # # # from flask_cors import CORS
+# # # # import os
+# # # # from openai import OpenAI
+# # # # from dotenv import load_dotenv
+
+# # # # # Load environment variables
+# # # # load_dotenv()
+
+# # # # # Initialize Flask app
+# # # # app = Flask(__name__)
+# # # # CORS(app)
+
+# # # # # Initialize OpenAI client with your API key
+# # # # client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# # # # @app.route("/classify", methods=["POST"])
+# # # # def classify():
+# # # #     data = request.get_json()
+# # # #     text = data.get("text", "")
+
+# # # #     if not text:
+# # # #         return jsonify({"error": "Text is required"}), 400
+
+# # # #     try:
+# # # #         # 1. Classify Spiral Dynamics stage
+# # # #         classification_prompt = f"""You are an expert in Spiral Dynamics. Based on the user's journal entry below, identify which stage (Beige, Purple, Red, Blue, Orange, Green, Yellow, or Turquoise) it most reflects, and give a one-line reason.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Stage: <stage>
+# # # # Reason: <one-line reason>
+# # # # """
+
+# # # #         classification_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": classification_prompt}],
+# # # #             temperature=0.5,
+# # # #         )
+
+# # # #         classification_result = classification_response.choices[0].message.content.strip()
+
+# # # #         # 2. Generate a reflective question based on the same input
+# # # #         reflection_prompt = f"""Based on the following journal entry, ask a deep reflective question that could help the user evolve to the next level of consciousness in Spiral Dynamics.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Reflective Question:"""
+
+# # # #         question_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": reflection_prompt}],
+# # # #             temperature=0.7,
+# # # #         )
+
+# # # #         reflective_question = question_response.choices[0].message.content.strip()
+
+# # # #         # Final combined response
+# # # #         reply = f"{classification_result}\n\nReflective Question: {reflective_question}"
+
+# # # #         return jsonify({"reply": reply})
+
+# # # #     except Exception as e:
+# # # #         return jsonify({"error": str(e)}), 500
+
+
+# # # # if __name__ == "__main__":
+# # # #     app.run(debug=True, host="0.0.0.0")
+
+
+# 4th
+# # # # from flask import Flask, request, jsonify
+# # # # from flask_cors import CORS
+# # # # import os
+# # # # from openai import OpenAI
+# # # # from dotenv import load_dotenv
+
+# # # # # Load environment variables
+# # # # load_dotenv()
+
+# # # # app = Flask(__name__)
+# # # # CORS(app)
+
+# # # # client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# # # # @app.route("/classify", methods=["POST"])
+# # # # def classify():
+# # # #     data = request.get_json()
+# # # #     text = data.get("text", "")
+
+# # # #     if not text:
+# # # #         return jsonify({"error": "Text is required"}), 400
+
+# # # #     try:
+# # # #         # 1. Classify Spiral Dynamics stage
+# # # #         classification_prompt = f"""You are an expert in Spiral Dynamics. Based on the user's journal entry below, identify which stage (Beige, Purple, Red, Blue, Orange, Green, Yellow, or Turquoise) it most reflects, and give a one-line reason.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Stage: <stage>
+# # # # Reason: <one-line reason>
+# # # # """
+
+# # # #         classification_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": classification_prompt}],
+# # # #             temperature=0.5,
+# # # #         )
+
+# # # #         classification_result = classification_response.choices[0].message.content.strip()
+
+# # # #         # 2. Generate reflective question
+# # # #         reflection_prompt = f"""Based on the following journal entry, ask a deep reflective question that could help the user evolve to the next level of consciousness in Spiral Dynamics.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Reflective Question:"""
+
+# # # #         question_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": reflection_prompt}],
+# # # #             temperature=0.7,
+# # # #         )
+
+# # # #         reflective_question = question_response.choices[0].message.content.strip()
+
+# # # #         # 3. Generate "Reflect inward" monologue or journaling prompt
+# # # #         monologue_prompt = f"""Based on the following journal entry, write a short inner monologue or prompted journaling line to help the user reflect inward and evolve their consciousness. Make it introspective and emotionally resonant.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Inner Monologue:"""
+
+# # # #         monologue_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": monologue_prompt}],
+# # # #             temperature=0.75,
+# # # #         )
+
+# # # #         inner_monologue = monologue_response.choices[0].message.content.strip()
+
+# # # #         # Final combined response
+# # # #         reply = (
+# # # #             f"{classification_result}\n\n"
+# # # #             f"Reflective Question: {reflective_question}\n\n"
+# # # #             f"Reflect Inward: {inner_monologue}"
+# # # #         )
+
+# # # #         return jsonify({"reply": reply})
+
+# # # #     except Exception as e:
+# # # #         return jsonify({"error": str(e)}), 500
+
+# # # # if __name__ == "__main__":
+# # # #     app.run(debug=True, host="0.0.0.0")
+
+# 4th
+# # # # from flask import Flask, request, jsonify
+# # # # from flask_cors import CORS
+# # # # import os
+# # # # from openai import OpenAI
+# # # # from dotenv import load_dotenv
+
+# # # # # Load environment variables
+# # # # load_dotenv()
+
+# # # # app = Flask(__name__)
+# # # # CORS(app)
+
+# # # # client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# # # # @app.route("/classify", methods=["POST"])
+# # # # def classify():
+# # # #     data = request.get_json()
+# # # #     text = data.get("text", "")
+
+# # # #     if not text:
+# # # #         return jsonify({"error": "Text is required"}), 400
+
+# # # #     try:
+# # # #         # 1. Spiral Dynamics Classification
+# # # #         classification_prompt = f"""You are an expert in Spiral Dynamics. Based on the user's journal entry below, identify which stage (Beige, Purple, Red, Blue, Orange, Green, Yellow, or Turquoise) it most reflects, and give a one-line reason.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Stage: <stage>
+# # # # Reason: <one-line reason>
+# # # # """
+# # # #         classification_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": classification_prompt}],
+# # # #             temperature=0.5,
+# # # #         )
+# # # #         classification_result = classification_response.choices[0].message.content.strip()
+
+# # # #         # 2. Reflective Question
+# # # #         reflection_prompt = f"""Based on the following journal entry, ask a deep reflective question that could help the user evolve to the next level of consciousness in Spiral Dynamics.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Reflective Question:"""
+# # # #         question_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": reflection_prompt}],
+# # # #             temperature=0.7,
+# # # #         )
+# # # #         reflective_question = question_response.choices[0].message.content.strip()
+
+# # # #         # 3. Reflect Inward (Inner Monologue)
+# # # #         monologue_prompt = f"""Based on the following journal entry, write a short inner monologue or prompted journaling line to help the user reflect inward and evolve their consciousness. Make it introspective and emotionally resonant.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Inner Monologue:"""
+# # # #         monologue_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": monologue_prompt}],
+# # # #             temperature=0.75,
+# # # #         )
+# # # #         inner_monologue = monologue_response.choices[0].message.content.strip()
+
+# # # #         # 4. Acceptance + Growth Prompts
+# # # #         growth_prompt = f"""You are a compassionate Spiral Dynamics mentor. Given the journal entry below, provide:
+# # # # 1. A gentle validation or acceptance of what the user is feeling.
+# # # # 2. A thoughtful growth prompt that nudges the user to evolve, without pushing or fixing.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Acceptance: <validate emotion>
+# # # # Growth Prompt: <gentle nudge>"""
+
+# # # #         growth_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": growth_prompt}],
+# # # #             temperature=0.7,
+# # # #         )
+# # # #         growth_result = growth_response.choices[0].message.content.strip()
+
+# # # #         # Final Combined Reply
+# # # #         reply = (
+# # # #             f"{classification_result}\n\n"
+# # # #             f"Reflective Question: {reflective_question}\n\n"
+# # # #             f"Reflect Inward: {inner_monologue}\n\n"
+# # # #             f"{growth_result}"
+# # # #         )
+
+# # # #         return jsonify({"reply": reply})
+
+# # # #     except Exception as e:
+# # # #         return jsonify({"error": str(e)}), 500
+
+# # # # if __name__ == "__main__":
+# # # #     app.run(debug=True, host="0.0.0.0")
+
+# 5th
+# # # # from flask import Flask, request, jsonify
+# # # # from flask_cors import CORS
+# # # # import os
+# # # # from openai import OpenAI
+# # # # from dotenv import load_dotenv
+
+# # # # # Load environment variables
+# # # # load_dotenv()
+
+# # # # app = Flask(__name__)
+# # # # CORS(app)
+
+# # # # client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# # # # @app.route("/classify", methods=["POST"])
+# # # # def classify():
+# # # #     data = request.get_json()
+# # # #     text = data.get("text", "")
+
+# # # #     if not text:
+# # # #         return jsonify({"error": "Text is required"}), 400
+
+# # # #     try:
+# # # #         # 1. Spiral Dynamics Classification
+# # # #         classification_prompt = f"""You are an expert in Spiral Dynamics. Based on the user's journal entry below, identify which stage (Beige, Purple, Red, Blue, Orange, Green, Yellow, or Turquoise) it most reflects, and give a one-line reason.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Stage: <stage>
+# # # # Reason: <one-line reason>
+# # # # """
+# # # #         classification_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": classification_prompt}],
+# # # #             temperature=0.5,
+# # # #         )
+# # # #         classification_result = classification_response.choices[0].message.content.strip()
+
+# # # #         # 2. Reflective Question
+# # # #         reflection_prompt = f"""Based on the following journal entry, ask a deep reflective question that could help the user evolve to the next level of consciousness in Spiral Dynamics.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Reflective Question:"""
+# # # #         question_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": reflection_prompt}],
+# # # #             temperature=0.7,
+# # # #         )
+# # # #         reflective_question = question_response.choices[0].message.content.strip()
+
+# # # #         # 3. Reflect Inward (Inner Monologue)
+# # # #         monologue_prompt = f"""Based on the following journal entry, write a short inner monologue or prompted journaling line to help the user reflect inward and evolve their consciousness. Make it introspective and emotionally resonant.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Inner Monologue:"""
+# # # #         monologue_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": monologue_prompt}],
+# # # #             temperature=0.75,
+# # # #         )
+# # # #         inner_monologue = monologue_response.choices[0].message.content.strip()
+
+# # # #         # 4. Acceptance + Growth Prompts
+# # # #         growth_prompt = f"""You are a compassionate Spiral Dynamics mentor. Given the journal entry below, provide:
+# # # # 1. A gentle validation or acceptance of what the user is feeling.
+# # # # 2. A thoughtful growth prompt that nudges the user to evolve, without pushing or fixing.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Acceptance: <validate emotion>
+# # # # Growth Prompt: <gentle nudge>"""
+
+# # # #         growth_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": growth_prompt}],
+# # # #             temperature=0.7,
+# # # #         )
+# # # #         growth_result = growth_response.choices[0].message.content.strip()
+
+# # # #         # Final Combined Reply
+# # # #         reply = (
+# # # #             f"{classification_result}\n\n"
+# # # #             f"Reflective Question: {reflective_question}\n\n"
+# # # #             f"Reflect Inward: {inner_monologue}\n\n"
+# # # #             f"{growth_result}"
+# # # #         )
+
+# # # #         return jsonify({"reply": reply})
+
+# # # #     except Exception as e:
+# # # #         return jsonify({"error": str(e)}), 500
+
+# # # # if __name__ == "__main__":
+# # # #     app.run(debug=True, host="0.0.0.0")
+
+# 6th
+# # # # from flask import Flask, request, jsonify
+# # # # from flask_cors import CORS
+# # # # import os
+# # # # from openai import OpenAI
+# # # # from dotenv import load_dotenv
+
+# # # # load_dotenv()
+
+# # # # app = Flask(__name__)
+# # # # CORS(app)
+
+# # # # client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# # # # @app.route("/classify", methods=["POST"])
+# # # # def classify():
+# # # #     data = request.get_json()
+# # # #     text = data.get("text", "")
+
+# # # #     if not text:
+# # # #         return jsonify({"error": "Text is required"}), 400
+
+# # # #     try:
+# # # #         # 1. Spiral Dynamics Classification + explanation
+# # # #         classification_prompt = f"""You are an expert in Spiral Dynamics. Based on the user's journal entry below, identify which stage (Beige, Purple, Red, Blue, Orange, Green, Yellow, or Turquoise) it most reflects, and give a one-line reason.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Stage: <stage>
+# # # # Reason: <one-line reason>
+# # # # """
+# # # #         classification_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": classification_prompt}],
+# # # #             temperature=0.5,
+# # # #         )
+# # # #         classification_result = classification_response.choices[0].message.content.strip()
+
+# # # #         # 2. Reflect Inward (Inner Monologue)
+# # # #         monologue_prompt = f"""Based on the following journal entry, write a short inner monologue or prompted journaling line to help the user reflect inward and evolve their consciousness. Make it introspective and emotionally resonant.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Inner Monologue:"""
+# # # #         monologue_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": monologue_prompt}],
+# # # #             temperature=0.75,
+# # # #         )
+# # # #         inner_monologue = monologue_response.choices[0].message.content.strip()
+
+# # # #         # 3. Acceptance + Growth Prompts
+# # # #         growth_prompt = f"""You are a compassionate Spiral Dynamics mentor. Given the journal entry below, provide:
+# # # # 1. A gentle validation or acceptance of what the user is feeling.
+# # # # 2. A thoughtful growth prompt that nudges the user to evolve, without pushing or fixing.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Acceptance: <validate emotion>
+# # # # Growth Prompt: <gentle nudge>"""
+# # # #         growth_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": growth_prompt}],
+# # # #             temperature=0.7,
+# # # #         )
+# # # #         growth_result = growth_response.choices[0].message.content.strip()
+
+# # # #         # 4. Deep Reflective Question
+# # # #         reflection_prompt = f"""Based on the following journal entry, ask one deep reflective question that could help the user evolve to the next level of consciousness in Spiral Dynamics.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Reflective Question:"""
+# # # #         question_response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": reflection_prompt}],
+# # # #             temperature=0.7,
+# # # #         )
+# # # #         reflective_question = question_response.choices[0].message.content.strip()
+
+# # # #         # Final Combined Reply
+# # # #         reply = (
+# # # #             f"{classification_result}\n\n"
+# # # #             f"Reflect Inward: {inner_monologue}\n\n"
+# # # #             f"{growth_result}\n\n"
+# # # #             f"Deep Reflective Question: {reflective_question}"
+# # # #         )
+
+# # # #         return jsonify({"reply": reply})
+
+# # # #     except Exception as e:
+# # # #         return jsonify({"error": str(e)}), 500
+
+# # # # if __name__ == "__main__":
+# # # #     app.run(debug=True, host="0.0.0.0")
+
+# 7th
+# # # # from flask import Flask, request, jsonify
+# # # # from flask_cors import CORS
+# # # # import os
+# # # # from openai import OpenAI
+# # # # from dotenv import load_dotenv
+
+# # # # load_dotenv()
+
+# # # # app = Flask(__name__)
+# # # # CORS(app)
+
+# # # # client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# # # # @app.route("/classify", methods=["POST"])
+# # # # def classify():
+# # # #     data = request.get_json()
+# # # #     text = data.get("text", "").strip()
+# # # #     mode = data.get("mode", "initial").strip().lower()  # "initial" or "reflective_response"
+# # # #     end_convo = data.get("end", False)
+
+# # # #     if not text:
+# # # #         return jsonify({"error": "Text is required"}), 400
+
+# # # #     if end_convo:
+# # # #         return jsonify({"reply": "Conversation ended by user.", "end": True})
+
+# # # #     try:
+# # # #         if mode == "initial":
+# # # #             # 1. Spiral Dynamics Classification + explanation
+# # # #             classification_prompt = f"""You are an expert in Spiral Dynamics. Based on the user's journal entry below, identify which stage (Beige, Purple, Red, Blue, Orange, Green, Yellow, or Turquoise) it most reflects, and give a one-line reason.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Stage: <stage>
+# # # # Reason: <one-line reason>
+# # # # """
+# # # #             classification_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": classification_prompt}],
+# # # #                 temperature=0.5,
+# # # #             )
+# # # #             classification_result = classification_response.choices[0].message.content.strip()
+
+# # # #             # 2. Reflect Inward (Inner Monologue)
+# # # #             monologue_prompt = f"""Based on the following journal entry, write a short inner monologue or prompted journaling line to help the user reflect inward and evolve their consciousness. Make it introspective and emotionally resonant.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Inner Monologue:"""
+# # # #             monologue_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": monologue_prompt}],
+# # # #                 temperature=0.75,
+# # # #             )
+# # # #             inner_monologue = monologue_response.choices[0].message.content.strip()
+
+# # # #             # 3. Acceptance + Growth Prompts
+# # # #             growth_prompt = f"""You are a compassionate Spiral Dynamics mentor. Given the journal entry below, provide:
+# # # # 1. A gentle validation or acceptance of what the user is feeling.
+# # # # 2. A thoughtful growth prompt that nudges the user to evolve, without pushing or fixing.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Acceptance: <validate emotion>
+# # # # Growth Prompt: <gentle nudge>"""
+# # # #             growth_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": growth_prompt}],
+# # # #                 temperature=0.7,
+# # # #             )
+# # # #             growth_result = growth_response.choices[0].message.content.strip()
+
+# # # #             # 4. Deep Reflective Question
+# # # #             reflection_prompt = f"""Based on the following journal entry, ask one deep reflective question that could help the user evolve to the next level of consciousness in Spiral Dynamics.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Reflective Question:"""
+# # # #             question_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": reflection_prompt}],
+# # # #                 temperature=0.7,
+# # # #             )
+# # # #             reflective_question = question_response.choices[0].message.content.strip()
+
+# # # #             # Final Combined Reply
+# # # #             reply = (
+# # # #                 f"{classification_result}\n\n"
+# # # #                 f"Reflect Inward: {inner_monologue}\n\n"
+# # # #                 f"{growth_result}\n\n"
+# # # #                 f"Deep Reflective Question: {reflective_question}"
+# # # #             )
+
+# # # #             # Save the last reflective question in response so frontend can show it
+# # # #             return jsonify({"reply": reply, "deep_question": reflective_question, "end": False})
+
+# # # #         elif mode == "reflective_response":
+# # # #             # User is responding to a previous deep question,
+# # # #             # so generate a NEW deep reflective question based on user input
+
+# # # #             next_question_prompt = f"""The user responded to a previous deep reflective question with the following answer. Based on this answer, ask one new deep reflective question that would help the user continue evolving their consciousness in Spiral Dynamics. Keep it introspective and thoughtful.
+
+# # # # User Response:
+# # # # {text}
+
+# # # # Next Deep Reflective Question:"""
+# # # #             next_question_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": next_question_prompt}],
+# # # #                 temperature=0.7,
+# # # #             )
+# # # #             next_deep_question = next_question_response.choices[0].message.content.strip()
+
+# # # #             return jsonify({"reply": next_deep_question, "deep_question": next_deep_question, "end": False})
+
+# # # #         else:
+# # # #             return jsonify({"error": "Invalid mode"}), 400
+
+# # # #     except Exception as e:
+# # # #         return jsonify({"error": str(e)}), 500
+
+
+# # # # if __name__ == "__main__":
+# # # #     app.run(debug=True, host="0.0.0.0")
+
+
+# 8th
+# # # # from flask import Flask, request, jsonify
+# # # # from flask_cors import CORS
+# # # # import os
+# # # # from openai import OpenAI
+# # # # from dotenv import load_dotenv
+# # # # from flask import session
+# # # # from datetime import datetime
+
+# # # # load_dotenv()
+
+# # # # app = Flask(__name__)
+# # # # CORS(app)
+
+# # # # client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# # # # # ---------------- Evolution Timeline (NEW ADDITION) ----------------
+
+# # # # user_timelines = {}  # In-memory storage; replace with DB in production
+
+# # # # @app.route("/timeline", methods=["GET"])
+# # # # def get_timeline():
+# # # #     user_id = request.args.get("user_id", "default_user")
+# # # #     return jsonify(user_timelines.get(user_id, []))
+
+# # # # def save_to_timeline(user_id, journal_entry, classification_result):
+# # # #     # Parse Stage from classification_result
+# # # #     lines = classification_result.splitlines()
+# # # #     stage_line = next((line for line in lines if line.lower().startswith("stage:")), None)
+# # # #     stage = stage_line.split(":")[1].strip() if stage_line else "Unknown"
+
+# # # #     if user_id not in user_timelines:
+# # # #         user_timelines[user_id] = []
+# # # #     user_timelines[user_id].append({
+# # # #         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+# # # #         "entry": journal_entry,
+# # # #         "stage": stage
+# # # #     })
+
+# # # # # ---------------- Spiral Dynamics Classification ----------------
+
+# # # # @app.route("/classify", methods=["POST"])
+# # # # def classify():
+# # # #     data = request.get_json()
+# # # #     text = data.get("text", "").strip()
+# # # #     mode = data.get("mode", "initial").strip().lower()  # "initial" or "reflective_response"
+# # # #     end_convo = data.get("end", False)
+
+# # # #     if not text:
+# # # #         return jsonify({"error": "Text is required"}), 400
+
+# # # #     if end_convo:
+# # # #         return jsonify({"reply": "Conversation ended by user.", "end": True})
+
+# # # #     try:
+# # # #         if mode == "initial":
+# # # #             # 1. Spiral Dynamics Classification + explanation
+# # # #             classification_prompt = f"""You are an expert in Spiral Dynamics. Based on the user's journal entry below, identify which stage (Beige, Purple, Red, Blue, Orange, Green, Yellow, or Turquoise) it most reflects, and give a one-line reason.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Stage: <stage>
+# # # # Reason: <one-line reason>
+# # # # """
+# # # #             classification_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": classification_prompt}],
+# # # #                 temperature=0.5,
+# # # #             )
+# # # #             classification_result = classification_response.choices[0].message.content.strip()
+
+# # # #             # Save to timeline
+# # # #             save_to_timeline("default_user", text, classification_result)
+
+# # # #             # 2. Reflect Inward (Inner Monologue)
+# # # #             monologue_prompt = f"""Based on the following journal entry, write a short inner monologue or prompted journaling line to help the user reflect inward and evolve their consciousness. Make it introspective and emotionally resonant.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Inner Monologue:"""
+# # # #             monologue_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": monologue_prompt}],
+# # # #                 temperature=0.75,
+# # # #             )
+# # # #             inner_monologue = monologue_response.choices[0].message.content.strip()
+
+# # # #             # 3. Acceptance + Growth Prompts
+# # # #             growth_prompt = f"""You are a compassionate Spiral Dynamics mentor. Given the journal entry below, provide:
+# # # # 1. A gentle validation or acceptance of what the user is feeling.
+# # # # 2. A thoughtful growth prompt that nudges the user to evolve, without pushing or fixing.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Acceptance: <validate emotion>
+# # # # Growth Prompt: <gentle nudge>"""
+# # # #             growth_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": growth_prompt}],
+# # # #                 temperature=0.7,
+# # # #             )
+# # # #             growth_result = growth_response.choices[0].message.content.strip()
+
+# # # #             # 4. Deep Reflective Question
+# # # #             reflection_prompt = f"""Based on the following journal entry, ask one deep reflective question that could help the user evolve to the next level of consciousness in Spiral Dynamics.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Reflective Question:"""
+# # # #             question_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": reflection_prompt}],
+# # # #                 temperature=0.7,
+# # # #             )
+# # # #             reflective_question = question_response.choices[0].message.content.strip()
+
+# # # #             # Final Combined Reply
+# # # #             reply = (
+# # # #                 f"{classification_result}\n\n"
+# # # #                 f"Reflect Inward: {inner_monologue}\n\n"
+# # # #                 f"{growth_result}\n\n"
+# # # #                 f"Deep Reflective Question: {reflective_question}"
+# # # #             )
+
+# # # #             return jsonify({"reply": reply, "deep_question": reflective_question, "end": False})
+
+# # # #         elif mode == "reflective_response":
+# # # #             next_question_prompt = f"""The user responded to a previous deep reflective question with the following answer. Based on this answer, ask one new deep reflective question that would help the user continue evolving their consciousness in Spiral Dynamics. Keep it introspective and thoughtful.
+
+# # # # User Response:
+# # # # {text}
+
+# # # # Next Deep Reflective Question:"""
+# # # #             next_question_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": next_question_prompt}],
+# # # #                 temperature=0.7,
+# # # #             )
+# # # #             next_deep_question = next_question_response.choices[0].message.content.strip()
+
+# # # #             return jsonify({"reply": next_deep_question, "deep_question": next_deep_question, "end": False})
+
+# # # #         else:
+# # # #             return jsonify({"error": "Invalid mode"}), 400
+
+# # # #     except Exception as e:
+# # # #         return jsonify({"error": str(e)}), 500
+
+
+# # # # if __name__ == "__main__":
+# # # #     app.run(debug=True, host="0.0.0.0")
+
+# 9th
+
+# # # # from flask import Flask, request, jsonify
+# # # # from flask_cors import CORS
+# # # # import os
+# # # # from openai import OpenAI
+# # # # from dotenv import load_dotenv
+# # # # from datetime import datetime
+
+# # # # import firebase_admin
+# # # # from firebase_admin import credentials, firestore
+
+# # # # # Load environment variables
+# # # # load_dotenv()
+
+# # # # # Initialize Flask app
+# # # # app = Flask(__name__)
+# # # # CORS(app)
+
+# # # # # Initialize OpenAI client
+# # # # client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# # # # # ---------------- Firebase Initialization ----------------
+# # # # # ✅ Ensure serviceAccountKey.json is in the same directory
+# # # # cred = credentials.Certificate("./serviceAccountKey.json")
+# # # # firebase_admin.initialize_app(cred)
+# # # # db = firestore.client()
+
+# # # # # ---------------- Evolution Timeline (In-memory + Firestore) ----------------
+# # # # user_timelines = {}  # In-memory storage
+
+# # # # @app.route("/timeline", methods=["GET"])
+# # # # def get_timeline():
+# # # #     user_id = request.args.get("user_id", "default_user")
+# # # #     return jsonify(user_timelines.get(user_id, []))
+
+# # # # def save_to_timeline(user_id, journal_entry, classification_result):
+# # # #     lines = classification_result.splitlines()
+# # # #     stage_line = next((line for line in lines if line.lower().startswith("stage:")), None)
+# # # #     stage = stage_line.split(":")[1].strip() if stage_line else "Unknown"
+
+# # # #     # Save to memory
+# # # #     if user_id not in user_timelines:
+# # # #         user_timelines[user_id] = []
+# # # #     user_timelines[user_id].append({
+# # # #         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+# # # #         "entry": journal_entry,
+# # # #         "stage": stage
+# # # #     })
+
+# # # #     # Save to Firestore
+# # # #     db.collection('users').document(user_id).collection('messages').add({
+# # # #         'message': journal_entry,
+# # # #         'stage': stage,
+# # # #         'timestamp': datetime.utcnow()
+# # # #     })
+
+# # # # # ---------------- Spiral Dynamics Classification ----------------
+
+# # # # @app.route("/classify", methods=["POST"])
+# # # # def classify():
+# # # #     data = request.get_json()
+# # # #     text = data.get("text", "").strip()
+# # # #     mode = data.get("mode", "initial").strip().lower()  # "initial" or "reflective_response"
+# # # #     end_convo = data.get("end", False)
+
+# # # #     if not text:
+# # # #         return jsonify({"error": "Text is required"}), 400
+
+# # # #     if end_convo:
+# # # #         return jsonify({"reply": "Conversation ended by user.", "end": True})
+
+# # # #     try:
+# # # #         if mode == "initial":
+# # # #             # 1. Spiral Dynamics Classification + explanation
+# # # #             classification_prompt = f"""You are an expert in Spiral Dynamics. Based on the user's journal entry below, identify which stage (Beige, Purple, Red, Blue, Orange, Green, Yellow, or Turquoise) it most reflects, and give a one-line reason.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Stage: <stage>
+# # # # Reason: <one-line reason>
+# # # # """
+# # # #             classification_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": classification_prompt}],
+# # # #                 temperature=0.5,
+# # # #             )
+# # # #             classification_result = classification_response.choices[0].message.content.strip()
+
+# # # #             # Save to timeline (memory + Firestore)
+# # # #             save_to_timeline("default_user", text, classification_result)
+
+# # # #             # 2. Reflect Inward (Inner Monologue)
+# # # #             monologue_prompt = f"""Based on the following journal entry, write a short inner monologue or prompted journaling line to help the user reflect inward and evolve their consciousness. Make it introspective and emotionally resonant.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Inner Monologue:"""
+# # # #             monologue_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": monologue_prompt}],
+# # # #                 temperature=0.75,
+# # # #             )
+# # # #             inner_monologue = monologue_response.choices[0].message.content.strip()
+
+# # # #             # 3. Acceptance + Growth Prompts
+# # # #             growth_prompt = f"""You are a compassionate Spiral Dynamics mentor. Given the journal entry below, provide:
+# # # # 1. A gentle validation or acceptance of what the user is feeling.
+# # # # 2. A thoughtful growth prompt that nudges the user to evolve, without pushing or fixing.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Respond in this format:
+# # # # Acceptance: <validate emotion>
+# # # # Growth Prompt: <gentle nudge>"""
+# # # #             growth_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": growth_prompt}],
+# # # #                 temperature=0.7,
+# # # #             )
+# # # #             growth_result = growth_response.choices[0].message.content.strip()
+
+# # # #             # 4. Deep Reflective Question
+# # # #             reflection_prompt = f"""Based on the following journal entry, ask one deep reflective question that could help the user evolve to the next level of consciousness in Spiral Dynamics.
+
+# # # # Journal Entry:
+# # # # {text}
+
+# # # # Reflective Question:"""
+# # # #             question_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": reflection_prompt}],
+# # # #                 temperature=0.7,
+# # # #             )
+# # # #             reflective_question = question_response.choices[0].message.content.strip()
+
+# # # #             # Final Combined Reply
+# # # #             reply = (
+# # # #                 f"{classification_result}\n\n"
+# # # #                 f"Reflect Inward: {inner_monologue}\n\n"
+# # # #                 f"{growth_result}\n\n"
+# # # #                 f"Deep Reflective Question: {reflective_question}"
+# # # #             )
+
+# # # #             return jsonify({"reply": reply, "deep_question": reflective_question, "end": False})
+
+# # # #         elif mode == "reflective_response":
+# # # #             next_question_prompt = f"""The user responded to a previous deep reflective question with the following answer. Based on this answer, ask one new deep reflective question that would help the user continue evolving their consciousness in Spiral Dynamics. Keep it introspective and thoughtful.
+
+# # # # User Response:
+# # # # {text}
+
+# # # # Next Deep Reflective Question:"""
+# # # #             next_question_response = client.chat.completions.create(
+# # # #                 model="gpt-4",
+# # # #                 messages=[{"role": "user", "content": next_question_prompt}],
+# # # #                 temperature=0.7,
+# # # #             )
+# # # #             next_deep_question = next_question_response.choices[0].message.content.strip()
+
+# # # #             return jsonify({"reply": next_deep_question, "deep_question": next_deep_question, "end": False})
+
+# # # #         else:
+# # # #             return jsonify({"error": "Invalid mode"}), 400
+
+# # # #     except Exception as e:
+# # # #         return jsonify({"error": str(e)}), 500
+
+# # # # # ---------------- Run App ----------------
+# # # # if __name__ == "__main__":
+# # # # #     app.run(debug=True, host="0.0.0.0")
+
+# 10th
+# # # # from flask import Flask, request, jsonify
+# # # # from flask_cors import CORS
+# # # # from dotenv import load_dotenv
+# # # # from openai import OpenAI
+# # # # import os
+# # # # import random
+
+# # # # # Load environment variables
+# # # # load_dotenv()
+# # # # api_key = os.getenv("OPENAI_API_KEY")
+
+# # # # # Initialize Flask app
+# # # # app = Flask(__name__)
+# # # # CORS(app)
+
+# # # # # Initialize OpenAI client
+# # # # client = OpenAI(api_key=api_key)
+
+# # # # # Story archetypes
+# # # # ARCHETYPES = ["The Seeker", "The Warrior", "The Sage", "The Healer", "The Rebel"]
+
+# # # # # Reflection types
+# # # # REFLECTION_TYPES = ["inner_monologue", "reflective_question", "practice_recommendation", "affirmation"]
+
+# # # # def build_prompt(user_input, archetype, stage, reflection_type):
+# # # #     base = f"You are guiding a user who is in the Spiral Dynamics stage: {stage}.\n"
+# # # #     base += f"They have chosen the story archetype: {archetype}.\n"
+# # # #     base += f"Their journal entry is:\n\"{user_input}\"\n\n"
+
+# # # #     if reflection_type == "inner_monologue":
+# # # #         return base + "Generate a deep, story-rich inner monologue based on their entry."
+    
+# # # #     elif reflection_type == "reflective_question":
+# # # #         return base + "Ask one deeply reflective question that fits their archetype and current level."
+
+# # # #     elif reflection_type == "practice_recommendation":
+# # # #         return base + "Recommend a spiritual or self-awareness practice suitable to their stage."
+
+# # # #     elif reflection_type == "affirmation":
+# # # #         return base + "Create a powerful affirmation that matches their Spiral Dynamics level and archetype."
+
+# # # #     else:
+# # # #         return base + "Give a general motivational message."
+
+# # # # @app.route("/reflective-loop", methods=["POST"])
+# # # # def reflective_loop():
+# # # #     try:
+# # # #         data = request.get_json()
+# # # #         user_input = data.get("text", "").strip()
+# # # #         user_stage = data.get("stage", "Green")  # Default to Green
+# # # #         user_archetype = data.get("archetype", random.choice(ARCHETYPES))
+
+# # # #         if not user_input:
+# # # #             return jsonify({"error": "Text is required."}), 400
+
+# # # #         reflection_type = random.choice(REFLECTION_TYPES)
+# # # #         prompt = build_prompt(user_input, user_archetype, user_stage, reflection_type)
+
+# # # #         response = client.chat.completions.create(
+# # # #             model="gpt-4",
+# # # #             messages=[{"role": "user", "content": prompt}],
+# # # #             temperature=0.8,
+# # # #         )
+
+# # # #         reply = response.choices[0].message.content.strip()
+
+# # # #         return jsonify({
+# # # #             "reply": reply,
+# # # #             "type": reflection_type,
+# # # #             "archetype": user_archetype
+# # # #         })
+
+# # # #     except Exception as e:
+# # # #         return jsonify({"error": str(e)}), 500
+
+# # # # @app.route("/", methods=["GET"])
+# # # # def home():
+# # # #     return "Gamified Spiral Dynamics Reflection API is running."
+
+# # # # if __name__ == "__main__":
+# # # #     app.run(debug=True, host="0.0.0.0", port=5000)
+
+# 11th
+# # # # from flask import Flask, request, jsonify
+# # # # from flask_cors import CORS
+# # # # from dotenv import load_dotenv
+# # # # from openai import OpenAI
+# # # # import os
+
+# # # # # Load env
+# # # # load_dotenv()
+# # # # api_key = os.getenv("OPENAI_API_KEY")
+
+# # # # app = Flask(__name__)
+# # # # CORS(app)
+
+# # # # client = OpenAI(api_key=api_key)
+
+# # # # # Classify stage
+# # # # def classify_stage(entry):
+# # # #     prompt = f"Based on this journal entry, which Spiral Dynamics stage does this person most align with and why?\n\nEntry: \"{entry}\"\n\nRespond with the stage and a brief reason."
+# # # #     res = client.chat.completions.create(
+# # # #         model="gpt-4",
+# # # #         messages=[{"role": "user", "content": prompt}],
+# # # #         temperature=0.7,
+# # # #     )
+# # # #     return res.choices[0].message.content.strip()
+
+# # # # # Generate growth prompt
+# # # # def generate_growth_prompt(entry, stage):
+# # # #     prompt = f"The user is in the Spiral Dynamics stage: {stage}.\nJournal entry: \"{entry}\"\n\nGive a growth-oriented prompt that gently stretches them from their current stage."
+# # # #     res = client.chat.completions.create(
+# # # #         model="gpt-4",
+# # # #         messages=[{"role": "user", "content": prompt}],
+# # # #         temperature=0.8,
+# # # #     )
+# # # #     return res.choices[0].message.content.strip()
+
+# # # # # Generate deep reflective question
+# # # # def generate_reflective_question(entry, stage):
+# # # #     prompt = f"Based on this journal entry and the Spiral Dynamics stage '{stage}', ask one deep, emotionally engaging, reflective question to help them evolve."
+# # # #     res = client.chat.completions.create(
+# # # #         model="gpt-4",
+# # # #         messages=[{"role": "user", "content": prompt}],
+# # # #         temperature=0.8,
+# # # #     )
+# # # #     return res.choices[0].message.content.strip()
+
+# # # # @app.route("/reflect", methods=["POST"])
+# # # # def reflect():
+# # # #     try:
+# # # #         data = request.get_json()
+# # # #         user_input = data.get("text", "").strip()
+
+# # # #         if not user_input:
+# # # #             return jsonify({"error": "Missing journaling input."}), 400
+
+# # # #         stage = classify_stage(user_input)
+# # # #         growth_prompt = generate_growth_prompt(user_input, stage)
+# # # #         reflective_question = generate_reflective_question(user_input, stage)
+
+# # # #         return jsonify({
+# # # #             "stage": stage,
+# # # #             "growth_prompt": growth_prompt,
+# # # #             "reflective_question": reflective_question
+# # # #         })
+
+# # # #     except Exception as e:
+# # # #         return jsonify({"error": str(e)}), 500
+
+# # # # @app.route("/", methods=["GET"])
+# # # # def home():
+# # # #     return "Compassionate Spiral Dynamics Reflection API is running."
+
+# # # # if __name__ == "__main__":
+# # # #     app.run(debug=True, host="0.0.0.0", port=5000)
+
+# 12th
+# # # # from flask import Flask, request, jsonify
+# # # # from flask_cors import CORS
+# # # # from dotenv import load_dotenv
+# # # # from openai import OpenAI
+# # # # import os
+
+# # # # # Load environment variables
+# # # # load_dotenv()
+# # # # api_key = os.getenv("OPENAI_API_KEY")
+
+# # # # app = Flask(__name__)
+# # # # CORS(app)
+
+# # # # client = OpenAI(api_key=api_key)
+
+# # # # # Spiral Dynamics stages (ordered)
+# # # # STAGES = [
+# # # #     "Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"
+# # # # ]
+
+# # # # # Badge name generator
+# # # # def get_badge(stage):
+# # # #     return f"{stage} Seeker"
+
+# # # # # Classify the user's current Spiral Dynamics stage
+# # # # def classify_stage(entry):
+# # # #     prompt = (
+# # # #         f"Based on the following journal entry, identify which Spiral Dynamics stage "
+# # # #         f"the person currently expresses, summarize their core values, and mention any "
+# # # #         f"possible shadow or limitation of this stage.\n\n"
+# # # #         f"Entry:\n\"{entry}\"\n\n"
+# # # #         f"Respond in this format:\n"
+# # # #         f"Stage: <stage>\n"
+# # # #         f"Values: <short explanation>\n"
+# # # #         f"Shadow: <short explanation>"
+# # # #     )
+# # # #     response = client.chat.completions.create(
+# # # #         model="gpt-4",
+# # # #         messages=[{"role": "user", "content": prompt}],
+# # # #         temperature=0.7,
+# # # #     )
+# # # #     return response.choices[0].message.content.strip()
+
+# # # # # Generate a "portal" reflection prompt to stretch the user to the next stage
+# # # # def generate_portal_prompt(stage, entry):
+# # # #     prompt = (
+# # # #         f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+# # # #         f"Based on this journal entry:\n\"{entry}\"\n\n"
+# # # #         f"Create a powerful and thought-provoking reflection question to help them "
+# # # #         f"grow toward the next Spiral Dynamics stage."
+# # # #     )
+# # # #     response = client.chat.completions.create(
+# # # #         model="gpt-4",
+# # # #         messages=[{"role": "user", "content": prompt}],
+# # # #         temperature=0.8,
+# # # #     )
+# # # #     return response.choices[0].message.content.strip()
+
+# # # # # Generate a daily self-development practice
+# # # # def generate_daily_practice(stage, entry):
+# # # #     prompt = (
+# # # #         f"Based on this journal entry and the user's current Spiral Dynamics stage '{stage}', "
+# # # #         f"give one practical self-awareness challenge, mindfulness exercise, or behavioral practice "
+# # # #         f"that could help them grow."
+# # # #     )
+# # # #     response = client.chat.completions.create(
+# # # #         model="gpt-4",
+# # # #         messages=[{"role": "user", "content": prompt}],
+# # # #         temperature=0.8,
+# # # #     )
+# # # #     return response.choices[0].message.content.strip()
+
+# # # # @app.route("/", methods=["GET"])
+# # # # def home():
+# # # #     return "🌟 Evolution Path API is running."
+
+# # # # @app.route("/reflect", methods=["POST"])
+# # # # def reflect():
+# # # #     try:
+# # # #         data = request.get_json()
+# # # #         entry = data.get("text", "").strip()
+
+# # # #         if not entry:
+# # # #             return jsonify({"error": "Missing journaling input."}), 400
+
+# # # #         # 1. Classify stage, values, and shadow
+# # # #         classification = classify_stage(entry)
+
+# # # #         # Parse response (simple version)
+# # # #         lines = classification.split("\n")
+# # # #         parsed = {"stage": "", "values": "", "shadow": ""}
+# # # #         for line in lines:
+# # # #             if line.lower().startswith("stage:"):
+# # # #                 parsed["stage"] = line.split(":", 1)[1].strip()
+# # # #             elif line.lower().startswith("values:"):
+# # # #                 parsed["values"] = line.split(":", 1)[1].strip()
+# # # #             elif line.lower().startswith("shadow:"):
+# # # #                 parsed["shadow"] = line.split(":", 1)[1].strip()
+
+# # # #         stage = parsed["stage"] or "Unknown"
+
+# # # #         # 2. Generate portal prompt and daily practice
+# # # #         portal_prompt = generate_portal_prompt(stage, entry)
+# # # #         daily_practice = generate_daily_practice(stage, entry)
+
+# # # #         # 3. Generate badge
+# # # #         badge = get_badge(stage)
+
+# # # #         # 4. Return structured JSON
+# # # #         return jsonify({
+# # # #             "stage": stage,
+# # # #             "values_summary": parsed["values"],
+# # # #             "shadow": parsed["shadow"],
+# # # #             "portal_prompt": portal_prompt,
+# # # #             "daily_practice": daily_practice,
+# # # #             "badge": badge,
+# # # #             "stage_index": STAGES.index(stage) if stage in STAGES else -1
+# # # #         })
+
+# # # #     except Exception as e:
+# # # #         return jsonify({"error": str(e)}), 500
+
+# # # # if __name__ == "__main__":
+# # # #     app.run(debug=True, host="0.0.0.0", port=5000)
+
+
+# 13th
+# # # # from flask import Flask, request, jsonify
+# # # # from flask_cors import CORS
+# # # # from dotenv import load_dotenv
+# # # # import google.generativeai as genai
+# # # # import os
+
+# # # # # Load environment variables
+# # # # load_dotenv()
+# # # # api_key = os.getenv("GEMINI_API_KEY")
+
+# # # # # Configure Gemini API
+# # # # genai.configure(api_key=api_key)
+# # # # model = genai.GenerativeModel('gemini-1.5-pro-latest')
+
+# # # # app = Flask(__name__)
+# # # # CORS(app)
+
+# # # # # Spiral Dynamics stages (ordered)
+# # # # STAGES = [
+# # # #     "Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"
+# # # # ]
+
+# # # # # Badge name generator
+# # # # def get_badge(stage):
+# # # #     return f"{stage} Seeker"
+
+# # # # # Classify the user's current Spiral Dynamics stage
+# # # # def classify_stage(entry):
+# # # #     prompt = (
+# # # #         f"Based on the following journal entry, identify which Spiral Dynamics stage "
+# # # #         f"the person currently expresses, summarize their core values, and mention any "
+# # # #         f"possible shadow or limitation of this stage.\n\n"
+# # # #         f"Entry:\n\"{entry}\"\n\n"
+# # # #         f"Respond in this format:\n"
+# # # #         f"Stage: <stage>\n"
+# # # #         f"Values: <short explanation>\n"
+# # # #         f"Shadow: <short explanation>"
+# # # #     )
+# # # #     response = model.generate_content(prompt)
+# # # #     return response.text.strip()
+
+# # # # # Generate a "portal" reflection prompt to stretch the user to the next stage
+# # # # def generate_portal_prompt(stage, entry):
+# # # #     prompt = (
+# # # #         f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+# # # #         f"Based on this journal entry:\n\"{entry}\"\n\n"
+# # # #         f"Create a powerful and thought-provoking reflection question to help them "
+# # # #         f"grow toward the next Spiral Dynamics stage."
+# # # #     )
+# # # #     response = model.generate_content(prompt)
+# # # #     return response.text.strip()
+
+# # # # # Generate a daily self-development practice
+# # # # def generate_daily_practice(stage, entry):
+# # # #     prompt = (
+# # # #         f"Based on this journal entry and the user's current Spiral Dynamics stage '{stage}', "
+# # # #         f"give one practical self-awareness challenge, mindfulness exercise, or behavioral practice "
+# # # #         f"that could help them grow."
+# # # #     )
+# # # #     response = model.generate_content(prompt)
+# # # #     return response.text.strip()
+
+# # # # @app.route("/", methods=["GET"])
+# # # # def home():
+# # # #     return "🌟 Gemini Spiral Dynamics API is running."
+
+# # # # @app.route("/reflect", methods=["POST"])
+# # # # def reflect():
+# # # #     try:
+# # # #         data = request.get_json()
+# # # #         entry = data.get("text", "").strip()
+
+# # # #         if not entry:
+# # # #             return jsonify({"error": "Missing journaling input."}), 400
+
+# # # #         # 1. Classify stage, values, and shadow
+# # # #         classification = classify_stage(entry)
+
+# # # #         # Parse response
+# # # #         lines = classification.split("\n")
+# # # #         parsed = {"stage": "", "values": "", "shadow": ""}
+# # # #         for line in lines:
+# # # #             if line.lower().startswith("stage:"):
+# # # #                 parsed["stage"] = line.split(":", 1)[1].strip()
+# # # #             elif line.lower().startswith("values:"):
+# # # #                 parsed["values"] = line.split(":", 1)[1].strip()
+# # # #             elif line.lower().startswith("shadow:"):
+# # # #                 parsed["shadow"] = line.split(":", 1)[1].strip()
+
+# # # #         stage = parsed["stage"] or "Unknown"
+
+# # # #         # 2. Generate portal prompt and daily practice
+# # # #         portal_prompt = generate_portal_prompt(stage, entry)
+# # # #         daily_practice = generate_daily_practice(stage, entry)
+
+# # # #         # 3. Generate badge
+# # # #         badge = get_badge(stage)
+
+# # # #         # 4. Return structured JSON
+# # # #         return jsonify({
+# # # #             "stage": stage,
+# # # #             "values_summary": parsed["values"],
+# # # #             "shadow": parsed["shadow"],
+# # # #             "portal_prompt": portal_prompt,
+# # # #             "daily_practice": daily_practice,
+# # # #             "badge": badge,
+# # # #             "stage_index": STAGES.index(stage) if stage in STAGES else -1
+# # # #         })
+
+# # # #     except Exception as e:
+# # # #         return jsonify({"error": str(e)}), 500
+
+# # # # if __name__ == "__main__":
+# # # #     app.run(debug=True, host="0.0.0.0", port=5000)
+
+
+# # May be useful part 1
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+
+# # Load environment variables from .env file
+# load_dotenv()
+
+# # Get the A4F API key and base URL from environment variables
+# a4f_api_key = os.getenv("A4F_API_KEY")
+# a4f_base_url = "https://api.a4f.co/v1"
+
+# # Ensure the API key is loaded
+# if not a4f_api_key:
+#     raise ValueError("A4F_API_KEY not found in .env file.")
+
+# # Initialize Flask app
+# app = Flask(__name__)
+# CORS(app)
+
+# # Initialize OpenAI client using A4F proxy
+# client = OpenAI(
+#     api_key=a4f_api_key,
+#     base_url=a4f_base_url,
+# )
+
+# # Spiral Dynamics stages
+# STAGES = [
+#     "Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"
+# ]
+
+# # Utility to generate a badge
+# def get_badge(stage):
+#     return f"{stage} Seeker"
+
+# # Classify the journal entry into Spiral Dynamics stage
+# def classify_stage(entry):
+#     prompt = (
+#         f"Based on the following journal entry, identify which Spiral Dynamics stage "
+#         f"the person currently expresses, summarize their core values, and mention any "
+#         f"possible shadow or limitation of this stage.\n\n"
+#         f"Entry:\n\"{entry}\"\n\n"
+#         f"Respond in this format:\n"
+#         f"Stage: <stage>\n"
+#         f"Values: <short explanation>\n"
+#         f"Shadow: <short explanation>"
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-1/chatgpt-4o-latest",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.7,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# # Generate reflection question to stretch the user to next stage
+# def generate_portal_prompt(stage, entry):
+#     prompt = (
+#         f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+#         f"Based on this journal entry:\n\"{entry}\"\n\n"
+#         f"Create a powerful and thought-provoking reflection question to help them "
+#         f"grow toward the next Spiral Dynamics stage."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-1/chatgpt-4o-latest",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# # Generate daily practice based on stage
+# def generate_daily_practice(stage, entry):
+#     prompt = (
+#         f"Based on this journal entry and the user's current Spiral Dynamics stage '{stage}', "
+#         f"give one practical self-awareness challenge, mindfulness exercise, or behavioral practice "
+#         f"that could help them grow."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-1/chatgpt-4o-latest",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# # Root health check
+# @app.route("/", methods=["GET"])
+# def home():
+#     return "🌟 Evolution Path API is running."
+
+# # Main reflection endpoint
+# @app.route("/reflect", methods=["POST"])
+# def reflect():
+#     try:
+#         data = request.get_json()
+#         entry = data.get("text", "").strip()
+
+#         if not entry:
+#             return jsonify({"error": "Missing journaling input."}), 400
+
+#         # Step 1: Classify stage
+#         classification = classify_stage(entry)
+
+#         # Step 2: Parse classification result
+#         lines = classification.split("\n")
+#         parsed = {"stage": "", "values": "", "shadow": ""}
+#         for line in lines:
+#             if line.lower().startswith("stage:"):
+#                 parsed["stage"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("values:"):
+#                 parsed["values"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("shadow:"):
+#                 parsed["shadow"] = line.split(":", 1)[1].strip()
+
+#         stage = parsed["stage"] or "Unknown"
+
+#         # Step 3: Generate portal and practice
+#         portal_prompt = generate_portal_prompt(stage, entry)
+#         daily_practice = generate_daily_practice(stage, entry)
+#         badge = get_badge(stage)
+
+#         # Step 4: Respond
+#         return jsonify({
+#             "stage": stage,
+#             "values_summary": parsed["values"],
+#             "shadow": parsed["shadow"],
+#             "portal_prompt": portal_prompt,
+#             "daily_practice": daily_practice,
+#             "badge": badge,
+#             "stage_index": STAGES.index(stage) if stage in STAGES else -1
+#         })
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+# # Run the app
+# if __name__ == "__main__":
+#     app.run(debug=True, host="0.0.0.0", port=5000)
+
+# NEW MODEL API
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+# import traceback
+
+# # Load environment variables from .env file
+# load_dotenv()
+
+# # Get the A4F API key and base URL from environment variables
+# a4f_api_key = os.getenv("A4F_API_KEY")
+# a4f_base_url = "https://api.a4f.co/v1"
+
+# if not a4f_api_key:
+#     raise ValueError("A4F_API_KEY not found in environment variables")
+
+# # Initialize OpenAI client using A4F proxy
+# client = OpenAI(
+#     api_key=a4f_api_key,
+#     base_url=a4f_base_url,
+# )
+
+# app = Flask(__name__)
+# CORS(app)
+
+# STAGES = [
+#     "Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"
+# ]
+
+# def get_badge(stage):
+#     return f"{stage} Seeker"
+
+# def classify_stage(entry):
+#     prompt = (
+#         f"Based on the following journal entry, identify which Spiral Dynamics stage "
+#         f"the person currently expresses, summarize their core values, and mention any "
+#         f"possible shadow or limitation of this stage.\n\n"
+#         f"Entry:\n\"{entry}\"\n\n"
+#         f"Respond in this format:\n"
+#         f"Stage: <stage>\n"
+#         f"Values: <short explanation>\n"
+#         f"Shadow: <short explanation>"
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.7,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def generate_portal_prompt(stage, entry):
+#     prompt = (
+#         f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+#         f"Based on this journal entry:\n\"{entry}\"\n\n"
+#         f"Create a powerful and thought-provoking reflection question to help them "
+#         f"grow toward the next Spiral Dynamics stage."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def generate_daily_practice(stage, entry):
+#     prompt = (
+#         f"Based on this journal entry and the user's current Spiral Dynamics stage '{stage}', "
+#         f"give one practical self-awareness challenge, mindfulness exercise, or behavioral practice "
+#         f"that could help them grow."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# @app.route("/", methods=["GET"])
+# def home():
+#     return "🌟 Evolution Path API is running."
+
+# @app.route("/reflect", methods=["POST"])
+# def reflect():
+#     try:
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({"error": "Invalid or missing JSON data."}), 400
+
+#         entry = data.get("text", "").strip()
+#         if not entry:
+#             return jsonify({"error": "Missing journaling input."}), 400
+
+#         print("Received entry:", entry)
+
+#         classification = classify_stage(entry)
+#         print("Classification output:", classification)
+
+#         lines = classification.split("\n")
+#         parsed = {"stage": "", "values": "", "shadow": ""}
+#         for line in lines:
+#             if line.lower().startswith("stage:"):
+#                 parsed["stage"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("values:"):
+#                 parsed["values"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("shadow:"):
+#                 parsed["shadow"] = line.split(":", 1)[1].strip()
+
+#         stage = parsed["stage"] or "Unknown"
+#         print("Parsed stage:", stage)
+
+#         portal_prompt = generate_portal_prompt(stage, entry)
+#         daily_practice = generate_daily_practice(stage, entry)
+#         badge = get_badge(stage)
+
+#         stage_index = STAGES.index(stage) if stage in STAGES else -1
+
+#         return jsonify({
+#             "stage": stage,
+#             "values_summary": parsed["values"],
+#             "shadow": parsed["shadow"],
+#             "portal_prompt": portal_prompt,
+#             "daily_practice": daily_practice,
+#             "badge": badge,
+#             "stage_index": stage_index
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# if __name__ == "__main__":
+#     app.run(debug=True, host="0.0.0.0", port=5000)
+
+# New 2
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+# import traceback
+
+# # Load environment variables from .env file
+# load_dotenv()
+
+# # Get the A4F API key and base URL from environment variables
+# a4f_api_key = os.getenv("A4F_API_KEY")
+# a4f_base_url = "https://api.a4f.co/v1"
+
+# if not a4f_api_key:
+#     raise ValueError("A4F_API_KEY not found in environment variables")
+
+# # Initialize OpenAI client using A4F proxy
+# client = OpenAI(
+#     api_key=a4f_api_key,
+#     base_url=a4f_base_url,
+# )
+
+# app = Flask(__name__)
+# CORS(app)
+
+# STAGES = [
+#     "Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"
+# ]
+
+# def get_badge(stage):
+#     return f"{stage} Seeker"
+
+# def classify_stage(entry):
+#     prompt = (
+#         f"Based on the following journal entry, identify which Spiral Dynamics stage "
+#         f"the person currently expresses, summarize their core values, and mention any "
+#         f"possible shadow or limitation of this stage.\n\n"
+#         f"Entry:\n\"{entry}\"\n\n"
+#         f"Respond in this format:\n"
+#         f"Stage: <stage>\n"
+#         f"Values: <short explanation>\n"
+#         f"Shadow: <short explanation>"
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-4/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.7,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def generate_portal_prompt(stage, entry):
+#     prompt = (
+#         f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+#         f"Based on this journal entry:\n\"{entry}\"\n\n"
+#         f"Create a powerful and thought-provoking reflection question to help them "
+#         f"grow toward the next Spiral Dynamics stage."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-4/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def generate_daily_practice(stage, entry):
+#     prompt = (
+#         f"Based on this journal entry and the user's current Spiral Dynamics stage '{stage}', "
+#         f"give one practical self-awareness challenge, mindfulness exercise, or behavioral practice "
+#         f"that could help them grow."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-4/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# @app.route("/", methods=["GET"])
+# def home():
+#     return "🌟 Evolution Path API is running."
+
+# @app.route("/reflect", methods=["POST"])
+# def reflect():
+#     try:
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({"error": "Invalid or missing JSON data."}), 400
+
+#         entry = data.get("text", "").strip()
+#         if not entry:
+#             return jsonify({"error": "Missing journaling input."}), 400
+
+#         print("Received entry:", entry)
+
+#         classification = classify_stage(entry)
+#         print("Classification output:", classification)
+
+#         lines = classification.split("\n")
+#         parsed = {"stage": "", "values": "", "shadow": ""}
+#         for line in lines:
+#             if line.lower().startswith("stage:"):
+#                 parsed["stage"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("values:"):
+#                 parsed["values"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("shadow:"):
+#                 parsed["shadow"] = line.split(":", 1)[1].strip()
+
+#         stage = parsed["stage"] or "Unknown"
+#         print("Parsed stage:", stage)
+
+#         portal_prompt = generate_portal_prompt(stage, entry)
+#         daily_practice = generate_daily_practice(stage, entry)
+#         badge = get_badge(stage)
+
+#         stage_index = STAGES.index(stage) if stage in STAGES else -1
+
+#         return jsonify({
+#             "stage": stage,
+#             "values_summary": parsed["values"],
+#             "shadow": parsed["shadow"],
+#             "portal_prompt": portal_prompt,
+#             "daily_practice": daily_practice,
+#             "badge": badge,
+#             "stage_index": stage_index
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# if __name__ == "__main__":
+#     app.run(debug=True, host="0.0.0.0", port=5000)
+
+
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+# import traceback
+
+# # Load environment variables from .env file
+# load_dotenv()
+
+# # Get the A4F API key and base URL from environment variables
+# a4f_api_key = os.getenv("A4F_API_KEY")
+# a4f_base_url = "https://api.a4f.co/v1"
+
+# if not a4f_api_key:
+#     raise ValueError("A4F_API_KEY not found in environment variables")
+
+# # Initialize OpenAI client using A4F proxy
+# client = OpenAI(
+#     api_key=a4f_api_key,
+#     base_url=a4f_base_url,
+# )
+
+# app = Flask(__name__)
+# CORS(app)
+
+# STAGES = [
+#     "Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"
+# ]
+
+# def get_badge(stage):
+#     return f"{stage} Seeker"
+
+# def classify_stage(entry):
+#     prompt = (
+#         f"Based on the following journal entry, identify which Spiral Dynamics stage "
+#         f"the person currently expresses, summarize their core values, and mention any "
+#         f"possible shadow or limitation of this stage.\n\n"
+#         f"Entry:\n\"{entry}\"\n\n"
+#         f"Respond in this format:\n"
+#         f"Stage: <stage>\n"
+#         f"Values: <short explanation>\n"
+#         f"Shadow: <short explanation>"
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-4/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.7,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def generate_portal_prompt(stage, entry):
+#     prompt = (
+#         f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+#         f"Based on this journal entry:\n\"{entry}\"\n\n"
+#         f"Create a powerful and thought-provoking reflection question to help them "
+#         f"grow toward the next Spiral Dynamics stage."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-4/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def generate_daily_practice(stage, entry):
+#     prompt = (
+#         f"Based on this journal entry and the user's current Spiral Dynamics stage '{stage}', "
+#         f"give one practical self-awareness challenge, mindfulness exercise, or behavioral practice "
+#         f"that could help them grow."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-4/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# @app.route("/", methods=["GET"])
+# def home():
+#     return "🌟 Evolution Path API is running."
+
+# @app.route("/chat", methods=["POST"])
+# def chat():
+#     try:
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({"error": "Invalid or missing JSON data."}), 400
+
+#         text = data.get("text", "").strip()
+#         if not text:
+#             return jsonify({"error": "Missing user input."}), 400
+
+#         print("Normal chat input:", text)
+
+#         response = client.chat.completions.create(
+#             model="provider-4/gpt-4o",
+#             messages=[{"role": "user", "content": text}],
+#             temperature=0.7,
+#         )
+#         reply = response.choices[0].message.content.strip()
+#         return jsonify({"response": reply})
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# @app.route("/reflect", methods=["POST"])
+# def reflect():
+#     try:
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({"error": "Invalid or missing JSON data."}), 400
+
+#         entry = data.get("text", "").strip()
+#         if not entry:
+#             return jsonify({"error": "Missing journaling input."}), 400
+
+#         print("Received journal entry:", entry)
+
+#         classification = classify_stage(entry)
+#         print("Classification output:", classification)
+
+#         lines = classification.split("\n")
+#         parsed = {"stage": "", "values": "", "shadow": ""}
+#         for line in lines:
+#             if line.lower().startswith("stage:"):
+#                 parsed["stage"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("values:"):
+#                 parsed["values"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("shadow:"):
+#                 parsed["shadow"] = line.split(":", 1)[1].strip()
+
+#         stage = parsed["stage"] or "Unknown"
+#         print("Parsed stage:", stage)
+
+#         portal_prompt = generate_portal_prompt(stage, entry)
+#         daily_practice = generate_daily_practice(stage, entry)
+#         badge = get_badge(stage)
+#         stage_index = STAGES.index(stage) if stage in STAGES else -1
+
+#         return jsonify({
+#             "stage": stage,
+#             "values_summary": parsed["values"],
+#             "shadow": parsed["shadow"],
+#             "portal_prompt": portal_prompt,
+#             "daily_practice": daily_practice,
+#             "badge": badge,
+#             "stage_index": stage_index
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# if __name__ == "__main__":
+#     app.run(debug=True, host="0.0.0.0", port=5000)
+
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+# import traceback
+
+# # Load environment variables
+# load_dotenv()
+
+# a4f_api_key = os.getenv("A4F_API_KEY")
+# a4f_base_url = "https://api.a4f.co/v1"
+
+# if not a4f_api_key:
+#     raise ValueError("A4F_API_KEY not found in .env")
+
+# # OpenAI client using A4F proxy
+# client = OpenAI(
+#     api_key=a4f_api_key,
+#     base_url=a4f_base_url,
+# )
+
+# app = Flask(__name__)
+# CORS(app)
+
+# STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
+
+# def get_badge(stage):
+#     return f"{stage} Seeker"
+
+# def classify_stage(entry):
+#     prompt = (
+#         f"Based on the following journal entry, identify which Spiral Dynamics stage "
+#         f"the person currently expresses, summarize their core values, and mention any "
+#         f"possible shadow or limitation of this stage.\n\n"
+#         f"Entry:\n\"{entry}\"\n\n"
+#         f"Respond in this format:\n"
+#         f"Stage: <stage>\n"
+#         f"Values: <short explanation>\n"
+#         f"Shadow: <short explanation>"
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-4/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.7,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def generate_portal_prompt(stage, entry):
+#     prompt = (
+#         f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+#         f"Based on this journal entry:\n\"{entry}\"\n\n"
+#         f"Create a powerful and thought-provoking reflection question to help them "
+#         f"grow toward the next Spiral Dynamics stage."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-4/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def generate_daily_practice(stage, entry):
+#     prompt = (
+#         f"Based on this journal entry and the user's current Spiral Dynamics stage '{stage}', "
+#         f"give one practical self-awareness challenge, mindfulness exercise, or behavioral practice "
+#         f"that could help them grow."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-4/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# @app.route("/", methods=["GET"])
+# def home():
+#     return "🌟 Evolution Path API is running."
+
+# @app.route("/merged", methods=["POST"])
+# def merged_reflect_or_chat():
+#     try:
+#         data = request.get_json()
+#         if not data or "text" not in data:
+#             return jsonify({"error": "Missing input"}), 400
+
+#         entry = data["text"].strip()
+#         if not entry:
+#             return jsonify({"error": "Empty journal entry"}), 400
+
+#         print("Received entry:", entry)
+
+#         # Detect reflective intent
+#         reflection_keywords = [
+#             "i feel", "i've been thinking", "lately", "i'm struggling", "inner conflict",
+#             "purpose", "values", "growth", "emotion", "i want to understand", "why do i"
+#         ]
+#         is_reflective = any(word in entry.lower() for word in reflection_keywords)
+
+#         # Normal chatbot response
+#         chat_prompt = f"The user says: \"{entry}\"\nRespond thoughtfully like a helpful assistant."
+#         chat_response = client.chat.completions.create(
+#             model="provider-4/gpt-4o",
+#             messages=[{"role": "user", "content": chat_prompt}],
+#             temperature=0.7,
+#         ).choices[0].message.content.strip()
+
+#         if not is_reflective:
+#             print("Normal chat detected.")
+#             return jsonify({
+#                 "response": chat_response
+#             })
+
+#         # Spiral Dynamics classification
+#         classification = classify_stage(entry)
+#         print("Classification output:", classification)
+
+#         parsed = {"stage": "", "values": "", "shadow": ""}
+#         for line in classification.split("\n"):
+#             if line.lower().startswith("stage:"):
+#                 parsed["stage"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("values:"):
+#                 parsed["values"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("shadow:"):
+#                 parsed["shadow"] = line.split(":", 1)[1].strip()
+
+#         stage = parsed["stage"] or "Unknown"
+#         badge = get_badge(stage)
+#         portal_prompt = generate_portal_prompt(stage, entry)
+#         daily_practice = generate_daily_practice(stage, entry)
+#         stage_index = STAGES.index(stage) if stage in STAGES else -1
+
+#         print("Returning full reflection + response.")
+#         return jsonify({
+#             "response": chat_response,
+#             "stage": stage,
+#             "values_summary": parsed["values"],
+#             "shadow": parsed["shadow"],
+#             "portal_prompt": portal_prompt,
+#             "daily_practice": daily_practice,
+#             "badge": badge,
+#             "stage_index": stage_index
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# if __name__ == "__main__":
+#     app.run(debug=True, host="0.0.0.0", port=5000)
+
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+# import traceback
+
+# # Load environment variables
+# load_dotenv()
+
+# a4f_api_key = os.getenv("A4F_API_KEY")
+# a4f_base_url = "https://api.a4f.co/v1"
+
+# if not a4f_api_key:
+#     raise ValueError("A4F_API_KEY not found in environment variables")
+
+# # Initialize A4F OpenAI proxy client
+# client = OpenAI(
+#     api_key=a4f_api_key,
+#     base_url=a4f_base_url,
+# )
+
+# app = Flask(__name__)
+# CORS(app)
+
+# STAGES = [
+#     "Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"
+# ]
+
+# def get_badge(stage):
+#     return f"{stage} Seeker"
+
+# def classify_stage(entry):
+#     prompt = (
+#         f"Based on the following journal entry, identify which Spiral Dynamics stage "
+#         f"the person currently expresses, summarize their core values, and mention any "
+#         f"possible shadow or limitation of this stage.\n\n"
+#         f"Entry:\n\"{entry}\"\n\n"
+#         f"Respond in this format:\n"
+#         f"Stage: <stage>\n"
+#         f"Values: <short explanation>\n"
+#         f"Shadow: <short explanation>"
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-4/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.7,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def generate_portal_prompt(stage, entry):
+#     prompt = (
+#         f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+#         f"Based on this journal entry:\n\"{entry}\"\n\n"
+#         f"Create a powerful and thought-provoking reflection question to help them "
+#         f"grow toward the next Spiral Dynamics stage."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-4/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def generate_daily_practice(stage, entry):
+#     prompt = (
+#         f"Based on this journal entry and the user's current Spiral Dynamics stage '{stage}', "
+#         f"give one practical self-awareness challenge, mindfulness exercise, or behavioral practice "
+#         f"that could help them grow."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-4/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def detect_intent(entry):
+#     prompt = (
+#         "Determine whether the following journal entry is seeking personal growth reflection "
+#         "(Spiral Dynamics classification) or just normal conversation.\n\n"
+#         "Respond with one word only: 'spiral' or 'chat'\n\n"
+#         f"Entry: \"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-4/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0,
+#     )
+#     intent = response.choices[0].message.content.strip().lower()
+#     return "spiral" if "spiral" in intent else "chat"
+
+# @app.route("/", methods=["GET"])
+# def home():
+#     return "🌟 Evolution Path API is running."
+
+# @app.route("/merged", methods=["POST"])
+# def merged_reflection():
+#     try:
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({"error": "Invalid or missing JSON data."}), 400
+
+#         entry = data.get("text", "").strip()
+#         if not entry:
+#             return jsonify({"error": "Missing journaling input."}), 400
+
+#         print("Received entry:", entry)
+
+#         intent = detect_intent(entry)
+#         print("Detected intent:", intent)
+
+#         if intent == "chat":
+#             # Normal Chat Mode
+#             prompt = f"You are a kind and insightful assistant. Respond to this user message:\n\n\"{entry}\""
+#             response = client.chat.completions.create(
+#                 model="provider-4/gpt-4o",
+#                 messages=[{"role": "user", "content": prompt}],
+#                 temperature=0.7,
+#             )
+#             reply = response.choices[0].message.content.strip()
+#             return jsonify({
+#                 "mode": "chat",
+#                 "response": reply
+#             })
+
+#         # Spiral Dynamics Mode
+#         classification = classify_stage(entry)
+#         print("Classification:", classification)
+
+#         lines = classification.split("\n")
+#         parsed = {"stage": "", "values": "", "shadow": ""}
+#         for line in lines:
+#             if line.lower().startswith("stage:"):
+#                 parsed["stage"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("values:"):
+#                 parsed["values"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("shadow:"):
+#                 parsed["shadow"] = line.split(":", 1)[1].strip()
+
+#         stage = parsed["stage"] or "Unknown"
+#         stage_index = STAGES.index(stage) if stage in STAGES else -1
+
+#         return jsonify({
+#             "mode": "spiral",
+#             "stage": stage,
+#             "values_summary": parsed["values"],
+#             "shadow": parsed["shadow"],
+#             "portal_prompt": generate_portal_prompt(stage, entry),
+#             "daily_practice": generate_daily_practice(stage, entry),
+#             "badge": get_badge(stage),
+#             "stage_index": stage_index,
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# if __name__ == "__main__":
+#     app.run(debug=True, host="0.0.0.0", port=5000)
+
+# # from flask import Flask, request, jsonify
+# # from flask_cors import CORS
+# # from openai import OpenAI
+# # from dotenv import load_dotenv
+# # import os
+# # import traceback
+
+# # # Load environment variables
+# # load_dotenv()
+
+# # # Load A4F Proxy API key
+# # a4f_api_key = os.getenv("A4F_API_KEY")
+# # a4f_base_url = "https://api.a4f.co/v1"
+
+# # # Debug print
+# # print("✅ Loaded A4F_API_KEY:", "Present" if a4f_api_key else "Missing")
+# # if not a4f_api_key:
+# #     raise ValueError("❌ A4F_API_KEY not found in environment variables or .env file")
+
+# # # Initialize OpenAI client via A4F proxy
+# # client = OpenAI(
+# #     api_key=a4f_api_key,
+# #     base_url=a4f_base_url,
+# # )
+
+# # # Flask app
+# # app = Flask(__name__)
+# # CORS(app)
+
+# # # Spiral Dynamics stages
+# # STAGES = [
+# #     "Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"
+# # ]
+
+# # # -------- Helper Functions -------- #
+
+# # def classify_stage(entry):
+# #     prompt = (
+# #         f"You're an expert in Spiral Dynamics. Based on the following journal entry, "
+# #         f"classify the user into one of these 8 Spiral Dynamics stages:\n"
+# #         f"{', '.join(STAGES)}\n\n"
+# #         f"Entry:\n\"{entry}\"\n\n"
+# #         f"Respond strictly in this format:\n"
+# #         f"Stage: <one stage from the list>\n"
+# #         f"Values: <short summary of user's core values>\n"
+# #         f"Shadow: <short explanation of a limitation in this stage>"
+# #     )
+# #     response = client.chat.completions.create(
+# #         model="provider-2/gpt-3.5-turbo",
+# #         messages=[{"role": "user", "content": prompt}],
+# #         temperature=0.7,
+# #     )
+# #     return response.choices[0].message.content.strip()
+
+# # def generate_portal_prompt(stage, entry):
+# #     prompt = (
+# #         f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+# #         f"Based on their journal entry:\n\"{entry}\"\n\n"
+# #         f"Ask a deep and thoughtful reflection question to help them grow toward the next Spiral Dynamics stage."
+# #     )
+# #     response = client.chat.completions.create(
+# #         model="provider-2/gpt-3.5-turbo",
+# #         messages=[{"role": "user", "content": prompt}],
+# #         temperature=0.8,
+# #     )
+# #     return response.choices[0].message.content.strip()
+
+# # def detect_intent(entry):
+# #     prompt = (
+# #         "Decide whether this journal entry is for reflection and growth (Spiral Dynamics) or normal chat.\n"
+# #         "Reply with just one word: 'spiral' or 'chat'\n\n"
+# #         f"Entry: \"{entry}\""
+# #     )
+# #     response = client.chat.completions.create(
+# #         model="provider-2/gpt-3.5-turbo",
+# #         messages=[{"role": "user", "content": prompt}],
+# #         temperature=0,
+# #     )
+# #     intent = response.choices[0].message.content.strip().lower()
+# #     return "spiral" if "spiral" in intent else "chat"
+
+# # def get_badge(stage):
+# #     return f"{stage} Seeker"
+
+# # # -------- Flask Routes -------- #
+
+# # @app.route("/", methods=["GET"])
+# # def home():
+# #     return "🌱 Spiral Dynamics API is live."
+
+# # @app.route("/merged", methods=["POST"])
+# # def merged_reflection():
+# #     try:
+# #         data = request.get_json()
+# #         entry = data.get("text", "").strip()
+
+# #         if not entry:
+# #             return jsonify({"error": "Missing journaling input."}), 400
+
+# #         print("📝 Received entry:", entry)
+
+# #         intent = detect_intent(entry)
+# #         print("🧠 Detected intent:", intent)
+
+# #         if intent == "chat":
+# #             prompt = f"You are a wise and kind assistant. Respond conversationally to this user:\n\n\"{entry}\""
+# #             response = client.chat.completions.create(
+# #                 model="provider-2/gpt-3.5-turbo",
+# #                 messages=[{"role": "user", "content": prompt}],
+# #                 temperature=0.7,
+# #             )
+# #             return jsonify({
+# #                 "mode": "chat",
+# #                 "response": response.choices[0].message.content.strip()
+# #             })
+
+# #         classification = classify_stage(entry)
+# #         print("📊 Classification:", classification)
+
+# #         parsed = {"stage": "", "values": "", "shadow": ""}
+# #         for line in classification.split("\n"):
+# #             if line.lower().startswith("stage:"):
+# #                 parsed["stage"] = line.split(":", 1)[1].strip()
+# #             elif line.lower().startswith("values:"):
+# #                 parsed["values"] = line.split(":", 1)[1].strip()
+# #             elif line.lower().startswith("shadow:"):
+# #                 parsed["shadow"] = line.split(":", 1)[1].strip()
+
+# #         stage = parsed["stage"] or "Unknown"
+# #         stage_index = STAGES.index(stage) if stage in STAGES else -1
+
+# #         return jsonify({
+# #             "mode": "spiral",
+# #             "stage": stage,
+# #             "values_summary": parsed["values"],
+# #             "shadow": parsed["shadow"],
+# #             "portal_prompt": generate_portal_prompt(stage, entry),
+# #             "badge": get_badge(stage),
+# #             "stage_index": stage_index
+# #         })
+
+# #     except Exception as e:
+# #         traceback.print_exc()
+# #         return jsonify({"error": str(e)}), 500
+
+# # @app.route("/growth_prompt", methods=["POST"])
+# # def growth_prompt():
+# #     try:
+# #         data = request.get_json()
+# #         stage = data.get("stage")
+# #         user_answer = data.get("user_answer")
+
+# #         if not stage or not user_answer:
+# #             return jsonify({"error": "Missing data"}), 400
+
+# #         prompt = (
+# #             f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+# #             f"They answered this reflection:\n\"{user_answer}\"\n\n"
+# #             f"Now suggest a single powerful personal growth prompt, mindset shift, or daily practice "
+# #             f"that would help them evolve toward the next Spiral Dynamics stage."
+# #         )
+
+# #         response = client.chat.completions.create(
+# #             model="provider-2/gpt-3.5-turbo",
+# #             messages=[{"role": "user", "content": prompt}],
+# #             temperature=0.8,
+# #         )
+
+# #         return jsonify({
+# #             "growth_prompt": response.choices[0].message.content.strip()
+# #         })
+
+# #     except Exception as e:
+# #         traceback.print_exc()
+# #         return jsonify({"error": str(e)}), 500
+
+# # # -------- Run Server -------- #
+
+# # if __name__ == "__main__":
+# #     app.run(debug=True, host="0.0.0.0", port=5000)
+
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from transformers import Wav2Vec2ForSequenceClassification, Wav2Vec2FeatureExtractor
+# import torch
+# import soundfile as sf
+# import io
+
+# app = Flask(__name__)
+# CORS(app)
+
+# # Load model and feature extractor
+# model_name = "superb/wav2vec2-base-superb-er"
+# model = Wav2Vec2ForSequenceClassification.from_pretrained(model_name)
+# feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(model_name)
+
+# # Emotion label mapping for the superb model
+# id2label = {
+#     0: "angry",
+#     1: "happy",
+#     2: "neutral",
+#     3: "sad"
+# }
+
+# @app.route('/analyze_voice', methods=['POST'])
+# def analyze_voice():
+#     if 'audio' not in request.files:
+#         return jsonify({'error': 'No audio file provided'}), 400
+
+#     file = request.files['audio']
+#     audio_bytes = file.read()
+
+#     # Load audio using soundfile
+#     audio, sample_rate = sf.read(io.BytesIO(audio_bytes))
+
+#     # Convert audio into format required by model
+#     inputs = feature_extractor(audio, sampling_rate=sample_rate, return_tensors="pt", padding=True)
+
+#     with torch.no_grad():
+#         logits = model(**inputs).logits
+
+#     predicted_id = torch.argmax(logits, dim=-1).item()
+#     emotion = id2label.get(predicted_id, "unknown")
+
+#     # Basic sentiment mapping
+#     sentiment_map = {
+#         "happy": "positive",
+#         "neutral": "neutral",
+#         "angry": "negative",
+#         "sad": "negative"
+#     }
+#     sentiment = sentiment_map.get(emotion, "neutral")
+
+#     # Dummy Spiral Dynamics mapping
+#     spiral_dynamics_map = {
+#         "happy": "Green",
+#         "neutral": "Blue",
+#         "angry": "Red",
+#         "sad": "Purple"
+#     }
+#     spiral_dynamics = spiral_dynamics_map.get(emotion, "Beige")
+
+#     return jsonify({
+#         'emotion': emotion,
+#         'sentiment': sentiment,
+#         'spiral_dynamics': spiral_dynamics
+#     })
+
+# if __name__ == '__main__':
+#     app.run(debug=True)
+
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+# import traceback
+
+# # Voice imports
+# from transformers import Wav2Vec2ForSequenceClassification, Wav2Vec2FeatureExtractor
+# import torch
+# import soundfile as sf
+# import io
+
+# # Load environment variables
+# load_dotenv()
+# a4f_api_key = os.getenv("A4F_API_KEY")
+# a4f_base_url = "https://api.a4f.co/v1"
+
+# print("✅ Loaded A4F_API_KEY:", "Present" if a4f_api_key else "Missing")
+# if not a4f_api_key:
+#     raise ValueError("❌ A4F_API_KEY not found in .env")
+
+# # Initialize OpenAI client via A4F proxy
+# client = OpenAI(api_key=a4f_api_key, base_url=a4f_base_url)
+
+# # Flask app
+# app = Flask(__name__)
+# CORS(app)
+
+# # Spiral Dynamics stages
+# STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
+
+# # ---------- TEXT INPUT HELPERS ---------- #
+
+# def classify_stage(entry):
+#     prompt = (
+#         f"You're an expert in Spiral Dynamics. Based on the following journal entry, "
+#         f"classify the user into one of these 8 Spiral Dynamics stages:\n"
+#         f"{', '.join(STAGES)}\n\n"
+#         f"Entry:\n\"{entry}\"\n\n"
+#         f"Respond strictly in this format:\n"
+#         f"Stage: <one stage from the list>\n"
+#         f"Values: <short summary of user's core values>\n"
+#         f"Shadow: <short explanation of a limitation in this stage>"
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.7,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def generate_portal_prompt(stage, entry):
+#     prompt = (
+#         f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+#         f"Based on their journal entry:\n\"{entry}\"\n\n"
+#         f"Ask a deep and thoughtful reflection question to help them grow toward the next Spiral Dynamics stage."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def detect_intent(entry):
+#     prompt = (
+#         "Decide whether this journal entry is for reflection and growth (Spiral Dynamics) or normal chat.\n"
+#         "Reply with just one word: 'spiral' or 'chat'\n\n"
+#         f"Entry: \"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0,
+#     )
+#     intent = response.choices[0].message.content.strip().lower()
+#     return "spiral" if "spiral" in intent else "chat"
+
+# def get_badge(stage):
+#     return f"{stage} Seeker"
+
+# # ---------- TEXT ROUTES ---------- #
+
+# @app.route("/", methods=["GET"])
+# def home():
+#     return "🌱 Spiral Dynamics API is live."
+
+# @app.route("/merged", methods=["POST"])
+# def merged_reflection():
+#     try:
+#         data = request.get_json()
+#         entry = data.get("text", "").strip()
+#         if not entry:
+#             return jsonify({"error": "Missing journaling input."}), 400
+
+#         print("📝 Received entry:", entry)
+#         intent = detect_intent(entry)
+#         print("🧠 Detected intent:", intent)
+
+#         if intent == "chat":
+#             prompt = f"You are a wise and kind assistant. Respond conversationally to this user:\n\n\"{entry}\""
+#             response = client.chat.completions.create(
+#                 model="provider-2/gpt-3.5-turbo",
+#                 messages=[{"role": "user", "content": prompt}],
+#                 temperature=0.7,
+#             )
+#             return jsonify({
+#                 "mode": "chat",
+#                 "response": response.choices[0].message.content.strip()
+#             })
+
+#         classification = classify_stage(entry)
+#         print("📊 Classification:", classification)
+
+#         parsed = {"stage": "", "values": "", "shadow": ""}
+#         for line in classification.split("\n"):
+#             if line.lower().startswith("stage:"):
+#                 parsed["stage"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("values:"):
+#                 parsed["values"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("shadow:"):
+#                 parsed["shadow"] = line.split(":", 1)[1].strip()
+
+#         stage = parsed["stage"] or "Unknown"
+#         stage_index = STAGES.index(stage) if stage in STAGES else -1
+
+#         return jsonify({
+#             "mode": "spiral",
+#             "stage": stage,
+#             "values_summary": parsed["values"],
+#             "shadow": parsed["shadow"],
+#             "portal_prompt": generate_portal_prompt(stage, entry),
+#             "badge": get_badge(stage),
+#             "stage_index": stage_index
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# @app.route("/growth_prompt", methods=["POST"])
+# def growth_prompt():
+#     try:
+#         data = request.get_json()
+#         stage = data.get("stage")
+#         user_answer = data.get("user_answer")
+
+#         if not stage or not user_answer:
+#             return jsonify({"error": "Missing data"}), 400
+
+#         prompt = (
+#             f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+#             f"They answered this reflection:\n\"{user_answer}\"\n\n"
+#             f"Now suggest a single powerful personal growth prompt, mindset shift, or daily practice "
+#             f"that would help them evolve toward the next Spiral Dynamics stage."
+#         )
+
+#         response = client.chat.completions.create(
+#             model="provider-2/gpt-3.5-turbo",
+#             messages=[{"role": "user", "content": prompt}],
+#             temperature=0.8,
+#         )
+
+#         return jsonify({
+#             "growth_prompt": response.choices[0].message.content.strip()
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# # ---------- VOICE ANALYSIS ROUTE ---------- #
+
+# # Load model once
+# model_name = "superb/wav2vec2-base-superb-er"
+# model = Wav2Vec2ForSequenceClassification.from_pretrained(model_name)
+# feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(model_name)
+
+# id2label = {
+#     0: "angry",
+#     1: "happy",
+#     2: "neutral",
+#     3: "sad"
+# }
+
+# @app.route("/analyze_voice", methods=["POST"])
+# def analyze_voice():
+#     try:
+#         if 'audio' not in request.files:
+#             return jsonify({'error': 'No audio file provided'}), 400
+
+#         file = request.files['audio']
+#         audio_bytes = file.read()
+#         print(f"✅ Received audio file: {file.filename}, size: {len(audio_bytes)} bytes")
+
+#         audio, sample_rate = sf.read(io.BytesIO(audio_bytes))
+#         inputs = feature_extractor(audio, sampling_rate=sample_rate, return_tensors="pt", padding=True)
+
+#         with torch.no_grad():
+#             logits = model(**inputs).logits
+
+#         predicted_id = torch.argmax(logits, dim=-1).item()
+#         emotion = id2label.get(predicted_id, "unknown")
+
+#         sentiment_map = {
+#             "happy": "positive",
+#             "neutral": "neutral",
+#             "angry": "negative",
+#             "sad": "negative"
+#         }
+#         sentiment = sentiment_map.get(emotion, "neutral")
+
+#         spiral_dynamics_map = {
+#             "happy": "Green",
+#             "neutral": "Blue",
+#             "angry": "Red",
+#             "sad": "Purple"
+#         }
+#         spiral_dynamics = spiral_dynamics_map.get(emotion, "Beige")
+
+#         return jsonify({
+#             'emotion': emotion,
+#             'sentiment': sentiment,
+#             'spiral_dynamics': spiral_dynamics
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({'error': str(e)}), 500
+
+# # ---------- RUN ---------- #
+
+# if __name__ == "__main__":
+    # app.run(debug=True, host="0.0.0.0", port=5000)
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+# import traceback
+# import tempfile
+# import wave
+# import requests
+# import time
+
+# # Load environment variables
+# load_dotenv()
+# a4f_api_key = os.getenv("A4F_API_KEY")
+# assemblyai_api_key = os.getenv("ASSEMBLYAI_API_KEY")
+
+# if not a4f_api_key:
+#     raise ValueError("❌ A4F_API_KEY not found in .env")
+# if not assemblyai_api_key:
+#     raise ValueError("❌ ASSEMBLYAI_API_KEY not found in .env")
+
+# client = OpenAI(api_key=a4f_api_key, base_url="https://api.a4f.co/v1")
+
+# app = Flask(__name__)
+# CORS(app)
+
+# STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
+
+# # ---------- TEXT ROUTES ---------- #
+
+# def classify_stage(entry):
+#     prompt = (
+#         f"You're an expert in Spiral Dynamics. Based on the following journal entry, "
+#         f"classify the user into one of these 8 Spiral Dynamics stages:\n"
+#         f"{', '.join(STAGES)}\n\n"
+#         f"Entry:\n\"{entry}\"\n\n"
+#         f"Respond strictly in this format:\n"
+#         f"Stage: <one stage from the list>\n"
+#         f"Values: <short summary of user's core values>\n"
+#         f"Shadow: <short explanation of a limitation in this stage>"
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.7,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def generate_portal_prompt(stage, entry):
+#     prompt = (
+#         f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+#         f"Based on their journal entry:\n\"{entry}\"\n\n"
+#         f"Ask a deep and thoughtful reflection question to help them grow toward the next Spiral Dynamics stage."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def detect_intent(entry):
+#     prompt = (
+#         "Decide whether this journal entry is for reflection and growth (Spiral Dynamics) or normal chat.\n"
+#         "Reply with just one word: 'spiral' or 'chat'\n\n"
+#         f"Entry: \"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0,
+#     )
+#     intent = response.choices[0].message.content.strip().lower()
+#     return "spiral" if "spiral" in intent else "chat"
+
+# def get_badge(stage):
+#     return f"{stage} Seeker"
+
+# @app.route("/", methods=["GET"])
+# def home():
+#     return "🌱 Spiral Dynamics API is live."
+
+# @app.route("/merged", methods=["POST"])
+# def merged_reflection():
+#     try:
+#         data = request.get_json()
+#         entry = data.get("text", "").strip()
+#         if not entry:
+#             return jsonify({"error": "Missing journaling input."}), 400
+
+#         intent = detect_intent(entry)
+
+#         if intent == "chat":
+#             prompt = f"You are a wise and kind assistant. Respond conversationally to this user:\n\n\"{entry}\""
+#             response = client.chat.completions.create(
+#                 model="provider-2/gpt-3.5-turbo",
+#                 messages=[{"role": "user", "content": prompt}],
+#                 temperature=0.7,
+#             )
+#             return jsonify({
+#                 "mode": "chat",
+#                 "response": response.choices[0].message.content.strip()
+#             })
+
+#         classification = classify_stage(entry)
+#         parsed = {"stage": "", "values": "", "shadow": ""}
+#         for line in classification.split("\n"):
+#             if line.lower().startswith("stage:"):
+#                 parsed["stage"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("values:"):
+#                 parsed["values"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("shadow:"):
+#                 parsed["shadow"] = line.split(":", 1)[1].strip()
+
+#         stage = parsed["stage"] or "Unknown"
+#         stage_index = STAGES.index(stage) if stage in STAGES else -1
+
+#         return jsonify({
+#             "mode": "spiral",
+#             "stage": stage,
+#             "values_summary": parsed["values"],
+#             "shadow": parsed["shadow"],
+#             "portal_prompt": generate_portal_prompt(stage, entry),
+#             "badge": get_badge(stage),
+#             "stage_index": stage_index
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# @app.route("/growth_prompt", methods=["POST"])
+# def growth_prompt():
+#     try:
+#         data = request.get_json()
+#         stage = data.get("stage")
+#         user_answer = data.get("user_answer")
+
+#         if not stage or not user_answer:
+#             return jsonify({"error": "Missing data"}), 400
+
+#         prompt = (
+#             f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+#             f"They answered this reflection:\n\"{user_answer}\"\n\n"
+#             f"Now suggest a single powerful personal growth prompt, mindset shift, or daily practice "
+#             f"that would help them evolve toward the next Spiral Dynamics stage."
+#         )
+
+#         response = client.chat.completions.create(
+#             model="provider-2/gpt-3.5-turbo",
+#             messages=[{"role": "user", "content": prompt}],
+#             temperature=0.8,
+#         )
+
+#         return jsonify({
+#             "growth_prompt": response.choices[0].message.content.strip()
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# # ---------- VOICE ANALYSIS (Corrected AssemblyAI integration) ---------- #
+
+# def upload_audio_to_assemblyai(filepath):
+#     with open(filepath, 'rb') as f:
+#         response = requests.post(
+#             'https://api.assemblyai.com/v2/upload',
+#             headers={'authorization': assemblyai_api_key},
+#             files={'file': f}
+#         )
+#     return response.json()['upload_url']
+
+# def transcribe_audio(audio_url):
+#     request_body = {
+#         "audio_url": audio_url,
+#         "sentiment_analysis": True
+#     }
+#     response = requests.post(
+#         'https://api.assemblyai.com/v2/transcript',
+#         json=request_body,
+#         headers={'authorization': assemblyai_api_key}
+#     )
+#     return response.json()['id']
+
+# def poll_transcription(transcript_id):
+#     endpoint = f'https://api.assemblyai.com/v2/transcript/{transcript_id}'
+#     while True:
+#         response = requests.get(endpoint, headers={'authorization': assemblyai_api_key})
+#         result = response.json()
+#         if result['status'] == 'completed':
+#             return result
+#         elif result['status'] == 'error':
+#             raise Exception(result['error'])
+#         time.sleep(3)
+
+# @app.route("/analyze_voice", methods=["POST"])
+# def analyze_voice():
+#     try:
+#         if 'audio' not in request.files:
+#             return jsonify({'error': 'No audio file provided'}), 400
+
+#         audio_file = request.files['audio']
+#         temp_path = os.path.join(tempfile.gettempdir(), 'voice.wav')
+#         audio_file.save(temp_path)
+
+#         print("✅ Uploading audio to AssemblyAI...")
+#         audio_url = upload_audio_to_assemblyai(temp_path)
+#         transcript_id = transcribe_audio(audio_url)
+#         print("⏳ Waiting for transcription...")
+
+#         result = poll_transcription(transcript_id)
+#         transcript_text = result.get('text', '')
+#         sentiment_results = result.get('sentiment_analysis_results', [])
+
+#         # Default values
+#         sentiment = "neutral"
+#         dominant_emotion = "neutral"
+
+#         # Analyze sentiment
+#         sentiment_counts = {"POSITIVE": 0, "NEUTRAL": 0, "NEGATIVE": 0}
+#         for res in sentiment_results:
+#             sentiment_counts[res["sentiment"]] += 1
+
+#         if sentiment_counts:
+#             dominant_sentiment = max(sentiment_counts, key=sentiment_counts.get).lower()
+#             sentiment = dominant_sentiment
+#             dominant_emotion = {
+#                 "positive": "happy",
+#                 "neutral": "neutral",
+#                 "negative": "sad"
+#             }.get(sentiment, "neutral")
+
+#         spiral_dynamics_map = {
+#             "happy": "Green",
+#             "neutral": "Blue",
+#             "sad": "Purple",
+#             "angry": "Red"
+#         }
+#         spiral_dynamics = spiral_dynamics_map.get(dominant_emotion, "Beige")
+
+#         return jsonify({
+#             'transcript': transcript_text,
+#             'dominant_emotion': dominant_emotion,
+#             'sentiment': sentiment,
+#             'spiral_dynamics': spiral_dynamics
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({'error': str(e)}), 500
+
+# # ---------- RUN ---------- #
+
+# if __name__ == "__main__":
+#     app.run(debug=True, host="0.0.0.0", port=5000)
+    
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+# import traceback
+# import tempfile
+# import requests
+# import time
+
+# # Load environment variables
+# load_dotenv()
+# a4f_api_key = os.getenv("A4F_API_KEY")
+# assemblyai_api_key = os.getenv("ASSEMBLYAI_API_KEY")
+
+# if not a4f_api_key:
+#     raise ValueError("❌ A4F_API_KEY not found in .env")
+# if not assemblyai_api_key:
+#     raise ValueError("❌ ASSEMBLYAI_API_KEY not found in .env")
+
+# client = OpenAI(api_key=a4f_api_key, base_url="https://api.a4f.co/v1")
+
+# app = Flask(__name__)
+# CORS(app)
+
+# STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
+
+# def detect_intent(entry):
+#     prompt = (
+#         "Decide whether this journal entry is for reflection and growth (Spiral Dynamics) or normal chat.\n"
+#         "Reply with just one word: 'spiral' or 'chat'\n\n"
+#         f"Entry: \"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0,
+#     )
+#     intent = response.choices[0].message.content.strip().lower()
+#     return "spiral" if "spiral" in intent else "chat"
+
+# @app.route("/", methods=["GET"])
+# def home():
+#     return "🌱 Spiral Dynamics API is live."
+
+# @app.route("/merged", methods=["POST"])
+# def merged_reflection():
+#     try:
+#         data = request.get_json()
+#         text = data.get("text", "").strip()
+#         if not text:
+#             return jsonify({"error": "Missing journaling input."}), 400
+
+#         intent = detect_intent(text)
+
+#         if intent == "chat":
+#             prompt = f"You are a wise and kind assistant. Respond conversationally to this user:\n\n\"{text}\""
+#             response = client.chat.completions.create(
+#                 model="provider-2/gpt-3.5-turbo",
+#                 messages=[{"role": "user", "content": prompt}],
+#                 temperature=0.7,
+#             )
+#             return jsonify({
+#                 "mode": "chat",
+#                 "response": response.choices[0].message.content.strip()
+#             })
+
+#         # Spiral mode: apply expanded prompts
+#         # 1. Classification
+#         classification_prompt = f"""You are an expert in Spiral Dynamics. Based on the user's journal entry below, identify which stage (Beige, Purple, Red, Blue, Orange, Green, Yellow, or Turquoise) it most reflects, and give a one-line reason.
+
+# Journal Entry:
+# {text}
+
+# Respond in this format:
+# Stage: <stage>
+# Reason: <one-line reason>
+# """
+#         classification_response = client.chat.completions.create(
+#             model="gpt-4",
+#             messages=[{"role": "user", "content": classification_prompt}],
+#             temperature=0.5,
+#         )
+#         classification_result = classification_response.choices[0].message.content.strip()
+
+#         # Parse classification result
+#         parsed = {"stage": "", "reason": "", "values": "", "shadow": ""}
+#         for line in classification_result.split("\n"):
+#             if line.lower().startswith("stage:"):
+#                 parsed["stage"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("reason:"):
+#                 parsed["reason"] = line.split(":", 1)[1].strip()
+
+#         stage = parsed["stage"] or "Unknown"
+#         stage_index = STAGES.index(stage) if stage in STAGES else -1
+
+#         # 2. Reflect Inward
+#         monologue_prompt = f"""Based on the following journal entry, write a short inner monologue or prompted journaling line to help the user reflect inward and evolve their consciousness. Make it introspective and emotionally resonant.
+
+# Journal Entry:
+# {text}
+
+# Inner Monologue:"""
+#         monologue_response = client.chat.completions.create(
+#             model="gpt-4",
+#             messages=[{"role": "user", "content": monologue_prompt}],
+#             temperature=0.75,
+#         )
+#         inner_monologue = monologue_response.choices[0].message.content.strip()
+
+#         # 3. Acceptance + Growth Prompt
+#         growth_prompt = f"""You are a compassionate Spiral Dynamics mentor. Given the journal entry below, provide:
+# 1. A gentle validation or acceptance of what the user is feeling.
+# 2. A thoughtful growth prompt that nudges the user to evolve, without pushing or fixing.
+
+# Journal Entry:
+# {text}
+
+# Respond in this format:
+# Acceptance: <validate emotion>
+# Growth Prompt: <gentle nudge>"""
+#         growth_response = client.chat.completions.create(
+#             model="gpt-4",
+#             messages=[{"role": "user", "content": growth_prompt}],
+#             temperature=0.7,
+#         )
+#         growth_result = growth_response.choices[0].message.content.strip()
+
+#         # 4. Deep Reflective Question
+#         reflection_prompt = f"""Based on the following journal entry, ask one deep reflective question that could help the user evolve to the next level of consciousness in Spiral Dynamics.
+
+# Journal Entry:
+# {text}
+
+# Reflective Question:"""
+#         question_response = client.chat.completions.create(
+#             model="gpt-4",
+#             messages=[{"role": "user", "content": reflection_prompt}],
+#             temperature=0.7,
+#         )
+#         reflective_question = question_response.choices[0].message.content.strip()
+
+#         reply = (
+#             f"{classification_result}\n\n"
+#             f"Reflect Inward: {inner_monologue}\n\n"
+#             f"{growth_result}\n\n"
+#             f"Deep Reflective Question: {reflective_question}"
+#         )
+
+#         return jsonify({
+#             "mode": "spiral",
+#             "stage": parsed["stage"],
+#             "reason": parsed["reason"],
+#             "values_summary": "",
+#             "shadow": "",
+#             "portal_prompt": reflective_question,
+#             "badge": f"{parsed['stage']} Seeker",
+#             "stage_index": stage_index,
+#             "reply": reply
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# @app.route("/growth_prompt", methods=["POST"])
+# def growth_prompt():
+#     try:
+#         data = request.get_json()
+#         stage = data.get("stage")
+#         user_answer = data.get("user_answer")
+
+#         if not stage or not user_answer:
+#             return jsonify({"error": "Missing data"}), 400
+
+#         prompt = (
+#             f"The user is currently in the '{stage}' stage of Spiral Dynamics. "
+#             f"They answered this reflection:\n\"{user_answer}\"\n\n"
+#             f"Now suggest a single powerful personal growth prompt, mindset shift, or daily practice "
+#             f"that would help them evolve toward the next Spiral Dynamics stage."
+#         )
+
+#         response = client.chat.completions.create(
+#             model="provider-2/gpt-3.5-turbo",
+#             messages=[{"role": "user", "content": prompt}],
+#             temperature=0.8,
+#         )
+
+#         return jsonify({
+#             "growth_prompt": response.choices[0].message.content.strip()
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# @app.route("/analyze_voice", methods=["POST"])
+# def analyze_voice():
+#     try:
+#         if 'audio' not in request.files:
+#             return jsonify({'error': 'No audio file provided'}), 400
+
+#         audio_file = request.files['audio']
+#         temp_path = os.path.join(tempfile.gettempdir(), 'voice.wav')
+#         audio_file.save(temp_path)
+
+#         print("✅ Uploading audio to AssemblyAI...")
+#         audio_url = upload_audio_to_assemblyai(temp_path)
+#         transcript_id = transcribe_audio(audio_url)
+#         print("⏳ Waiting for transcription...")
+
+#         result = poll_transcription(transcript_id)
+#         transcript_text = result.get('text', '')
+#         sentiment_results = result.get('sentiment_analysis_results', [])
+
+#         sentiment = "neutral"
+#         dominant_emotion = "neutral"
+#         sentiment_counts = {"POSITIVE": 0, "NEUTRAL": 0, "NEGATIVE": 0}
+
+#         for res in sentiment_results:
+#             sentiment_counts[res["sentiment"]] += 1
+
+#         if sentiment_counts:
+#             dominant_sentiment = max(sentiment_counts, key=sentiment_counts.get).lower()
+#             sentiment = dominant_sentiment
+#             dominant_emotion = {
+#                 "positive": "happy",
+#                 "neutral": "neutral",
+#                 "negative": "sad"
+#             }.get(sentiment, "neutral")
+
+#         spiral_dynamics_map = {
+#             "happy": "Green",
+#             "neutral": "Blue",
+#             "sad": "Purple",
+#             "angry": "Red"
+#         }
+#         spiral_dynamics = spiral_dynamics_map.get(dominant_emotion, "Beige")
+
+#         return jsonify({
+#             'transcript': transcript_text,
+#             'dominant_emotion': dominant_emotion,
+#             'sentiment': sentiment,
+#             'spiral_dynamics': spiral_dynamics
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({'error': str(e)}), 500
+
+# def upload_audio_to_assemblyai(filepath):
+#     with open(filepath, 'rb') as f:
+#         response = requests.post(
+#             'https://api.assemblyai.com/v2/upload',
+#             headers={'authorization': assemblyai_api_key},
+#             files={'file': f}
+#         )
+#     return response.json()['upload_url']
+
+# def transcribe_audio(audio_url):
+#     request_body = {
+#         "audio_url": audio_url,
+#         "sentiment_analysis": True
+#     }
+#     response = requests.post(
+#         'https://api.assemblyai.com/v2/transcript',
+#         json=request_body,
+#         headers={'authorization': assemblyai_api_key}
+#     )
+#     return response.json()['id']
+
+# def poll_transcription(transcript_id):
+#     endpoint = f'https://api.assemblyai.com/v2/transcript/{transcript_id}'
+#     while True:
+#         response = requests.get(endpoint, headers={'authorization': assemblyai_api_key})
+#         result = response.json()
+#         if result['status'] == 'completed':
+#             return result
+#         elif result['status'] == 'error':
+#             raise Exception(result['error'])
+#         time.sleep(3)
+
+# if __name__ == "__main__":
+#     app.run(debug=True, host="0.0.0.0", port=5000)
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+# import traceback
+# import tempfile
+# from model_loader import predict_emotion
+
+# load_dotenv()
+# a4f_api_key = os.getenv("A4F_API_KEY")
+
+# if not a4f_api_key:
+#     raise ValueError("❌ A4F_API_KEY not found in .env")
+
+# client = OpenAI(api_key=a4f_api_key, base_url="https://api.a4f.co/v1")
+
+# app = Flask(__name__)
+# CORS(app)
+
+# STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
+
+# # ---------- SPIRAL TEXT ROUTES ---------- #
+
+# def classify_stage(entry):
+#     prompt = (
+#         f"You're an expert in Spiral Dynamics. Based on the following journal entry, "
+#         f"classify the user into one of these 8 stages:\n{', '.join(STAGES)}\n\n"
+#         f"Entry:\n\"{entry}\"\n\n"
+#         f"Format:\nStage: <one stage>\nValues: <summary>\nShadow: <limitation>"
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.7,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def detect_intent(entry):
+#     prompt = (
+#         "Is this journal entry for self-growth or casual chat?\n"
+#         "Reply with one word: 'spiral' or 'chat'\n\n"
+#         f"Entry: \"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0,
+#     )
+#     return "spiral" if "spiral" in response.choices[0].message.content.lower() else "chat"
+
+# def generate_portal_prompt(stage, entry):
+#     prompt = (
+#         f"The user is currently in the '{stage}' stage. Based on:\n\"{entry}\"\n\n"
+#         f"Ask a deep reflection question to help them evolve to the next Spiral Dynamics stage."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def get_badge(stage):
+#     return f"{stage} Seeker"
+
+# @app.route("/", methods=["GET"])
+# def home():
+#     return "🌱 Spiral Dynamics API is live."
+
+# @app.route("/merged", methods=["POST"])
+# def merged_reflection():
+#     try:
+#         data = request.get_json()
+#         entry = data.get("text", "").strip()
+#         if not entry:
+#             return jsonify({"error": "Missing journaling input."}), 400
+
+#         intent = detect_intent(entry)
+#         if intent == "chat":
+#             prompt = f"You are a kind assistant. Respond to this:\n\"{entry}\""
+#             reply = client.chat.completions.create(
+#                 model="provider-2/gpt-3.5-turbo",
+#                 messages=[{"role": "user", "content": prompt}],
+#                 temperature=0.7,
+#             )
+#             return jsonify({"mode": "chat", "response": reply.choices[0].message.content.strip()})
+
+#         classification = classify_stage(entry)
+#         parsed = {"stage": "", "values": "", "shadow": ""}
+#         for line in classification.split("\n"):
+#             if line.lower().startswith("stage:"):
+#                 parsed["stage"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("values:"):
+#                 parsed["values"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("shadow:"):
+#                 parsed["shadow"] = line.split(":", 1)[1].strip()
+
+#         stage = parsed["stage"]
+#         return jsonify({
+#             "mode": "spiral",
+#             "stage": stage,
+#             "values_summary": parsed["values"],
+#             "shadow": parsed["shadow"],
+#             "portal_prompt": generate_portal_prompt(stage, entry),
+#             "badge": get_badge(stage),
+#             "stage_index": STAGES.index(stage) if stage in STAGES else -1
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# # ---------- VOICE EMOTION ANALYSIS ROUTE ---------- #
+
+# @app.route('/predict-emotion', methods=['POST'])
+# def predict():
+#     if 'file' not in request.files:
+#         return jsonify({'error': 'No audio file provided'}), 400
+
+#     file = request.files['file']
+#     file_path = os.path.join(tempfile.gettempdir(), "temp_audio.wav")
+#     file.save(file_path)
+
+#     try:
+#         emotion = predict_emotion(file_path)
+#         os.remove(file_path)
+#         return jsonify({'emotion': emotion})
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({'error': str(e)}), 500
+
+# # ---------- RUN ---------- #
+
+# if __name__ == "__main__":
+#     app.run(debug=True, host="0.0.0.0", port=5000)
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+# import traceback
+# import tempfile
+# from model_loader import predict_emotion  # make sure this exists
+
+# # ---------- SETUP ---------- #
+# load_dotenv()
+# a4f_api_key = os.getenv("A4F_API_KEY")
+
+# if not a4f_api_key:
+#     raise ValueError("❌ A4F_API_KEY not found in .env")
+
+# client = OpenAI(api_key=a4f_api_key, base_url="https://api.a4f.co/v1")
+# app = Flask(__name__)
+# CORS(app)
+
+# STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
+
+# # ---------- SPIRAL DYNAMICS ---------- #
+
+# def classify_stage(entry):
+#     prompt = (
+#         f"You're an expert in Spiral Dynamics. Based on the following journal entry, "
+#         f"classify the user into one of these 8 stages:\n{', '.join(STAGES)}\n\n"
+#         f"Entry:\n\"{entry}\"\n\n"
+#         f"Format:\nStage: <one stage>\nValues: <summary>\nShadow: <limitation>"
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.7,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def detect_intent(entry):
+#     prompt = (
+#         "Is this journal entry for self-growth or casual chat?\n"
+#         "Reply with one word: 'spiral' or 'chat'\n\n"
+#         f"Entry: \"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0,
+#     )
+#     return "spiral" if "spiral" in response.choices[0].message.content.lower() else "chat"
+
+# def generate_portal_prompt(stage, entry):
+#     prompt = (
+#         f"The user is currently in the '{stage}' stage. Based on:\n\"{entry}\"\n\n"
+#         f"Ask a deep reflection question to help them evolve to the next Spiral Dynamics stage."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-2/gpt-3.5-turbo",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def get_badge(stage):
+#     return f"{stage} Seeker"
+
+# @app.route("/", methods=["GET"])
+# def home():
+#     return "🌱 Spiral Dynamics API is live."
+
+# @app.route("/merged", methods=["POST"])
+# def merged_reflection():
+#     try:
+#         data = request.get_json()
+#         entry = data.get("text", "").strip()
+#         if not entry:
+#             return jsonify({"error": "Missing journaling input."}), 400
+
+#         intent = detect_intent(entry)
+#         if intent == "chat":
+#             prompt = f"You are a kind assistant. Respond to this:\n\"{entry}\""
+#             reply = client.chat.completions.create(
+#                 model="provider-2/gpt-3.5-turbo",
+#                 messages=[{"role": "user", "content": prompt}],
+#                 temperature=0.7,
+#             )
+#             return jsonify({"mode": "chat", "response": reply.choices[0].message.content.strip()})
+
+#         classification = classify_stage(entry)
+#         parsed = {"stage": "", "values": "", "shadow": ""}
+#         for line in classification.split("\n"):
+#             if line.lower().startswith("stage:"):
+#                 parsed["stage"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("values:"):
+#                 parsed["values"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("shadow:"):
+#                 parsed["shadow"] = line.split(":", 1)[1].strip()
+
+#         stage = parsed["stage"]
+#         return jsonify({
+#             "mode": "spiral",
+#             "stage": stage,
+#             "values_summary": parsed["values"],
+#             "shadow": parsed["shadow"],
+#             "portal_prompt": generate_portal_prompt(stage, entry),
+#             "badge": get_badge(stage),
+#             "stage_index": STAGES.index(stage) if stage in STAGES else -1
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# # ---------- VOICE EMOTION ANALYSIS ---------- #
+
+# @app.route('/predict-emotion', methods=['POST'])
+# def predict():
+#     if 'file' not in request.files:
+#         return jsonify({'error': 'No audio file provided'}), 400
+
+#     file = request.files['file']
+#     file_path = os.path.join(tempfile.gettempdir(), "temp_audio.wav")
+#     file.save(file_path)
+
+#     try:
+#         emotion = predict_emotion(file_path)
+#         os.remove(file_path)  # delete temp file
+#         return jsonify({'emotion': emotion})
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({'error': str(e)}), 500
+
+# # ---------- RUN SERVER ---------- #
+
+# if __name__ == "__main__":
+#     app.run(debug=True, host="0.0.0.0", port=5000)
+
+# new working code
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+# import traceback
+# import tempfile
+# from model_loader import predict_emotion  # Your voice emotion model logic
+
+# # Load environment variables
+# load_dotenv()
+# a4f_api_key = os.getenv("A4F_API_KEY")
+
+# if not a4f_api_key:
+#     raise ValueError("❌ A4F_API_KEY not found in .env")
+
+# # Initialize OpenAI client with gpt-4o
+# client = OpenAI(api_key=a4f_api_key, base_url="https://api.a4f.co/v1")
+
+# app = Flask(__name__)
+# CORS(app)
+
+# STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
+
+# # ---------- SPIRAL TEXT ANALYSIS FUNCTIONS ---------- #
+
+# def classify_stage(entry):
+#     prompt = (
+#         f"You're an expert in Spiral Dynamics. Based on the following journal entry, "
+#         f"classify the user into one of these 8 stages:\n{', '.join(STAGES)}\n\n"
+#         f"Entry:\n\"{entry}\"\n\n"
+#         f"Format:\nStage: <one stage>\nValues: <summary>\nShadow: <limitation>"
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-3/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.7,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def detect_intent(entry):
+#     prompt = (
+#         "Is this journal entry for self-growth or casual chat?\n"
+#         "Reply with one word: 'spiral' or 'chat'\n\n"
+#         f"Entry: \"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-3/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0,
+#     )
+#     return "spiral" if "spiral" in response.choices[0].message.content.lower() else "chat"
+
+# def generate_portal_prompt(stage, entry):
+#     prompt = (
+#         f"The user is currently in the '{stage}' stage. Based on:\n\"{entry}\"\n\n"
+#         f"Ask a deep reflection question to help them evolve to the next Spiral Dynamics stage."
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-3/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.8,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def get_badge(stage):
+#     return f"{stage} Seeker"
+
+# # ---------- ROUTES ---------- #
+
+# @app.route("/", methods=["GET"])
+# def home():
+#     return "🌱 Spiral Dynamics & Emotion API is live."
+
+# @app.route("/merged", methods=["POST"])
+# def merged_reflection():
+#     try:
+#         data = request.get_json()
+#         entry = data.get("text", "").strip()
+#         if not entry:
+#             return jsonify({"error": "Missing journaling input."}), 400
+
+#         intent = detect_intent(entry)
+#         if intent == "chat":
+#             prompt = f"You are a kind assistant. Respond to this:\n\"{entry}\""
+#             reply = client.chat.completions.create(
+#                 model="provider-3/gpt-4o",
+#                 messages=[{"role": "user", "content": prompt}],
+#                 temperature=0.7,
+#             )
+#             return jsonify({"mode": "chat", "response": reply.choices[0].message.content.strip()})
+
+#         classification = classify_stage(entry)
+#         parsed = {"stage": "", "values": "", "shadow": ""}
+#         for line in classification.split("\n"):
+#             if line.lower().startswith("stage:"):
+#                 parsed["stage"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("values:"):
+#                 parsed["values"] = line.split(":", 1)[1].strip()
+#             elif line.lower().startswith("shadow:"):
+#                 parsed["shadow"] = line.split(":", 1)[1].strip()
+
+#         stage = parsed["stage"]
+#         return jsonify({
+#             "mode": "spiral",
+#             "stage": stage,
+#             "values_summary": parsed["values"],
+#             "shadow": parsed["shadow"],
+#             "portal_prompt": generate_portal_prompt(stage, entry),
+#             "badge": get_badge(stage),
+#             "stage_index": STAGES.index(stage) if stage in STAGES else -1
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# @app.route('/predict-emotion', methods=['POST'])
+# def predict():
+#     if 'file' not in request.files:
+#         return jsonify({'error': 'No audio file provided'}), 400
+
+#     file = request.files['file']
+#     file_path = os.path.join(tempfile.gettempdir(), "temp_audio.wav")
+#     file.save(file_path)
+
+#     try:
+#         emotion = predict_emotion(file_path)
+#         os.remove(file_path)
+#         return jsonify({'emotion': emotion})
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({'error': str(e)}), 500
+
+# # ---------- START SERVER ---------- #
+
+# if __name__ == "__main__":
+#     app.run(debug=True, host="0.0.0.0", port=5000)
+
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+# import traceback
+# import tempfile
+# from model_loader import predict_emotion  # Voice emotion model logic
+
+# # Load environment variables
+# load_dotenv()
+# a4f_api_key = os.getenv("A4F_API_KEY")
+
+# if not a4f_api_key:
+#     raise ValueError("❌ A4F_API_KEY not found in .env")
+
+# # Initialize OpenAI client
+# client = OpenAI(api_key=a4f_api_key, base_url="https://api.a4f.co/v1")
+
+# app = Flask(__name__)
+# CORS(app)
+
+# STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
+
+# # ---------- SPIRAL DYNAMICS FUNCTIONS ---------- #
+
+# def classify_stage(entry):
+#     prompt = (
+#         f"You are a Spiral Dynamics guide with emotional intelligence and storytelling skill.\n"
+#         f"A user shares a journal entry. Your task is to analyze it and return:\n"
+#         f"- Stage: (one of {', '.join(STAGES)})\n"
+#         f"- Values: (what seems to matter most to them right now - speak emotionally)\n"
+#         f"- Shadow: (where they might be stuck - be gentle and insightful)\n\n"
+#         f"Use metaphor, compassion, and reflection. Do NOT be robotic or judgmental.\n\n"
+#         f"Journal Entry:\n\"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-3/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.75,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def detect_intent(entry):
+#     prompt = (
+#         "You are a gatekeeper. Is this journal entry about personal reflection, values, or growth (Spiral Dynamics)?\n"
+#         "Or is it just casual talk?\n\n"
+#         "Reply with one word only: 'spiral' or 'chat'.\n\n"
+#         f"Entry: \"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-3/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0,
+#     )
+#     return "spiral" if "spiral" in response.choices[0].message.content.lower() else "chat"
+
+# def generate_portal_prompt(stage, entry):
+#     prompt = (
+#         f"You are a Spiral Dynamics mentor. The user is currently in the '{stage}' stage.\n"
+#         f"Based on their journal entry, ask a deep, emotionally resonant question to help them reflect and possibly grow toward the next stage.\n\n"
+#         f"Use storytelling, metaphor, and heart-centered language.\n"
+#         f"Do not reference 'Spiral Dynamics' directly in the question.\n\n"
+#         f"Entry:\n\"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-3/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.85,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def get_badge(stage):
+#     return f"{stage} Seeker"
+
+# # ---------- ROUTES ---------- #
+
+# @app.route("/", methods=["GET"])
+# def home():
+#     return "🌱 Spiral Dynamics & Emotion API is live."
+
+# @app.route("/merged", methods=["POST"])
+# def merged_reflection():
+#     try:
+#         data = request.get_json()
+#         entry = data.get("text", "").strip()
+#         if not entry:
+#             return jsonify({"error": "Missing journaling input."}), 400
+
+#         intent = detect_intent(entry)
+#         if intent == "chat":
+#             prompt = f"You are a kind, conversational assistant. Respond gently:\n\n\"{entry}\""
+#             reply = client.chat.completions.create(
+#                 model="provider-3/gpt-4o",
+#                 messages=[{"role": "user", "content": prompt}],
+#                 temperature=0.7,
+#             )
+#             return jsonify({"mode": "chat", "response": reply.choices[0].message.content.strip()})
+
+#         classification = classify_stage(entry)
+#         parsed = {"stage": "", "values": "", "shadow": ""}
+#         for line in classification.split("\n"):
+#             key, sep, value = line.partition(":")
+#             if sep and key.lower().strip() == "stage":
+#                 parsed["stage"] = value.strip()
+#             elif sep and key.lower().strip() == "values":
+#                 parsed["values"] = value.strip()
+#             elif sep and key.lower().strip() == "shadow":
+#                 parsed["shadow"] = value.strip()
+
+#         stage = parsed["stage"]
+#         return jsonify({
+#             "mode": "spiral",
+#             "stage": stage,
+#             "values_summary": parsed["values"],
+#             "shadow": parsed["shadow"],
+#             "portal_prompt": generate_portal_prompt(stage, entry),
+#             "badge": get_badge(stage),
+#             "stage_index": STAGES.index(stage) if stage in STAGES else -1
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# @app.route('/predict-emotion', methods=['POST'])
+# def predict():
+#     if 'file' not in request.files:
+#         return jsonify({'error': 'No audio file provided'}), 400
+
+#     file = request.files['file']
+#     file_path = os.path.join(tempfile.gettempdir(), "temp_audio.wav")
+#     file.save(file_path)
+
+#     try:
+#         emotion = predict_emotion(file_path)
+#         os.remove(file_path)
+#         return jsonify({'emotion': emotion})
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({'error': str(e)}), 500
+
+# # ---------- START SERVER ---------- #
+
+# if __name__ == "__main__":
+#     app.run(debug=True, host="0.0.0.0", port=5000)
+
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+# import traceback
+# import json
+
+# load_dotenv()
+# a4f_api_key = os.getenv("A4F_API_KEY")
+# if not a4f_api_key:
+#     raise ValueError("❌ A4F_API_KEY not found in .env")
+
+# client = OpenAI(api_key=a4f_api_key, base_url="https://api.a4f.co/v1")
+# app = Flask(__name__)
+# CORS(app)
+
+# STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
+
+# def detect_intent(entry):
+#     prompt = (
+#         "You are a gatekeeper. Is this journal entry about personal reflection, values, or growth (Spiral Dynamics)?\n"
+#         "Or is it just casual talk?\n\n"
+#         "Reply with one word only: 'spiral' or 'chat'.\n\n"
+#         f"Entry: \"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-3/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0,
+#     )
+#     return "spiral" if "spiral" in response.choices[0].message.content.lower() else "chat"
+
+# def classify_stage(entry):
+#     prompt = (
+#         f"Analyze the user's entry and return only the Spiral Dynamics stage (one of: {', '.join(STAGES)}). "
+#         f"Respond only with the stage name, nothing else.\n\n"
+#         f"Entry: \"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-3/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.6,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def generate_reflective_question(entry):
+#     prompt = (
+#         f"You are a Spiral Dynamics mentor. Based on the user's thoughts, ask one deep, emotionally resonant question. "
+#         f"Don't mention Spiral Dynamics. Don't explain anything. Just ask the question.\n\n"
+#         f"Entry: \"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-3/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.85,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def check_evolution(last_stage, current_stage):
+#     try:
+#         if STAGES.index(current_stage) > STAGES.index(last_stage):
+#             return f"🌱 Beautiful shift! You've evolved to {current_stage} — keep growing 🌟"
+#     except:
+#         pass
+#     return None
+
+# @app.route("/merged", methods=["POST"])
+# def merged_reflection():
+#     try:
+#         data = request.get_json()
+#         entry = data.get("text", "").strip()
+#         last_stage = data.get("last_stage", "").strip()
+
+#         if not entry:
+#             return jsonify({"error": "Missing journaling input."}), 400
+
+#         intent = detect_intent(entry)
+#         if intent == "chat":
+#             reply = client.chat.completions.create(
+#                 model="provider-3/gpt-4o",
+#                 messages=[{"role": "user", "content": f"You are a kind friend. Respond casually to: {entry}"}],
+#                 temperature=0.7,
+#             )
+#             return jsonify({
+#                 "mode": "chat",
+#                 "response": reply.choices[0].message.content.strip()
+#             })
+
+#         stage = classify_stage(entry)
+#         question = generate_reflective_question(entry)
+#         evolution_msg = check_evolution(last_stage, stage)
+
+#         return jsonify({
+#             "mode": "spiral",
+#             "stage": stage,
+#             "question": question,
+#             "evolution": evolution_msg,
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# if __name__ == "__main__":
+#     app.run(debug=True, host="0.0.0.0", port=5000)
+
+# from flask import Flask, request, jsonify
+# from flask_cors import CORS
+# from openai import OpenAI
+# from dotenv import load_dotenv
+# import os
+# import traceback
+
+# load_dotenv()
+# a4f_api_key = os.getenv("A4F_API_KEY")
+# if not a4f_api_key:
+#     raise ValueError("❌ A4F_API_KEY not found in .env")
+
+# client = OpenAI(api_key=a4f_api_key, base_url="https://api.a4f.co/v1")
+# app = Flask(__name__)
+# CORS(app)
+
+# STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
+
+# def detect_intent(entry):
+#     prompt = (
+#         "You are a gatekeeper. Is this journal entry about personal reflection, values, or growth (Spiral Dynamics)?\n"
+#         "Or is it just casual talk?\n\n"
+#         "Reply with one word only: 'spiral' or 'chat'.\n\n"
+#         f"Entry: \"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-3/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0,
+#     )
+#     return "spiral" if "spiral" in response.choices[0].message.content.lower() else "chat"
+
+# def classify_stage(entry):
+#     prompt = (
+#         f"Analyze the user's entry and return only the Spiral Dynamics stage (one of: {', '.join(STAGES)}). "
+#         f"Respond only with the stage name.\n\n"
+#         f"Entry: \"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-3/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.6,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def generate_reflective_question(entry, reply_to=None):
+#     context = f"\nReplying to: \"{reply_to}\"" if reply_to else ""
+#     prompt = (
+#         f"You are a Spiral Dynamics mentor. Based on the user's thoughts{context}, "
+#         f"ask one deep, emotionally resonant question. "
+#         f"Don't mention Spiral Dynamics. Don't explain anything. Just ask the question.\n\n"
+#         f"User message: \"{entry}\""
+#     )
+#     response = client.chat.completions.create(
+#         model="provider-3/gpt-4o",
+#         messages=[{"role": "user", "content": prompt}],
+#         temperature=0.85,
+#     )
+#     return response.choices[0].message.content.strip()
+
+# def check_evolution(last_stage, current_stage):
+#     try:
+#         if STAGES.index(current_stage) > STAGES.index(last_stage):
+#             return f"🌱 Beautiful shift! You've evolved to {current_stage} — keep growing 🌟"
+#     except:
+#         pass
+#     return None
+
+# @app.route("/merged", methods=["POST"])
+# def merged_reflection():
+#     try:
+#         data = request.get_json()
+#         entry = data.get("text", "").strip()
+#         last_stage = data.get("last_stage", "").strip()
+#         reply_to = data.get("reply_to", "").strip()
+
+#         if not entry:
+#             return jsonify({"error": "Missing journaling input."}), 400
+
+#         intent = detect_intent(entry)
+#         if intent == "chat":
+#             message = f"User: {reply_to}\n\nUser response: {entry}" if reply_to else entry
+#             reply = client.chat.completions.create(
+#                 model="provider-3/gpt-4o",
+#                 messages=[{"role": "user", "content": f"You are a kind friend. Respond casually to: {message}"}],
+#                 temperature=0.7,
+#             )
+#             return jsonify({"mode": "chat", "response": reply.choices[0].message.content.strip()})
+
+#         stage = classify_stage(entry)
+#         question = generate_reflective_question(entry, reply_to)
+#         evolution_msg = check_evolution(last_stage, stage)
+
+#         return jsonify({
+#             "mode": "spiral",
+#             "stage": stage,
+#             "question": question,
+#             "evolution": evolution_msg,
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+# if __name__ == "__main__":
+#     app.run(debug=True, host="0.0.0.0", port=5000)

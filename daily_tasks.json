@@ -1,0 +1,89 @@
+[
+  {
+    "user_id": "dBEErWGti0Y8Ytfx1W0SlcEZ29H2",
+    "task": "Identify one small act of kindness you performed today.",
+    "date": "2025-06-30",
+    "completed": false,
+    "timestamp": "2025-06-30T15:23:39.625582"
+  },
+  {
+    "user_id": "dBEErWGti0Y8Ytfx1W0SlcEZ29H2",
+    "task": "List three things you are grateful for right now.",
+    "date": "2025-07-01",
+    "completed": false,
+    "timestamp": "2025-07-01T16:02:20.719718"
+  },
+  {
+    "user_id": "dBEErWGti0Y8Ytfx1W0SlcEZ29H2",
+    "task": "Reflect on one small act of kindness you did today.",
+    "date": "2025-07-03",
+    "completed": true,
+    "timestamp": "2025-07-03T17:20:14.292921",
+    "completion_timestamp": "2025-07-03T17:20:24.977945"
+  },
+  {
+    "user_id": "dBEErWGti0Y8Ytfx1W0SlcEZ29H2",
+    "task": "Reflect on one thing you are grateful for today.",
+    "date": "2025-07-04",
+    "completed": true,
+    "timestamp": "2025-07-04T07:34:10.488357",
+    "completion_timestamp": "2025-07-04T17:48:05.072024"
+  },
+  {
+    "user_id": "dBEErWGti0Y8Ytfx1W0SlcEZ29H2",
+    "task": "Have you ever acted on impulse just because it felt right in the moment? What happened?",
+    "date": "2025-07-05",
+    "completed": false,
+    "timestamp": "2025-07-05T11:49:30.225846"
+  },
+  {
+    "user_id": "qlKzXtQ28EOeU6qa1D0LtPpcOLT2",
+    "task": "Have you ever acted on impulse just because it felt right in the moment? What happened?",
+    "date": "2025-07-05",
+    "completed": false,
+    "timestamp": "2025-07-05T12:09:55.673172"
+  },
+  {
+    "user_id": "dBEErWGti0Y8Ytfx1W0SlcEZ29H2",
+    "task": "Do you ever switch perspectives just to understand something more deeply?",
+    "date": "2025-07-06",
+    "completed": true,
+    "timestamp": "2025-07-06T12:21:31.923813",
+    "completion_timestamp": "2025-07-06T12:21:41.512120"
+  },
+  {
+    "user_id": "dBEErWGti0Y8Ytfx1W0SlcEZ29H2",
+    "task": "When do you feel most authentic \u2014 when leading, listening, creating, or something else?",
+    "date": "2025-07-07",
+    "completed": false,
+    "timestamp": "2025-07-07T07:34:42.751130"
+  },
+  {
+    "user_id": "dBEErWGti0Y8Ytfx1W0SlcEZ29H2",
+    "task": "If everyone followed your philosophy of life, what kind of world would we have?",
+    "date": "2025-07-08",
+    "completed": false,
+    "timestamp": "2025-07-08T11:15:11.711195"
+  },
+  {
+    "user_id": "dBEErWGti0Y8Ytfx1W0SlcEZ29H2",
+    "task": "Have your values changed over the years? What sparked the shift?",
+    "date": "2025-07-09",
+    "completed": false,
+    "timestamp": "2025-07-09T06:34:20.642859"
+  },
+  {
+    "user_id": "H23uQutto0MEwJoRmQeWSOr6m2U2",
+    "task": "What's more important to you \u2014 being right, or being helpful in a larger system?",
+    "date": "2025-07-09",
+    "completed": false,
+    "timestamp": "2025-07-09T07:58:02.241244"
+  },
+  {
+    "user_id": "dBEErWGti0Y8Ytfx1W0SlcEZ29H2",
+    "task": "Describe a time when you took control of a situation without waiting for permission. Why did you do it?",
+    "date": "2025-07-11",
+    "completed": false,
+    "timestamp": "2025-07-11T12:47:59.703941"
+  }
+]
