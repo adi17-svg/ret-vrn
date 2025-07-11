@@ -1,1 +1,67 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environment
+venv/
+env/
+.venv/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Logs and databases
+*.log
+*.sqlite3
+instance/
+*.db
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.cache
+pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# Environment variables
 .env
+.env.*
+
+# Secret keys and credentials
+serviceAccountKey.json
+firebase-key.json
+test_openai_key_gpt4.py
+
+# Jupyter Notebooks checkpoints
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# macOS folder attributes
+.AppleDouble
+.LSOverride
+
+# Node modules (if using npm for frontend)
+node_modules/
