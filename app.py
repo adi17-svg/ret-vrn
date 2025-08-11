@@ -4346,6 +4346,8 @@ def get_notification():
         return jsonify(latest_notification)
     return jsonify({"message": "No notification yet"}), 404
 
+@app.route('/')
+
 if __name__ == "__main__":
     send_daily_notification()
     app.run(debug=True, host="0.0.0.0", port=5000)
