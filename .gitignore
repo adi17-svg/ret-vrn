@@ -1,12 +1,14 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
+# ============================
+# Python
+# ============================
+_pycache_/
 *.py[cod]
 *$py.class
 
 # C extensions
 *.so
 
-# Virtual environment
+# Virtual environments
 venv/
 env/
 .venv/
@@ -51,10 +53,49 @@ test_openai_key_gpt4.py
 # Jupyter Notebooks checkpoints
 .ipynb_checkpoints/
 
+# ============================
+# Flutter / Dart
+# ============================
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+build/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/ephemeral/
+ios/Pods/
+ios/.symlinks/
+.android/
+.idea/
+*.iml
+
+# IntelliJ / Android Studio
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# ============================
+# Node.js
+# ============================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp.*
+.pnp.js
+
+# ============================
 # VS Code
+# ============================
 .vscode/
 
-# OS-specific files
+# ============================
+# OS Files
+# ============================
 .DS_Store
 Thumbs.db
 desktop.ini
@@ -62,6 +103,3 @@ desktop.ini
 # macOS folder attributes
 .AppleDouble
 .LSOverride
-
-# Node modules (if using npm for frontend)
-node_modules/
