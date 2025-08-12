@@ -4378,9 +4378,10 @@ openai.api_base = "https://api.a4f.co/v1"
 app = Flask(__name__)
 CORS(app)
 
-@app.route("/")
+@app.route("/", methods=["GET", "HEAD"])
 def home():
-    return "Service is live ✅", 200
+    return "Backend is running!"
+
 
 STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
 COMPLETED_TASKS_FILE = "completed_tasks.json"
