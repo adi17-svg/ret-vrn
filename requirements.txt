@@ -10,3 +10,4 @@ seaborn
 apscheduler
 schedule
 pyttsx3
+pydub
