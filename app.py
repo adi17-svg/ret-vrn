@@ -16,6 +16,8 @@ from apscheduler.triggers.cron import CronTrigger
 # ✅ Import A4F-compatible OpenAI SDK
 from openai import OpenAI
 from datetime import datetime, timezone
+import hashlib
+
 
 # Load environment variables
 load_dotenv()
@@ -221,13 +223,39 @@ init_task_files()
 # Notification functions
 # ----------------- Notification Functions ----------------- #
 
-def send_daily_task_notification(fcm_token, task_text):
-    """Send notification to a single user's FCM token"""
-    if not FIREBASE_INITIALIZED or not fcm_token:
-        print("Firebase not initialized or token missing - skipping")
-        return None
+# def send_daily_task_notification(fcm_token, task_text):
+#     """Send notification to a single user's FCM token"""
+#     if not FIREBASE_INITIALIZED or not fcm_token:
+#         print("Firebase not initialized or token missing - skipping")
+#         return None
 
+#     try:
+#         message = messaging.Message(
+#             notification=messaging.Notification(
+#                 title="🌱 Your Daily Spiral Task",
+#                 body=task_text
+#             ),
+#             data={
+#                 "type": "daily_task",
+#                 "task": task_text,
+#                 "screen": "chat"
+#             },
+#             token=fcm_token
+#         )
+
+#         response = messaging.send(message)
+#         print(f"✅ Sent notification: {response}")
+#         return response
+#     except Exception as e:
+#         print(f"⚠ Error sending notification: {e}")
+#         return None
+
+def send_daily_task_notification(fcm_token, task_text):
     try:
+        # Create a unique ID based on the task text and date
+        today = datetime.now(timezone.utc).date().isoformat()
+        notification_id = hashlib.md5(f"{today}_{task_text}".encode()).hexdigest()
+        
         message = messaging.Message(
             notification=messaging.Notification(
                 title="🌱 Your Daily Spiral Task",
@@ -236,16 +264,24 @@ def send_daily_task_notification(fcm_token, task_text):
             data={
                 "type": "daily_task",
                 "task": task_text,
-                "screen": "chat"
+                "screen": "chat",
+                "notification_id": notification_id  # Add this line
             },
-            token=fcm_token
+            token=fcm_token,
+            android=messaging.AndroidConfig(
+                collapse_key=notification_id  # Use same ID for collapse
+            ),
+            apns=messaging.APNSConfig(
+                headers={
+                    "apns-collapse-id": notification_id  # iOS equivalent
+                }
+            )
         )
-
+        
         response = messaging.send(message)
-        print(f"✅ Sent notification: {response}")
         return response
     except Exception as e:
-        print(f"⚠ Error sending notification: {e}")
+        print(f"Error sending notification: {e}")
         return None
 
 # def send_all_daily_tasks():
@@ -268,34 +304,47 @@ def send_daily_task_notification(fcm_token, task_text):
 #     except Exception as e:
 #         print(f"⚠ Error in send_all_daily_tasks: {e}")
 
+# def has_received_today(user_id):
+#     try:
+#         now = datetime.now(timezone.utc)
+#         today_str = now.strftime("%Y-%m-%d")
+#         messages_ref = db.collection("users").document(user_id).collection("mergedMessages")
+
+#         query = messages_ref.where("is_notification", "==", True)
+#         docs = query.stream()
+
+#         for doc in docs:
+#             data = doc.to_dict()
+#             ts = data.get("timestamp")
+#             if ts is None:
+#                 continue
+#             # Convert Firestore timestamp or ISO string to datetime
+#             if hasattr(ts, "to_datetime"):
+#                 dt = ts.to_datetime()
+#             elif isinstance(ts, datetime):
+#                 dt = ts
+#             else:
+#                 dt = datetime.fromisoformat(str(ts))
+#             if dt.strftime("%Y-%m-%d") == today_str:
+#                 return True
+#         return False
+#     except Exception as e:
+#         print(f"Error checking notification for user {user_id}: {e}")
+#         # Safety: treat as already sent to avoid spam
+#         return True
+
 def has_received_today(user_id):
-    try:
-        now = datetime.now(timezone.utc)
-        today_str = now.strftime("%Y-%m-%d")
-        messages_ref = db.collection("users").document(user_id).collection("mergedMessages")
-
-        query = messages_ref.where("is_notification", "==", True)
-        docs = query.stream()
-
-        for doc in docs:
-            data = doc.to_dict()
-            ts = data.get("timestamp")
-            if ts is None:
-                continue
-            # Convert Firestore timestamp or ISO string to datetime
-            if hasattr(ts, "to_datetime"):
-                dt = ts.to_datetime()
-            elif isinstance(ts, datetime):
-                dt = ts
-            else:
-                dt = datetime.fromisoformat(str(ts))
-            if dt.strftime("%Y-%m-%d") == today_str:
-                return True
-        return False
-    except Exception as e:
-        print(f"Error checking notification for user {user_id}: {e}")
-        # Safety: treat as already sent to avoid spam
-        return True
+    today = datetime.now(timezone.utc).date().isoformat()
+    messages_ref = db.collection("users").document(user_id)\
+        .collection("mergedMessages")
+    
+    query = messages_ref\
+        .where("is_notification", "==", True)\
+        .where("date", "==", today)\
+        .limit(1)
+    
+    docs = query.stream()
+    return any(True for _ in docs)  # Returns True if any docs exist
 
 # def has_received_today(user_id):
 #     """Check Firestore if user already received today's notification."""
@@ -321,45 +370,175 @@ def has_received_today(user_id):
 #             return True
 #     return False
 
+# def send_all_daily_tasks():
+#     """Fetch all users from Firestore and send notifications if not already sent today"""
+#     try:
+#         users_ref = db.collection("users")
+#         users = users_ref.stream()
+#         for user_doc in users:
+#             user_id = user_doc.id
+#             user_data = user_doc.to_dict()
+#             fcm_token = user_data.get("fcmToken")
+            
+#             if not fcm_token:
+#                 print(f"⚠ User {user_id} has no FCM token, skipping.")
+#                 continue
+
+#             # Check if user already received notification today
+#             if has_received_today(user_id):
+#                 print(f"⚠ User {user_id} already received today's notification, skipping.")
+#                 continue
+
+#             # Generate task
+#             task_data = generate_daily_task(user_id)
+#             task_text = task_data["task"]
+
+#             # Send notification
+#             send_daily_task_notification(fcm_token, task_text)
+
+#             # Record notification in Firestore under mergedMessages
+#             db.collection("users").document(user_id).collection("mergedMessages").add({
+#                 "type": "daily_task",
+#                 "message": task_text,
+#                 "timestamp": datetime.now(timezone.utc),
+#                 "from": "system",
+#                 "is_notification": True
+#             })
+
+#             print(f"✅ Sent and logged notification for user {user_id}")
+
+#     except Exception as e:
+#         print(f"⚠ Error in send_all_daily_tasks: {e}")
+# def send_all_daily_tasks():
+#     """Fetch all users from Firestore and send the same daily task notification"""
+#     try:
+#         # Generate or get today's shared task
+#         task_data = generate_daily_task()
+#         task_text = task_data["task"]
+        
+#         users_ref = db.collection("users")
+#         users = users_ref.stream()
+        
+#         for user_doc in users:
+#             user_id = user_doc.id
+#             user_data = user_doc.to_dict()
+#             fcm_token = user_data.get("fcmToken")
+            
+#             if not fcm_token:
+#                 print(f"⚠ User {user_id} has no FCM token, skipping.")
+#                 continue
+
+#             # Check if user already received notification today
+#             if has_received_today(user_id):
+#                 print(f"⚠ User {user_id} already received today's notification, skipping.")
+#                 continue
+
+#             # Send the same task to all users
+#             send_daily_task_notification(fcm_token, task_text)
+
+#             # Record notification in Firestore
+#             db.collection("users").document(user_id).collection("mergedMessages").add({
+#                 "type": "daily_task",
+#                 "message": task_text,
+#                 "timestamp": datetime.now(timezone.utc),
+#                 "from": "system",
+#                 "is_notification": True
+#             })
+
+#             print(f"✅ Sent and logged notification for user {user_id}")
+
+#     except Exception as e:
+#         print(f"⚠ Error in send_all_daily_tasks: {e}")
+
+# def send_all_daily_tasks():
+#     """Fetch all users from Firestore and send the same daily task notification"""
+#     try:
+#         # Generate or get today's shared task
+#         task_data = generate_daily_task()
+#         task_text = task_data["task"]
+        
+#         users_ref = db.collection("users")
+#         users = users_ref.stream()
+        
+#         for user_doc in users:
+#             user_id = user_doc.id
+#             user_data = user_doc.to_dict()
+#             fcm_token = user_data.get("fcmToken")
+            
+#             if not fcm_token:
+#                 print(f"⚠ User {user_id} has no FCM token, skipping.")
+#                 continue
+
+#             # Check if user already received notification today
+#             if has_received_today(user_id):
+#                 print(f"⚠ User {user_id} already received today's notification, skipping.")
+#                 continue
+
+#             # Send the same task to all users
+#             send_daily_task_notification(fcm_token, task_text)
+
+#             # Record notification in Firestore
+#             db.collection("users").document(user_id).collection("mergedMessages").add({
+#                 "type": "daily_task",
+#                 "message": task_text,
+#                 "timestamp": datetime.now(timezone.utc),
+#                 "from": "system",
+#                 "is_notification": True
+#             })
+
+#             print(f"✅ Sent and logged notification for user {user_id}")
+
+#     except Exception as e:
+#         print(f"⚠ Error in send_all_daily_tasks: {e}")
+
 def send_all_daily_tasks():
-    """Fetch all users from Firestore and send notifications if not already sent today"""
     try:
+        # Get today's shared task first
+        task_data = generate_daily_task()
+        task_text = task_data["task"]
+        today = datetime.now(timezone.utc).date().isoformat()
+        
         users_ref = db.collection("users")
-        users = users_ref.stream()
-        for user_doc in users:
+        batch = db.batch()
+        
+        # First pass: Check all users and prepare batch
+        users_to_notify = []
+        for user_doc in users_ref.stream():
             user_id = user_doc.id
             user_data = user_doc.to_dict()
             fcm_token = user_data.get("fcmToken")
             
             if not fcm_token:
-                print(f"⚠ User {user_id} has no FCM token, skipping.")
                 continue
-
-            # Check if user already received notification today
+                
+            # Check in memory to avoid duplicate checks
             if has_received_today(user_id):
-                print(f"⚠ User {user_id} already received today's notification, skipping.")
                 continue
-
-            # Generate task
-            task_data = generate_daily_task(user_id)
-            task_text = task_data["task"]
-
+                
+            users_to_notify.append((user_id, fcm_token))
+            
+        # Second pass: Send notifications and record in batch
+        for user_id, fcm_token in users_to_notify:
             # Send notification
             send_daily_task_notification(fcm_token, task_text)
-
-            # Record notification in Firestore under mergedMessages
-            db.collection("users").document(user_id).collection("mergedMessages").add({
+            
+            # Add to batch
+            notification_ref = db.collection("users").document(user_id)\
+                .collection("mergedMessages").document()
+            batch.set(notification_ref, {
                 "type": "daily_task",
                 "message": task_text,
                 "timestamp": datetime.now(timezone.utc),
                 "from": "system",
-                "is_notification": True
+                "is_notification": True,
+                "date": today  # Add date field for easier querying
             })
-
-            print(f"✅ Sent and logged notification for user {user_id}")
-
+        
+        # Commit batch
+        batch.commit()
+        
     except Exception as e:
-        print(f"⚠ Error in send_all_daily_tasks: {e}")
+        print(f"Error in send_all_daily_tasks: {e}")
 
 def schedule_daily_notifications():
     """Schedule daily notifications using APScheduler"""
@@ -583,24 +762,84 @@ def save_completed_task(user_id, task_data):
     except Exception as e:
         print("Error saving completed task:", e)
 
-def generate_daily_task(user_id):
+# def generate_daily_task(user_id):
+#     today = datetime.utcnow().date().isoformat()
+#     user_tasks = get_user_tasks(user_id, DAILY_TASKS_FILE)
+#     existing_today_task = next((t for t in user_tasks if t.get("date") == today), None)
+#     if existing_today_task:
+#         return existing_today_task
+#     recent_tasks = get_recent_tasks(user_id)
+#     task_content = generate_daily_task_content(user_id, recent_tasks)
+#     task_data = {
+#         "user_id": user_id,
+#         "task": task_content,
+#         "date": today,
+#         "completed": False,
+#         "timestamp": datetime.utcnow().isoformat()
+#     }
+#     save_daily_task(task_data)
+#     return task_data
+# def generate_daily_task():
+#     """Generate a single daily task for all users"""
+#     today = datetime.utcnow().date().isoformat()
+    
+#     # Check if a task already exists for today
+#     with open(DAILY_TASKS_FILE, "r") as f:
+#         tasks = json.load(f)
+    
+#     # Find any task from today (regardless of user)
+#     existing_task = next((t for t in tasks if t.get("date") == today), None)
+#     if existing_task:
+#         return existing_task
+    
+#     # If no task exists for today, generate a new one
+#     task_content = random.choice(SPIRAL_TASKS)
+#     task_data = {
+#         "user_id": "all",  # Mark this as a task for all users
+#         "task": task_content,
+#         "date": today,
+#         "completed": False,
+#         "timestamp": datetime.utcnow().isoformat()
+#     }
+    
+#     # Save the task
+#     tasks.append(task_data)
+#     with open(DAILY_TASKS_FILE, "w") as f:
+#         json.dump(tasks, f, indent=2)
+    
+#     return task_data
+def generate_daily_task():
+    """Generate a single daily task for all users"""
     today = datetime.utcnow().date().isoformat()
-    user_tasks = get_user_tasks(user_id, DAILY_TASKS_FILE)
-    existing_today_task = next((t for t in user_tasks if t.get("date") == today), None)
-    if existing_today_task:
-        return existing_today_task
-    recent_tasks = get_recent_tasks(user_id)
-    task_content = generate_daily_task_content(user_id, recent_tasks)
+    
+    # Check if a task already exists for today
+    try:
+        with open(DAILY_TASKS_FILE, "r") as f:
+            tasks = json.load(f)
+    except:
+        tasks = []
+    
+    # Find any task from today (regardless of user)
+    existing_task = next((t for t in tasks if t.get("date") == today), None)
+    if existing_task:
+        return existing_task
+    
+    # If no task exists for today, generate a new one
+    task_content = random.choice(SPIRAL_TASKS)
     task_data = {
-        "user_id": user_id,
+        "user_id": "all",  # Mark this as a task for all users
         "task": task_content,
         "date": today,
         "completed": False,
         "timestamp": datetime.utcnow().isoformat()
     }
-    save_daily_task(task_data)
+    
+    # Save the task
+    tasks.append(task_data)
+    with open(DAILY_TASKS_FILE, "w") as f:
+        json.dump(tasks, f, indent=2)
+    
     return task_data
-
 def detect_intent(entry):
     prompt = (
         "You are a Spiral Dynamics gatekeeper.\n"
@@ -727,17 +966,75 @@ def check_evolution(last_stage, current_result):
         pass
     return None
 
+# @app.route("/daily_task", methods=["GET"])
+# def get_daily_task():
+#     try:
+#         user_id = request.args.get("user_id")
+#         if not user_id:
+#             return jsonify({"error": "Missing user_id"}), 400
+#         return jsonify(generate_daily_task(user_id))
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+# @app.route("/daily_task", methods=["GET"])
+# def get_daily_task():
+#     try:
+#         user_id = request.args.get("user_id")
+#         if not user_id:
+#             return jsonify({"error": "Missing user_id"}), 400
+        
+#         # Get the shared daily task
+#         task_data = generate_daily_task()
+        
+#         # Check if this user has completed it
+#         with open(COMPLETED_TASKS_FILE, "r") as f:
+#             completed_tasks = json.load(f)
+        
+#         user_completed = any(
+#             t.get("user_id") == user_id and 
+#             t.get("date") == task_data.get("date") and 
+#             t.get("completed")
+#             for t in completed_tasks
+#         )
+        
+#         # Add completion status to the response
+#         response_data = dict(task_data)
+#         response_data["user_completed"] = user_completed
+        
+#         return jsonify(response_data)
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
 @app.route("/daily_task", methods=["GET"])
 def get_daily_task():
     try:
         user_id = request.args.get("user_id")
         if not user_id:
             return jsonify({"error": "Missing user_id"}), 400
-        return jsonify(generate_daily_task(user_id))
+        
+        # Get the shared daily task
+        task_data = generate_daily_task()
+        
+        # Check if this user has completed it
+        with open(COMPLETED_TASKS_FILE, "r") as f:
+            completed_tasks = json.load(f)
+        
+        user_completed = any(
+            t.get("user_id") == user_id and 
+            t.get("date") == task_data.get("date") and 
+            t.get("completed")
+            for t in completed_tasks
+        )
+        
+        # Add completion status to the response
+        response_data = dict(task_data)
+        response_data["user_completed"] = user_completed
+        
+        return jsonify(response_data)
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
+        
 @app.route("/complete_task", methods=["POST"])
 def complete_task():
     try:
