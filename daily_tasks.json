@@ -281,5 +281,12 @@
     "date": "2025-08-18",
     "completed": false,
     "timestamp": "2025-08-18T13:44:02.086593"
+  },
+  {
+    "user_id": "all",
+    "task": "Do you adapt your behavior depending on the environment or people around you?",
+    "date": "2025-08-19",
+    "completed": false,
+    "timestamp": "2025-08-19T06:31:00.077197"
   }
 ]

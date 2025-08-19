@@ -491,38 +491,129 @@ def has_received_today(user_id):
 #     except Exception as e:
 #         print(f"⚠ Error in send_all_daily_tasks: {e}")
 
+# def send_all_daily_tasks():
+#     try:
+#         # Get today's shared task first
+#         task_data = generate_daily_task()
+#         task_text = task_data["task"]
+#         today = datetime.now(timezone.utc).date().isoformat()
+        
+#         users_ref = db.collection("users")
+#         batch = db.batch()
+        
+#         # First pass: Check all users and prepare batch
+#         users_to_notify = []
+#         for user_doc in users_ref.stream():
+#             user_id = user_doc.id
+#             user_data = user_doc.to_dict()
+#             fcm_token = user_data.get("fcmToken")
+            
+#             if not fcm_token:
+#                 continue
+                
+#             # Check in memory to avoid duplicate checks
+#             if has_received_today(user_id):
+#                 continue
+                
+#             users_to_notify.append((user_id, fcm_token))
+            
+#         # Second pass: Send notifications and record in batch
+#         for user_id, fcm_token in users_to_notify:
+#             # Send notification
+#             send_daily_task_notification(fcm_token, task_text)
+            
+#             # Add to batch
+#             notification_ref = db.collection("users").document(user_id)\
+#                 .collection("mergedMessages").document()
+#             batch.set(notification_ref, {
+#                 "type": "daily_task",
+#                 "message": task_text,
+#                 "timestamp": datetime.now(timezone.utc),
+#                 "from": "system",
+#                 "is_notification": True,
+#                 "date": today  # Add date field for easier querying
+#             })
+        
+#         # Commit batch
+#         batch.commit()
+        
+#     except Exception as e:
+#         print(f"Error in send_all_daily_tasks: {e}")
+
+# def send_all_daily_tasks():
+#     try:
+#         # Generate or fetch today's shared task
+#         task_data = generate_daily_task()
+#         task_text = task_data["task"]
+#         today = datetime.now(timezone.utc).date().isoformat()
+
+#         users_ref = db.collection("users")
+#         batch = db.batch()
+
+#         for user_doc in users_ref.stream():
+#             user_id = user_doc.id
+#             user_data = user_doc.to_dict()
+#             fcm_token = user_data.get("fcmToken")
+
+#             if not fcm_token:
+#                 continue
+
+#             # Skip if already sent today
+#             if has_received_today(user_id):
+#                 continue
+
+#             # ✅ Send notification ONCE per user
+#             send_daily_task_notification(fcm_token, task_text)
+
+#             # ✅ Log one bot message in Firestore
+#             notification_ref = db.collection("users").document(user_id)\
+#                 .collection("mergedMessages").document()
+#             batch.set(notification_ref, {
+#                 "type": "daily_task",
+#                 "message": task_text,
+#                 "timestamp": datetime.now(timezone.utc),
+#                 "from": "system",
+#                 "is_notification": True,
+#                 "date": today
+#             })
+
+#         batch.commit()
+#         print(f"✅ Daily task sent to all users for {today}: {task_text}")
+
+#     except Exception as e:
+#         print(f"Error in send_all_daily_tasks: {e}")
+
 def send_all_daily_tasks():
     try:
-        # Get today's shared task first
+        # Generate or fetch today's shared task
         task_data = generate_daily_task()
         task_text = task_data["task"]
         today = datetime.now(timezone.utc).date().isoformat()
-        
+
+        # ✅ Send one message to the topic
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title="🌱 Your Daily Spiral Task",
+                body=task_text
+            ),
+            data={
+                "type": "daily_task",
+                "task": task_text,
+                "screen": "chat"
+            },
+            topic="daily_task"
+        )
+
+        response = messaging.send(message)
+        print(f"✅ Topic notification sent: {response}")
+
+        # ✅ Log one bot-message per user in Firestore
         users_ref = db.collection("users")
         batch = db.batch()
-        
-        # First pass: Check all users and prepare batch
-        users_to_notify = []
         for user_doc in users_ref.stream():
             user_id = user_doc.id
-            user_data = user_doc.to_dict()
-            fcm_token = user_data.get("fcmToken")
-            
-            if not fcm_token:
-                continue
-                
-            # Check in memory to avoid duplicate checks
             if has_received_today(user_id):
                 continue
-                
-            users_to_notify.append((user_id, fcm_token))
-            
-        # Second pass: Send notifications and record in batch
-        for user_id, fcm_token in users_to_notify:
-            # Send notification
-            send_daily_task_notification(fcm_token, task_text)
-            
-            # Add to batch
             notification_ref = db.collection("users").document(user_id)\
                 .collection("mergedMessages").document()
             batch.set(notification_ref, {
@@ -531,14 +622,14 @@ def send_all_daily_tasks():
                 "timestamp": datetime.now(timezone.utc),
                 "from": "system",
                 "is_notification": True,
-                "date": today  # Add date field for easier querying
+                "date": today
             })
-        
-        # Commit batch
         batch.commit()
-        
+
     except Exception as e:
         print(f"Error in send_all_daily_tasks: {e}")
+
+
 
 def schedule_daily_notifications():
     """Schedule daily notifications using APScheduler"""
@@ -556,6 +647,7 @@ def schedule_daily_notifications():
         print(f"⏰ Scheduled daily notifications at {NOTIFICATION_TIME} UTC")
     except Exception as e:
         print(f"⚠ Error scheduling notifications: {e}")
+
 # def send_daily_task_notification(user_id, task_text):
 #     if not FIREBASE_INITIALIZED:
 #         print("Firebase not initialized - skipping notification")
@@ -1388,26 +1480,27 @@ def finalize_stage():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/test_notification", methods=["POST"])
-def test_notification():
-    try:
-        data = request.get_json()
-        user_id = data.get("user_id")
-        task_text = data.get("task", "Test notification from Inner Compass")
+# @app.route("/test_notification", methods=["POST"])
+# def test_notification():
+#     try:
+#         data = request.get_json()
+#         user_id = data.get("user_id")
+#         task_text = data.get("task", "Test notification from Inner Compass")
         
-        response = send_daily_task_notification(user_id, task_text)
-        return jsonify({"status": "success", "message_id": response})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+#         response = send_daily_task_notification(user_id, task_text)
+#         return jsonify({"status": "success", "message_id": response})
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
 
-@app.route("/send_now", methods=["POST"])
-def send_now():
-    try:
-        send_all_daily_tasks()
-        return jsonify({"status": "success", "message": "Notifications sent"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+# @app.route("/send_now", methods=["POST"])
+# def send_now():
+#     try:
+#         send_all_daily_tasks()
+#         return jsonify({"status": "success", "message": "Notifications sent"})
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
 
+# important
 @app.route("/set_notification_time", methods=["POST"])
 def set_notification_time():
     try:
@@ -1430,7 +1523,35 @@ def set_notification_time():
         return jsonify({"status": "success", "new_time": NOTIFICATION_TIME})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
+@app.route("/send_welcome", methods=["POST"])
+def send_welcome():
+    try:
+        data = request.get_json()
+        user_id = data.get("user_id")
+        fcm_token = data.get("fcm_token")
+
+        if not user_id or not fcm_token:
+            return jsonify({"error": "Missing user_id or fcm_token"}), 400
+
+        # Send notification
+        send_welcome_notification(fcm_token)
+
+        # Log it in Firestore
+        db.collection("users").document(user_id).collection("mergedMessages").add({
+            "type": "welcome",
+            "message": "What’s on your mind right now? Write or speak freely—no filters.",
+            "timestamp": datetime.now(timezone.utc),
+            "from": "system",
+            "is_notification": True
+        })
+
+        return jsonify({"status": "success", "message": "Welcome notification sent"})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
 
 if __name__ == "__main__":
     if FIREBASE_INITIALIZED:
@@ -3161,6 +3282,7 @@ if __name__ == "__main__":
 
 # if __name__ == "__main__":
 # #     app.run(debug=True, host="0.0.0.0", port=5000)
+
 # from flask import Flask, request, jsonify, send_from_directory
 # from flask_cors import CORS
 # from dotenv import load_dotenv
