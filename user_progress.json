@@ -38,5 +38,55 @@
     "last_active_date": "2025-08-19",
     "message_count": 1,
     "badges": []
+  },
+  "1DkOWtpg3qU6bVly0pZwvvKpwfl1": {
+    "xp": 0,
+    "level": 1,
+    "last_level": 1,
+    "streak": 1,
+    "last_active_date": "2025-08-23",
+    "message_count": 1,
+    "badges": []
+  },
+  "nKjfdb7agYcOXFNkBTuPvM9zKED2": {
+    "xp": 0,
+    "level": 1,
+    "last_level": 1,
+    "streak": 1,
+    "last_active_date": "2025-08-24",
+    "message_count": 1,
+    "badges": []
+  },
+  "QFjdoe2usoQpgdDCOkK7pbBiDYu1": {
+    "xp": 0,
+    "level": 1,
+    "last_level": 1,
+    "streak": 1,
+    "last_active_date": "2025-08-24",
+    "message_count": 2,
+    "badges": []
+  },
+  "7hsIIAPcdBXIOckhxp2kq1rCzTP2": {
+    "xp": 20,
+    "level": 1,
+    "last_level": 1,
+    "streak": 1,
+    "last_active_date": "2025-08-24",
+    "message_count": 8,
+    "badges": [
+      "message_streak_5"
+    ]
+  },
+  "650D9dyEgzeJVQJ23qTvToykQwC2": {
+    "xp": 40,
+    "level": 1,
+    "last_level": 1,
+    "streak": 1,
+    "last_active_date": "2025-08-24",
+    "message_count": 7,
+    "badges": [
+      "message_streak_5",
+      "level_up"
+    ]
   }
 }
