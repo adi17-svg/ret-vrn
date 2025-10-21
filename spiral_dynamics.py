@@ -306,7 +306,8 @@ def detect_intent(entry: str) -> str:
         f"Entry: \"{entry}\""
     )
     response = client.chat.completions.create(
-        model="provider-3/gpt-4.1",
+        # model="provider-3/gpt-4.1",
+        model="provider-5/gpt-5-nano",
         messages=[{"role": "user", "content": prompt}],
         temperature=0,
     )
@@ -324,7 +325,8 @@ def classify_stage(entry: str) -> dict:
         f"Input: \"{entry}\""
     )
     response = client.chat.completions.create(
-        model="provider-3/gpt-4.1",
+        # model="provider-3/gpt-4.1",
+        model="provider-5/gpt-5-nano",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
         response_format={"type": "json_object"}
@@ -339,7 +341,8 @@ def classify_stage(entry: str) -> dict:
         }
     except Exception:
         fallback = client.chat.completions.create(
-            model="provider-3/gpt-4.1",
+            # model="provider-3/gpt-4.1",
+            model="provider-5/gpt-5-nano",
             messages=[{"role": "user", "content": f"Classify this into one stage from {', '.join(STAGES)}: {entry}"}],
             temperature=0
         )
@@ -374,7 +377,8 @@ def generate_reflective_question(entry: str, reply_to: str = None) -> str:
         f"User message: \"{entry}\""
     )
     response = client.chat.completions.create(
-        model="provider-3/gpt-4.1",
+        # model="provider-3/gpt-4.1",
+        model="provider-5/gpt-5-nano",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.85
     )
@@ -392,7 +396,8 @@ def generate_gamified_prompt(stage: str, entry: str, evolution: bool = False) ->
         "Format as JSON with keys: question, prompt, reward"
     )
     response = client.chat.completions.create(
-        model="provider-3/gpt-4.1",
+        # model="provider-3/gpt-4.1",
+        model="provider-5/gpt-5-nano",
         messages=[{"role": "user", "content": prompt_template}],
         temperature=0.7,
         response_format={"type": "json_object"}
