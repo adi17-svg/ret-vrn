@@ -169,8 +169,8 @@ def detect_intent(entry: str) -> str:
         f"Entry: \"{entry}\""
     )
     response = client.chat.completions.create(
-        model="provider-3/gpt-4.1",
-        # model="provider-5/gpt-5-nano",
+        # model="provider-3/gpt-4.1",
+        model="provider-5/gpt-5-nano",
         messages=[{"role": "user", "content": prompt}],
         temperature=0,
     )
