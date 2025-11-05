@@ -1009,7 +1009,7 @@ def merged():
             if reply_to:
                 prompt_msg = f"Previous: {reply_to}\nUser: {entry}"
             ai_resp = client.chat.completions.create(
-                model='provider-3/gpt-4.1',
+                model='provider-2/gpt-4.1',
                 messages=[{"role": "user", "content": f"Be a kind friend and casually respond to:\n{prompt_msg}"}],
                 temperature=0.7,
             ).choices[0].message.content.strip()
@@ -1152,7 +1152,7 @@ def reflect_transcription():
         intent = detect_intent(transcript_text)
         if intent == "chat":
             ai_resp = client.chat.completions.create(
-                model='provider-3/gpt-4.1',
+                model='provider-2/gpt-4.1',
                 messages=[{"role": "user", "content": f"Carefully respond to:\n{dialogue}"}],
                 temperature=0.7,
             ).choices[0].message.content.strip()
