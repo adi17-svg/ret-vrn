@@ -1009,7 +1009,7 @@ def merged():
             if reply_to:
                 prompt_msg = f"Previous: {reply_to}\nUser: {entry}"
             ai_resp = client.chat.completions.create(
-                model='provider-5/gpt-5-nano',
+                model='provider-5/chatgpt-4o-latest',
                 messages=[{"role": "user", "content": f"Be a kind friend and casually respond to:\n{prompt_msg}"}],
                 temperature=0.7,
             ).choices[0].message.content.strip()
@@ -1149,15 +1149,15 @@ def reflect_transcription():
         utterances = poll_data.get("utterances", [])
         dialogue = "\n".join(f"Speaker {u['speaker']}: {u['text']}" for u in utterances)
 
-        # intent = detect_intent(transcript_text)
-        try:
-            intent = detect_intent(transcript_text)
-        except openai.InternalServerError as e:
-            app.logger.error(f"API error: {e}")
-            return jsonify(error="Upstream AI service error, please try later"), 503
+        intent = detect_intent(transcript_text)
+        # try:
+        #     intent = detect_intent(transcript_text)
+        # except openai.InternalServerError as e:
+        #     app.logger.error(f"API error: {e}")
+        #     return jsonify(error="Upstream AI service error, please try later"), 503
         if intent == "chat":
             ai_resp = client.chat.completions.create(
-                model='provider-5/gpt-5-nano',
+                model='provider-5/chatgpt-4o-latest',
                 messages=[{"role": "user", "content": f"Carefully respond to:\n{dialogue}"}],
                 temperature=0.7,
             ).choices[0].message.content.strip()
