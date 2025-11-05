@@ -844,7 +844,7 @@ from rewards import get_user_progress, save_user_progress, update_streak, check_
 from spiral_dynamics import detect_intent, classify_stage, check_evolution, generate_reflective_question, generate_gamified_prompt
 from firebase_utils import db
 from notifications import send_welcome_notification
-from openai import OpenAI  # Your AI client instance configured elsewhere
+# from openai import OpenAI  # Your AI client instance configured elsewhere
 from spiral_dynamics import client  # Your OpenAI client instance
 
 bp = Blueprint('main', __name__)
