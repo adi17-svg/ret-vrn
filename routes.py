@@ -1149,7 +1149,12 @@ def reflect_transcription():
         utterances = poll_data.get("utterances", [])
         dialogue = "\n".join(f"Speaker {u['speaker']}: {u['text']}" for u in utterances)
 
-        intent = detect_intent(transcript_text)
+        # intent = detect_intent(transcript_text)
+        try:
+            intent = detect_intent(transcript_text)
+        except openai.InternalServerError as e:
+            app.logger.error(f"API error: {e}")
+            return jsonify(error="Upstream AI service error, please try later"), 503
         if intent == "chat":
             ai_resp = client.chat.completions.create(
                 model='provider-5/gpt-5-nano',
