@@ -148,7 +148,7 @@
 import os
 import json
 from openai import OpenAI
-from config import A4F_API_KEY
+# from config import A4F_API_KEY
 
 # Constants and config
 STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
@@ -164,6 +164,7 @@ STAGE_GAMIFIED_META = {
     "Turquoise": {"emoji": "🔷", "name": "Turquoise", "reward": "Global consciousness"},
 }
 
+A4F_API_KEY = os.getenv("A4F_API_KEY")
 # Initialize OpenAI client
 client = OpenAI(api_key=A4F_API_KEY, base_url="https://api.a4f.co/v1")
 

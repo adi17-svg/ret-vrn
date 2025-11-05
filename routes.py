@@ -1009,7 +1009,6 @@ def merged():
             if reply_to:
                 prompt_msg = f"Previous: {reply_to}\nUser: {entry}"
             ai_resp = client.chat.completions.create(
-                # model='provider-2/gpt-4.1',
                 model='provider-5/gpt-5-nano',
                 messages=[{"role": "user", "content": f"Be a kind friend and casually respond to:\n{prompt_msg}"}],
                 temperature=0.7,
