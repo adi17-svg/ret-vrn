@@ -200,7 +200,7 @@ def classify_stage(entry: str) -> dict:
         model="provider-5/gpt-5-nano",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
-        response_format={"type": "json_object"}
+        # response_format={"type": "json_object"}
     )
     try:
         result = json.loads(response.choices[0].message.content)
@@ -275,7 +275,7 @@ def generate_gamified_prompt(stage: str, entry: str, evolution: bool = False) ->
         model="provider-5/gpt-5-nano",
         messages=[{"role": "user", "content": prompt_template}],
         temperature=0.7,
-        response_format={"type": "json_object"}
+        # response_format={"type": "json_object"}
     )
     try:
         content = json.loads(response.choices[0].message.content)
