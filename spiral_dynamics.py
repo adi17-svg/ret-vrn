@@ -18,6 +18,12 @@ STAGE_GAMIFIED_META = {
     "Turquoise": {"emoji": "🔷", "name": "Turquoise", "reward": "Global consciousness"},
 }
 
+
+# ✅ Safely read key from Render environment
+A4F_API_KEY = os.getenv("A4F_API_KEY")
+
+if not A4F_API_KEY:
+    raise ValueError("❌ Missing A4F_API_KEY environment variable — check Render settings.")
 # Initialize OpenAI client
 client = OpenAI(api_key=A4F_API_KEY, base_url="https://api.a4f.co/v1")
 
