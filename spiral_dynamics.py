@@ -2,7 +2,7 @@
 import os
 import json
 from openai import OpenAI
-from config import A4F_API_KEY
+# from config import A4F_API_KEY
 
 # Constants and config
 STAGES = ["Beige", "Purple", "Red", "Blue", "Orange", "Green", "Yellow", "Turquoise"]
