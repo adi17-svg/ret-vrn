@@ -1009,7 +1009,7 @@ def merged():
             if reply_to:
                 prompt_msg = f"Previous: {reply_to}\nUser: {entry}"
             ai_resp = client.chat.completions.create(
-                model='provider-5/chatgpt-4o-latest',
+                model='gpt-4.1',
                 messages=[{"role": "user", "content": f"Be a kind friend and casually respond to:\n{prompt_msg}"}],
                 temperature=0.7,
             ).choices[0].message.content.strip()
@@ -1157,7 +1157,7 @@ def reflect_transcription():
         #     return jsonify(error="Upstream AI service error, please try later"), 503
         if intent == "chat":
             ai_resp = client.chat.completions.create(
-                model='provider-5/chatgpt-4o-latest',
+                model='gpt-4.1',
                 messages=[{"role": "user", "content": f"Carefully respond to:\n{dialogue}"}],
                 temperature=0.7,
             ).choices[0].message.content.strip()
