@@ -435,6 +435,7 @@ from spiral_dynamics import client  # Your OpenAI client instance
 # add near other imports
 from flask import Response, request, jsonify
 from tts import stream_tts_from_elevenlabs
+from flask import current_app
 
 
 bp = Blueprint('main', __name__)
@@ -1471,14 +1472,30 @@ def reflect_transcription():
         traceback.print_exc()
         return jsonify({"error": "Failed to process transcription"}), 500
 # new endpoint for audio stream
-@bp.route("/speak-stream", methods=["GET"])
+# in routes.py (replace existing speak_stream route)
+
+@bp.route("/speak-stream", methods=["GET", "POST"])
 def speak_stream():
-    text = request.args.get("text", "")
-    if not text:
+    # log request immediately
+    try:
+        txt = ""
+        if request.method == "GET":
+            txt = request.args.get("text", "") or ""
+        else:
+            body = request.get_json(silent=True) or {}
+            txt = body.get("text", "") or ""
+        current_app.logger.info("==== SPEAK-STREAM ROUTE CALLED ====")
+        current_app.logger.info("speak-stream preview=%s len=%d", (txt[:120] + ("..." if len(txt) > 120 else "")), len(txt))
+    except Exception as e:
+        current_app.logger.exception("Error reading speak-stream request: %s", e)
+
+    if not txt:
+        # return early so client sees a JSON error instead of empty audio
         return jsonify({"error": "missing text"}), 400
 
-    generator = stream_tts_from_elevenlabs(text)
-    return Response(generator, mimetype="audio/mpeg")
+    generator = stream_tts_from_elevenlabs(txt)
+    # direct_passthrough prevents Flask from buffering the whole generator
+    return Response(generator, mimetype="audio/mpeg", direct_passthrough=True)
 
 
 @bp.route('/finalize_stage', methods=['POST'])
