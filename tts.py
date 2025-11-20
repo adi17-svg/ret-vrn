@@ -84,6 +84,7 @@
 #         yield b""
 import os
 import logging
+from typing import Iterator
 from flask import Blueprint, request, jsonify
 from openai import OpenAI
 
@@ -94,6 +95,29 @@ if not OPENAI_API_KEY:
     raise ValueError("❌ Missing OPENAI_API_KEY environment variable")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
+
+def stream_tts_from_openai(text: str, chunk_size: int = 4096) -> Iterator[bytes]:
+    """
+    Generator that streams OpenAI TTS audio chunks (MP3).
+    """
+    if not text:
+        logging.warning("TTS called with empty text")
+        yield b""
+        return
+
+    try:
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice="alloy",
+            input=text,
+            response_format="mp3"
+        )
+        for chunk in response.iter_bytes(chunk_size=chunk_size):
+            if chunk:
+                yield chunk
+    except Exception as e:
+        logging.exception("Error streaming TTS: %s", e)
+        yield b""
 
 @bp.route('/tts', methods=['POST'])
 def generate_tts_audio():
@@ -106,7 +130,7 @@ def generate_tts_audio():
             model="tts-1",
             voice="alloy",
             input=text,
-            response_format="url"  # Return URL to audio
+            response_format="url"  # Return URL to generated audio file
         )
         audio_url = response.get("audio_url")
         if not audio_url:
