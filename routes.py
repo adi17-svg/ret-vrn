@@ -1471,7 +1471,7 @@ def reflect_transcription():
         traceback.print_exc()
         return jsonify({"error": "Failed to process transcription"}), 500
 # new endpoint for audio stream
-@app.route("/speak-stream", methods=["GET"])
+@bp.route("/speak-stream", methods=["GET"])
 def speak_stream():
     text = request.args.get("text", "")
     if not text:
