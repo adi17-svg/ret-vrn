@@ -1497,29 +1497,56 @@ def reflect_transcription():
 #     return Response(generator, mimetype="audio/mpeg", direct_passthrough=True)
 
 @bp.route("/speak-stream", methods=["GET", "POST"])
+# def speak_stream():
+#     """
+#     Streams OpenAI TTS audio (replaces ElevenLabs).
+#     No audio files saved - streams directly to client.
+#     """
+#     try:
+#         txt = ""
+#         if request.method == "GET":
+#             txt = request.args.get("text", "") or ""
+#         else:
+#             body = request.get_json(silent=True) or {}
+#             txt = body.get("text", "") or ""
+#         current_app.logger.info("==== SPEAK-STREAM ROUTE CALLED ====")
+#         current_app.logger.info("speak-stream preview=%s len=%d", (txt[:120] + ("..." if len(txt) > 120 else "")), len(txt))
+#     except Exception as e:
+#         current_app.logger.exception("Error reading speak-stream request: %s", e)
+
+#     if not txt:
+#         return jsonify({"error": "missing text"}), 400
+
+#     # CHANGED: Use OpenAI instead of ElevenLabs
+#     generator = stream_tts_from_openai(txt)
+#     return Response(generator, mimetype="audio/mpeg", direct_passthrough=True)
 def speak_stream():
-    """
-    Streams OpenAI TTS audio (replaces ElevenLabs).
-    No audio files saved - streams directly to client.
-    """
     try:
-        txt = ""
-        if request.method == "GET":
-            txt = request.args.get("text", "") or ""
+        if request.method == 'GET':
+            txt = request.args.get('text', '')
+            current_app.logger.info(f'SPEAK-STREAM GET called with text length: {len(txt)}')
         else:
-            body = request.get_json(silent=True) or {}
-            txt = body.get("text", "") or ""
-        current_app.logger.info("==== SPEAK-STREAM ROUTE CALLED ====")
-        current_app.logger.info("speak-stream preview=%s len=%d", (txt[:120] + ("..." if len(txt) > 120 else "")), len(txt))
+            json_data = request.get_json(silent=True)
+            txt = json_data.get('text', '') if json_data else ''
+            current_app.logger.info(f'SPEAK-STREAM POST called with text length: {len(txt)}')
+
+        if not txt:
+            return {"error": "Missing text parameter"}, 400
+
+        # Optionally limit text length for TTS
+        preview_len = min(len(txt), 120)
+        preview_text = txt[:preview_len]
+
+        # Generate the audio stream response from OpenAI TTS stream generator function
+        return Response(
+            streamttsfromopenai(txt),
+            mimetype='audio/mpeg',
+            direct_passthrough=True
+        )
+
     except Exception as e:
-        current_app.logger.exception("Error reading speak-stream request: %s", e)
-
-    if not txt:
-        return jsonify({"error": "missing text"}), 400
-
-    # CHANGED: Use OpenAI instead of ElevenLabs
-    generator = stream_tts_from_openai(txt)
-    return Response(generator, mimetype="audio/mpeg", direct_passthrough=True)
+        current_app.logger.exception(f"Error in speak-stream endpoint: {e}")
+        return {"error": "Internal server error"}, 500
 
 @bp.route('/finalize_stage', methods=['POST'])
 def finalize_stage():
