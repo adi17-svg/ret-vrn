@@ -434,7 +434,7 @@ from notifications import send_welcome_notification
 from spiral_dynamics import client  # Your OpenAI client instance
 # add near other imports
 from flask import Response, request, jsonify
-from tts import stream_tts_from_elevenlabs
+from tts import stream_tts_from_openai
 from flask import current_app
 
 
@@ -1474,9 +1474,34 @@ def reflect_transcription():
 # new endpoint for audio stream
 # in routes.py (replace existing speak_stream route)
 
+# @bp.route("/speak-stream", methods=["GET", "POST"])
+# def speak_stream():
+#     # log request immediately
+#     try:
+#         txt = ""
+#         if request.method == "GET":
+#             txt = request.args.get("text", "") or ""
+#         else:
+#             body = request.get_json(silent=True) or {}
+#             txt = body.get("text", "") or ""
+#         current_app.logger.info("==== SPEAK-STREAM ROUTE CALLED ====")
+#         current_app.logger.info("speak-stream preview=%s len=%d", (txt[:120] + ("..." if len(txt) > 120 else "")), len(txt))
+#     except Exception as e:
+#         current_app.logger.exception("Error reading speak-stream request: %s", e)
+
+#     if not txt:
+#         # return early so client sees a JSON error instead of empty audio
+#         return jsonify({"error": "missing text"}), 400
+
+#     generator = stream_tts_from_openai(txt)    # direct_passthrough prevents Flask from buffering the whole generator
+#     return Response(generator, mimetype="audio/mpeg", direct_passthrough=True)
+
 @bp.route("/speak-stream", methods=["GET", "POST"])
 def speak_stream():
-    # log request immediately
+    """
+    Streams OpenAI TTS audio (replaces ElevenLabs).
+    No audio files saved - streams directly to client.
+    """
     try:
         txt = ""
         if request.method == "GET":
@@ -1490,13 +1515,11 @@ def speak_stream():
         current_app.logger.exception("Error reading speak-stream request: %s", e)
 
     if not txt:
-        # return early so client sees a JSON error instead of empty audio
         return jsonify({"error": "missing text"}), 400
 
-    generator = stream_tts_from_elevenlabs(txt)
-    # direct_passthrough prevents Flask from buffering the whole generator
+    # CHANGED: Use OpenAI instead of ElevenLabs
+    generator = stream_tts_from_openai(txt)
     return Response(generator, mimetype="audio/mpeg", direct_passthrough=True)
-
 
 @bp.route('/finalize_stage', methods=['POST'])
 def finalize_stage():

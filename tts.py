@@ -33,54 +33,52 @@
 #         yield b""
 # /backend/tts.py
 import os
-import requests
 import logging
 from typing import Iterator
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY", "")
-VOICE_ID = os.getenv("VOICE_ID", "RILOU7YmBhvwJGDGjNmP")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+if not OPENAI_API_KEY:
+    raise ValueError("❌ Missing OPENAI_API_KEY environment variable")
 
-def stream_tts_from_elevenlabs(text: str, chunk_size: int = 4096) -> Iterator[bytes]:
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+def stream_tts_from_openai(text: str, chunk_size: int = 4096) -> Iterator[bytes]:
     """
-    Generator that proxies ElevenLabs streaming TTS and yields raw audio chunks (MP3).
+    Generator that streams OpenAI TTS audio chunks (MP3 format).
+    Replaces ElevenLabs with OpenAI TTS API.
     """
     if not text:
         logger.warning("TTS called with empty text")
         yield b""
         return
 
-    if not ELEVEN_API_KEY:
-        logger.error("ELEVEN_API_KEY is empty at runtime")
+    if not OPENAI_API_KEY:
+        logger.error("OPENAI_API_KEY is empty at runtime")
         yield b""
         return
 
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}/stream"
-    headers = {
-        "xi-api-key": ELEVEN_API_KEY,
-        "Content-Type": "application/json",
-        "Accept": "audio/mpeg"
-    }
-    payload = {"text": text, "model_id": "eleven_multilingual_v2"}
-
     try:
-        logger.info("Requesting ElevenLabs TTS: voice=%s text_len=%d", VOICE_ID, len(text))
-        resp = requests.post(url, headers=headers, json=payload, stream=True, timeout=60)
-        logger.info("ElevenLabs responded: %s %s", resp.status_code, resp.reason)
-        resp.raise_for_status()
-        for chunk in resp.iter_content(chunk_size=chunk_size):
+        logger.info("Requesting OpenAI TTS: text_len=%d", len(text))
+        
+        # OpenAI TTS streaming
+        response = client.audio.speech.create(
+            model="tts-1",  # Use "tts-1-hd" for higher quality
+            voice="alloy",  # Options: alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer
+            input=text,
+            response_format="mp3"
+        )
+        
+        logger.info("OpenAI TTS response received successfully")
+        
+        # Stream the audio content
+        for chunk in response.iter_bytes(chunk_size=chunk_size):
             if chunk:
                 yield chunk
-    except requests.HTTPError as he:
-        # log server error body if any
-        try:
-            logger.exception("ElevenLabs HTTP error: %s body: %s", he, resp.text[:1000])
-        except Exception:
-            logger.exception("ElevenLabs HTTP error: %s (no body available)", he)
-        # yield a small empty chunk to avoid client hanging
-        yield b""
+                
     except Exception as e:
-        logger.exception("Unexpected error streaming TTS: %s", e)
+        logger.exception("Unexpected error streaming OpenAI TTS: %s", e)
         yield b""
