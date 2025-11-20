@@ -432,6 +432,10 @@ from firebase_utils import db, save_conversation_message, get_recent_conversatio
 from notifications import send_welcome_notification
 # from openai import OpenAI  # Your AI client instance configured elsewhere
 from spiral_dynamics import client  # Your OpenAI client instance
+# add near other imports
+from flask import Response, request, jsonify
+from tts import stream_tts_from_elevenlabs
+
 
 bp = Blueprint('main', __name__)
 
@@ -1108,10 +1112,21 @@ def merged():
         # Build context messages for OpenAI
         messages_for_ai = []
         # persona/system message first
+        # system_msg = {
+        #     "role": "system",
+        #     "content": "You are a kind, reflective Spiral Dynamics mentor and supportive chatbot for RETVRN. Keep replies concise and empathetic."
+        # }
         system_msg = {
-            "role": "system",
-            "content": "You are a kind, reflective Spiral Dynamics mentor and supportive chatbot for RETVRN. Keep replies concise and empathetic."
-        }
+    "role": "system",
+    "content": (
+        "You are a warm, natural, conversational companion for RETVRN who speaks like a supportive friend. "
+        "Be kind and reflective, but avoid formal or robotic phrasing — use contractions, short paragraphs, and "
+        "simple everyday language. If the user has just completed a mission, briefly celebrate (1–2 lines), "
+        "then follow with an open, friendly follow-up question to keep the chat going. Keep responses human, varied, "
+        "and gently encouraging while staying concise."
+    )
+}
+
         messages_for_ai.append(system_msg)
 
         # Helper: parse latest assistant message for Mind Mirror and Mission
@@ -1158,14 +1173,25 @@ def merged():
                 print("⚠ Could not fetch recent conversation:", e)
 
         # Additional system instruction to nudge model to use Mind Mirror/Mission when present
+        # messages_for_ai.insert(1, {
+        #     "role": "system",
+        #     "content": (
+        #         "When answering, first check for any 'Latest Mind Mirror' and 'Latest Mission' in the conversation. "
+        #         "If present, briefly reference them and tailor suggestions to align with that Mind Mirror and/or Mission. "
+        #         "If neither is present, answer normally and empathetically."
+        #     )
+        # })
         messages_for_ai.insert(1, {
-            "role": "system",
-            "content": (
-                "When answering, first check for any 'Latest Mind Mirror' and 'Latest Mission' in the conversation. "
-                "If present, briefly reference them and tailor suggestions to align with that Mind Mirror and/or Mission. "
-                "If neither is present, answer normally and empathetically."
-            )
-        })
+    "role": "system",
+    "content": (
+        "When answering, first check for any 'Latest Mind Mirror' and 'Latest Mission' in the conversation. "
+        "If present, briefly reference them so your reply feels connected to the user's recent reflection or task. "
+        "If the user has just completed the mission, celebrate briefly (a warm, casual line), then ask a friendly, "
+        "open-ended follow-up that invites more sharing (e.g., 'How did that feel?' or 'Anything surprising?'). "
+        "Always avoid sounding formal or repetitive — aim to sound like a compassionate human companion."
+    )
+})
+
 
         # Append the current user message last
         current_user_content = entry if not reply_to else f"Previous: {reply_to}\nUser: {entry}"
@@ -1444,6 +1470,15 @@ def reflect_transcription():
     except Exception:
         traceback.print_exc()
         return jsonify({"error": "Failed to process transcription"}), 500
+# new endpoint for audio stream
+@app.route("/speak-stream", methods=["GET"])
+def speak_stream():
+    text = request.args.get("text", "")
+    if not text:
+        return jsonify({"error": "missing text"}), 400
+
+    generator = stream_tts_from_elevenlabs(text)
+    return Response(generator, mimetype="audio/mpeg")
 
 
 @bp.route('/finalize_stage', methods=['POST'])

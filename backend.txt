@@ -1,8 +1,8 @@
 spiral_dynamics.py:
 
-
 import os
 import json
+import re
 from openai import OpenAI
 
 # Constants and config
@@ -26,67 +26,137 @@ if not OPENAI_API_KEY:
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+
+# ----------------------------
+# Intent detection (deterministic)
+# ----------------------------
 def detect_intent(entry: str) -> str:
+    """
+    Return 'spiral' if message is reflective/emotional/values-driven; otherwise 'chat'.
+    Deterministic (temperature=0) and expects exact word.
+    """
     prompt = (
-        "You are a Spiral Dynamics gatekeeper.\n"
-        "Determine if this journal entry reflects emotional expression, life struggle, desire for change, personal values, reflection, or self-awareness.\n"
-        "If yes, return 'spiral'. If it's only surface-level chat, jokes, or small talk, return 'chat'.\n"
-        f"Entry: \"{entry}\""
+        "You are a strict intent classifier. If the message expresses emotions, life struggle, "
+        "deep reflection, longing for change, or values-based thought, reply exactly with the single word: spiral\n"
+        "Otherwise reply exactly with the single word: chat\n\n"
+        f"Message: \"{entry}\""
     )
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0,
-    )
-    content = response.choices[0].message.content.lower()
-    return "spiral" if "spiral" in content else "chat"
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            max_tokens=8,
+        )
+        content = resp.choices[0].message.content.strip().lower()
+        return "spiral" if content.startswith("spiral") else "chat"
+    except Exception as e:
+        # on failure, default to chat to avoid over-triggering spiral logic
+        print("detect_intent failed:", e)
+        return "chat"
 
 
+# ----------------------------
+# Stage classifier (robust, returns mind_mirror + mood)
+# ----------------------------
 def classify_stage(entry: str, context: str = None) -> dict:
     """
-    Classify the entry into a Spiral Dynamics stage.
-    Optional 'context' can be provided (short conversation history) to improve classification.
-    Returns dict with keys: stage, secondary, confidence, reason
+    Return:
+      - stage (primary stage name string)
+      - secondary (secondary stage or None)
+      - confidence (float 0.0-1.0)
+      - reason (short string)
+      - mind_mirror (short reflective sentence or None)   <-- NEW
+      - mood (single word mood label or None)             <-- NEW
+
+    Backwards-compatible: callers expecting 'stage','secondary','confidence','reason' still work.
     """
     ctx_part = f"\nContext:\n{context}\n" if context else ""
     prompt = (
-        f"Analyze this user input and classify its dominant Spiral Dynamics stage from: {', '.join(STAGES)}.\n"
-        "Respond with JSON containing:\n"
-        "- 'primary_stage': The most dominant stage\n"
-        "- 'secondary_stage': Second most present stage (if any)\n"
-        "- 'confidence': Your confidence in primary stage (0-1)\n"
-        "- 'reason': Brief explanation of your choice\n\n"
+        f"Analyze the following user text using Spiral Dynamics stages: {', '.join(STAGES)}.\n\n"
+        "Return a JSON object with keys exactly: primary_stage, secondary_stage, confidence (0-1), reason, "
+        "mind_mirror (one reflective sentence, max 20 words), mood (single word like bored/sad/anxious/hopeful).\n\n"
         f"{ctx_part}\nInput: \"{entry}\""
     )
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-        response_format={"type": "json_object"}
-    )
+
     try:
-        result = json.loads(response.choices[0].message.content)
-        return {
-            "stage": result.get("primary_stage", "Unknown"),
-            "secondary": result.get("secondary_stage"),
-            "confidence": float(result.get("confidence", 0)),
-            "reason": result.get("reason", "")
-        }
-    except Exception:
-        # fallback: simple classification without structured JSON
-        fallback = client.chat.completions.create(
+        resp = client.chat.completions.create(
             model="gpt-4.1",
-            messages=[{"role": "user", "content": f"Classify this into one stage from {', '.join(STAGES)}: {entry}"}],
-            temperature=0
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            max_tokens=350,
         )
+        raw = resp.choices[0].message.content.strip()
+    except Exception as e:
+        print("classify_stage AI call failed:", e)
         return {
-            "stage": fallback.choices[0].message.content.strip(),
+            "stage": "Unknown",
             "secondary": None,
-            "confidence": 1.0,
-            "reason": ""
+            "confidence": 0.0,
+            "reason": "classification_failed",
+            "mind_mirror": None,
+            "mood": None,
         }
 
+    # Try to parse JSON robustly
+    parsed = None
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        m = re.search(r'(\{[\s\S]*\})', raw)
+        if m:
+            try:
+                parsed = json.loads(m.group(1))
+            except Exception:
+                parsed = None
 
+    # Fallback to simple line-parsing
+    if not parsed:
+        parsed = {}
+        for line in raw.splitlines():
+            if ":" in line:
+                k, v = line.split(":", 1)
+                parsed[k.strip().lower()] = v.strip()
+
+    def _get(d, *keys):
+        for k in keys:
+            if k in d and d[k] not in (None, ""):
+                return d[k]
+        return None
+
+    primary = _get(parsed, "primary_stage", "primary", "stage")
+    secondary = _get(parsed, "secondary_stage", "secondary")
+    reason = _get(parsed, "reason", "explanation")
+    mind_mirror = _get(parsed, "mind_mirror", "mindmirror", "mirror", "reflection")
+    mood = _get(parsed, "mood", "emotion", "feeling")
+
+    # Normalize confidence
+    confidence = 0.0
+    raw_conf = _get(parsed, "confidence", "conf")
+    if raw_conf is not None:
+        try:
+            confidence = float(str(raw_conf).strip())
+            if confidence > 1:
+                confidence = confidence / 100.0
+        except Exception:
+            confidence = 0.0
+
+    if not primary:
+        primary = "Unknown"
+
+    return {
+        "stage": primary,
+        "secondary": secondary,
+        "confidence": confidence,
+        "reason": reason,
+        "mind_mirror": mind_mirror,
+        "mood": mood,
+    }
+
+
+# ----------------------------
+# Evolution check (unchanged semantics)
+# ----------------------------
 def check_evolution(last_stage: str, current_result: dict) -> str:
     if not last_stage:
         return None
@@ -104,11 +174,10 @@ def check_evolution(last_stage: str, current_result: dict) -> str:
     return None
 
 
+# ----------------------------
+# Reflective question generator (keeps creative temp)
+# ----------------------------
 def generate_reflective_question(entry: str, reply_to: str = None, context: str = None) -> str:
-    """
-    Generate a short reflective question based on the user's entry.
-    Accepts optional reply_to and a short context (conversation history) to make questions more targeted.
-    """
     ctx = ""
     if reply_to:
         ctx += f"\nReplying to: \"{reply_to}\""
@@ -116,49 +185,62 @@ def generate_reflective_question(entry: str, reply_to: str = None, context: str 
         ctx += f"\nContext: {context}"
     prompt = (
         f"You are a Spiral Dynamics mentor. Based on the user's thoughts{ctx}, "
-        "ask one deep, emotionally resonant question (max 15 words). Just ask the question.\n\n"
+        "ask ONE deep, emotionally resonant question (max 15 words). Only output the question.\n\n"
         f"User message: \"{entry}\""
     )
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.85
-    )
-    return response.choices[0].message.content.strip()
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.85,
+            max_tokens=60,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print("generate_reflective_question failed:", e)
+        return "What would that change look like for you?"
 
 
+# ----------------------------
+# Gamified prompt generator (robust JSON parsing, no response_format param)
+# ----------------------------
 def generate_gamified_prompt(stage: str, entry: str, evolution: bool = False) -> dict:
     stage_meta = STAGE_GAMIFIED_META.get(stage, STAGE_GAMIFIED_META["Green"])
     prompt_template = (
         f"Create a gamified interaction for a user at the {stage} stage of Spiral Dynamics. "
         f"The user just shared: '{entry}'\n\n"
-        "Provide:\n"
-        "1. A VERY short reflective question (5-10 words) to deepen their awareness\n"
-        "2. A concrete action prompt (max 15 words) aligned with their stage\n"
-        "3. A stage-appropriate reward description\n"
-        "Format as JSON with keys: question, prompt, reward"
-    )
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[{"role": "user", "content": prompt_template}],
-        temperature=0.7,
-        response_format={"type": "json_object"}
+        "Return a JSON object with keys: question, prompt, reward.\n"
+        " - question: 5-10 word reflective question\n"
+        " - prompt: concrete action (max 15 words)\n"
+        " - reward: short reward description\n"
     )
     try:
-        content = json.loads(response.choices[0].message.content)
+        resp = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[{"role": "user", "content": prompt_template}],
+            temperature=0.7,
+            max_tokens=200,
+        )
+        raw = resp.choices[0].message.content.strip()
+        try:
+            content = json.loads(raw)
+        except Exception:
+            m = re.search(r'(\{[\s\S]*\})', raw)
+            content = json.loads(m.group(1)) if m else {}
         return {
             "gamified_question": f"{stage_meta['emoji']} {stage_meta['name']}\n🎯 {content.get('question','')}",
             "gamified_prompt": f"💡 {content.get('prompt','')}",
             "reward": content.get('reward') if evolution else stage_meta["reward"]
         }
-    except Exception:
+    except Exception as e:
+        print("generate_gamified_prompt failed:", e)
         return {
             "gamified_question": f"{stage_meta['emoji']} {stage_meta['name']}\n🎯 What about this resonates most with you?",
             "gamified_prompt": "💡 Reflect on how this shows up in your daily life",
             "reward": stage_meta["reward"]
         }
-
 routes.py:
+
 from flask import Blueprint, request, jsonify
 import json
 import os
@@ -283,16 +365,484 @@ def user_progress():
         traceback.print_exc()
         return jsonify({"error": "Failed to fetch user progress"}), 500
 
+# commented code first one is original
+# @bp.route('/merged', methods=['POST'])
+# def merged():
+#     """
+#     Main endpoint for both chat (casual) and spiral (reflection) processing.
+#     This endpoint now:
+#     - saves incoming user messages to Firestore (if user_id provided)
+#     - fetches recent conversation history and includes it in the OpenAI chat call
+#     - saves the assistant's reply back to Firestore
+#     All existing gamification, streak and mission logic is preserved.
+#     """
+#     try:
+#         data = request.json
+#         entry = data.get("text", "").strip()
+#         last_stage = data.get("last_stage", "").strip()
+#         reply_to = data.get("reply_to", "").strip()
+#         user_id = data.get("user_id")
+#         if not entry:
+#             return jsonify({"error": "Missing entry"}), 400
+
+#         streak = 0
+#         rewards = []
+#         message_rewards = []
+#         missions_completed = 0
+#         new_mission_reward = None
+
+#         if user_id:
+#             streak = update_streak(user_id)
+#             rewards = check_streak_rewards(user_id, streak)
+#             message_rewards = check_message_rewards(user_id)
+
+#         # ✅ Mission tracking if replying
+#         if reply_to and user_id:
+#             try:
+#                 with open("daily_tasks.json") as f:
+#                     tasks = json.load(f)
+#                 task_to_complete = next(
+#                     (t for t in tasks if t.get("task") == reply_to or str(t.get("timestamp")) == reply_to),
+#                     None
+#                 )
+#                 if task_to_complete:
+#                     save_completed_task(user_id, task_to_complete)
+
+#                     # Increment missions completed
+#                     progress = get_user_progress(user_id)
+#                     progress["missions_completed"] = progress.get("missions_completed", 0) + 1
+#                     missions_completed = progress["missions_completed"]
+
+#                     # Check mission milestone rewards
+#                     if missions_completed in MISSION_REWARDS:
+#                         reward = MISSION_REWARDS[missions_completed]
+#                         progress["xp"] += reward["xp"]
+#                         if reward["badge"] not in progress.get("badges", []):
+#                             progress["badges"].append(reward["badge"])
+#                         new_mission_reward = reward
+#                     save_user_progress(user_id, progress)
+#             except Exception as e:
+#                 print("⚠ Error marking growth prompt complete:", e)
+
+#         # Save incoming user message to Firestore (memory) if user_id exists
+#         if user_id:
+#             try:
+#                 # Save the raw incoming user entry as a 'user' role
+#                 save_conversation_message(user_id, "user", entry)
+#             except Exception as e:
+#                 print("⚠ Warning: could not save incoming message:", e)
+
+#         # Build context messages for OpenAI
+#         messages_for_ai = []
+#         # add a short system persona message (keeps behaviour consistent)
+#         system_msg = {
+#             "role": "system",
+#             "content": "You are a kind, reflective Spiral Dynamics mentor and supportive chatbot for RETVRN. Keep replies concise and empathetic."
+#         }
+#         messages_for_ai.append(system_msg)
+
+#         # If we have a user_id, fetch recent messages and append
+#         if user_id:
+#             try:
+#                 recent = get_recent_conversation(user_id, limit=HISTORY_LIMIT)
+#                 # recent is oldest->newest
+#                 for m in recent:
+#                     # Ensure role conforms to OpenAI roles
+#                     r = m.get("role", "user")
+#                     if r not in ("user", "assistant", "system"):
+#                         r = "user"
+#                     messages_for_ai.append({"role": r, "content": m.get("content", "")})
+#             except Exception as e:
+#                 print("⚠ Could not fetch recent conversation:", e)
+
+#         # Append the current user message last
+#         current_user_content = entry if not reply_to else f"Previous: {reply_to}\nUser: {entry}"
+#         messages_for_ai.append({"role": "user", "content": current_user_content})
+
+#         # Decide intent
+#         intent = detect_intent(entry)
+
+#         # ---------------------------
+#         # Chat (casual) flow
+#         # ---------------------------
+#         if intent == "chat":
+#             try:
+#                 resp = client.chat.completions.create(
+#                     model='gpt-4.1',
+#                     messages=messages_for_ai,
+#                     temperature=0.7,
+#                 )
+#                 ai_resp = resp.choices[0].message.content.strip()
+#             except Exception as e:
+#                 print("AI chat error, falling back:", e)
+#                 try:
+#                     # fallback simple call without history
+#                     ai_resp = client.chat.completions.create(
+#                         model='gpt-4.1',
+#                         messages=[{"role": "user", "content": f"Be a kind friend and casually respond to:\n{current_user_content}"}],
+#                         temperature=0.7
+#                     ).choices[0].message.content.strip()
+#                 except Exception as e2:
+#                     print("Fallback AI also failed:", e2)
+#                     return jsonify({"error": "AI service unavailable"}), 503
+
+#             # Save assistant response to Firestore
+#             if user_id:
+#                 try:
+#                     save_conversation_message(user_id, "assistant", ai_resp)
+#                 except Exception as e:
+#                     print("⚠ Could not save assistant reply:", e)
+
+#             return jsonify({
+#                 "mode": "chat",
+#                 "response": ai_resp,
+#                 "streak": streak,
+#                 "rewards": rewards,
+#                 "message_rewards": message_rewards,
+#                 "missions_completed": missions_completed,
+#                 "new_mission_reward": new_mission_reward,
+#             })
+
+#         # ---------------------------
+#         # Spiral (reflection) flow
+#         # ---------------------------
+#         # Provide a small context string to pass to classifier & question generator
+#         context_text = ""
+#         if user_id:
+#             try:
+#                 recent_small = get_recent_conversation(user_id, limit=3)
+#                 context_text = "\n".join([f"{m['role']}: {m['content']}" for m in recent_small])
+#             except Exception:
+#                 context_text = ""
+
+#         # Pass context into classify_stage (we adjusted signature to accept optional context)
+#         try:
+#             classification = classify_stage(entry, context=context_text)
+#         except TypeError:
+#             # back-compat: if classify_stage doesn't accept context, call old way
+#             classification = classify_stage(entry)
+
+#         stage = classification.get("stage")
+#         evolution_msg = check_evolution(last_stage, classification)
+
+#         xp_gain = 0
+#         badges = []
+#         if user_id and evolution_msg:
+#             progress = get_user_progress(user_id)
+#             progress["xp"] += XP_REWARDS.get("level_up", 10)
+#             if "level_up" not in progress.get("badges", []):
+#                 progress["badges"].append("level_up")
+#                 badges.append("🌱 Level Up")
+#             save_user_progress(user_id, progress)
+#             xp_gain = XP_REWARDS.get("level_up", 10)
+
+#         gamified = generate_gamified_prompt(stage or last_stage, entry, evolution=bool(evolution_msg))
+
+#         # generate_reflective_question now may accept context as second arg (back-compat handled)
+#         try:
+#             question = generate_reflective_question(entry, reply_to=reply_to or None, context=context_text)
+#         except TypeError:
+#             question = generate_reflective_question(entry, reply_to)
+
+#         # Save assistant-generated question (assistant message) into conversation store
+#         if user_id and question:
+#             try:
+#                 save_conversation_message(user_id, "assistant", question)
+#             except Exception as e:
+#                 print("⚠ Could not save assistant question:", e)
+
+#         response = {
+#             "mode": "spiral",
+#             "stage": stage,
+#             "evolution": evolution_msg,
+#             "xp_gain": xp_gain,
+#             "badges": badges,
+#             "question": question,
+#             "gamified": gamified,
+#             "confidence": classification.get("confidence"),
+#             "reason": classification.get("reason"),
+#             "streak": streak,
+#             "rewards": rewards,
+#             "message_rewards": message_rewards,
+#             "missions_completed": missions_completed,
+#             "new_mission_reward": new_mission_reward,
+#         }
+#         if classification.get("confidence", 1) < 0.7 and classification.get("secondary"):
+#             response["note"] = f"Also detected: {classification['secondary']}"
+#         return jsonify(response)
+
+#     except Exception:
+#         traceback.print_exc()
+#         return jsonify({"error": "Failed to process reflection"}), 500
+# @bp.route('/merged', methods=['POST'])
+# def merged():
+#     """
+#     Backend-only: ensure model references 'Mind Mirror' and 'Mission' (or both).
+#     Replaces the previous /merged endpoint; uses existing helpers.
+#     """
+#     try:
+#         data = request.json
+#         entry = data.get("text", "").strip()
+#         last_stage = data.get("last_stage", "").strip()
+#         reply_to = data.get("reply_to", "").strip()
+#         user_id = data.get("user_id")
+#         if not entry:
+#             return jsonify({"error": "Missing entry"}), 400
+
+#         streak = 0
+#         rewards = []
+#         message_rewards = []
+#         missions_completed = 0
+#         new_mission_reward = None
+
+#         if user_id:
+#             streak = update_streak(user_id)
+#             rewards = check_streak_rewards(user_id, streak)
+#             message_rewards = check_message_rewards(user_id)
+
+#         # Mission completion if replying to a task
+#         if reply_to and user_id:
+#             try:
+#                 with open("daily_tasks.json") as f:
+#                     tasks = json.load(f)
+#                 task_to_complete = next(
+#                     (t for t in tasks if t.get("task") == reply_to or str(t.get("timestamp")) == reply_to),
+#                     None
+#                 )
+#                 if task_to_complete:
+#                     save_completed_task(user_id, task_to_complete)
+#                     progress = get_user_progress(user_id)
+#                     progress["missions_completed"] = progress.get("missions_completed", 0) + 1
+#                     missions_completed = progress["missions_completed"]
+#                     if missions_completed in MISSION_REWARDS:
+#                         reward = MISSION_REWARDS[missions_completed]
+#                         progress["xp"] += reward["xp"]
+#                         if reward["badge"] not in progress.get("badges", []):
+#                             progress["badges"].append(reward["badge"])
+#                         new_mission_reward = reward
+#                     save_user_progress(user_id, progress)
+#             except Exception as e:
+#                 print("⚠ Error marking growth prompt complete:", e)
+
+#         # Save raw incoming user entry as memory
+#         if user_id:
+#             try:
+#                 save_conversation_message(user_id, "user", entry)
+#             except Exception as e:
+#                 print("⚠ Warning: could not save incoming message:", e)
+
+#         # Build context messages for OpenAI
+#         messages_for_ai = []
+#         # persona/system message first
+#         system_msg = {
+#             "role": "system",
+#             "content": "You are a kind, reflective Spiral Dynamics mentor and supportive chatbot for RETVRN. Keep replies concise and empathetic."
+#         }
+#         messages_for_ai.append(system_msg)
+
+#         # Helper: parse latest assistant message for Mind Mirror and Mission
+#         def _get_latest_mindmirror_mission(uid):
+#             try:
+#                 recent = get_recent_conversation(uid, limit=12)  # look back a bit further for mission/mindmirror
+#             except Exception:
+#                 return None, None
+#             # search newest -> oldest
+#             for m in reversed(recent):
+#                 if m.get("role") == "assistant" and m.get("content"):
+#                     content = m["content"]
+#                     mind = None
+#                     mission = None
+#                     for line in content.splitlines():
+#                         ln = line.strip()
+#                         if ln.lower().startswith("mind mirror:"):
+#                             mind = ln.split(":", 1)[1].strip()
+#                         elif ln.lower().startswith("mission:"):
+#                             mission = ln.split(":", 1)[1].strip()
+#                     if mind or mission:
+#                         return mind, mission
+#             return None, None
+
+#         # If we have a user_id, fetch recent messages and append (oldest -> newest)
+#         if user_id:
+#             try:
+#                 recent = get_recent_conversation(user_id, limit=HISTORY_LIMIT)
+#                 for m in recent:
+#                     r = m.get("role", "user")
+#                     if r not in ("user", "assistant", "system"):
+#                         r = "user"
+#                     messages_for_ai.append({"role": r, "content": m.get("content", "")})
+#                 # explicit assistant snippet containing latest Mind Mirror / Mission (if any)
+#                 mind_mirror_text, mission_text = _get_latest_mindmirror_mission(user_id)
+#                 if mind_mirror_text or mission_text:
+#                     explicit_snip = (
+#                         f"Latest Mind Mirror: {mind_mirror_text or '—'}\n"
+#                         f"Latest Mission: {mission_text or '—'}"
+#                     )
+#                     # Append as assistant role to ensure visibility (won't change UI)
+#                     messages_for_ai.append({"role": "assistant", "content": explicit_snip})
+#             except Exception as e:
+#                 print("⚠ Could not fetch recent conversation:", e)
+
+#         # Additional system instruction to nudge model to use Mind Mirror/Mission when present
+#         messages_for_ai.insert(1, {
+#             "role": "system",
+#             "content": (
+#                 "When answering, first check for any 'Latest Mind Mirror' and 'Latest Mission' in the conversation. "
+#                 "If present, briefly reference them and tailor suggestions to align with that Mind Mirror and/or Mission. "
+#                 "If neither is present, answer normally and empathetically."
+#             )
+#         })
+
+#         # Append the current user message last
+#         current_user_content = entry if not reply_to else f"Previous: {reply_to}\nUser: {entry}"
+#         messages_for_ai.append({"role": "user", "content": current_user_content})
+
+#         # Decide intent
+#         intent = detect_intent(entry)
+
+#         # ---------------------------
+#         # Chat (casual) flow
+#         # ---------------------------
+#         if intent == "chat":
+#             try:
+#                 resp = client.chat.completions.create(
+#                     model='gpt-4.1',
+#                     messages=messages_for_ai,
+#                     temperature=0.7,
+#                 )
+#                 ai_resp = resp.choices[0].message.content.strip()
+#             except Exception as e:
+#                 print("AI chat error, falling back:", e)
+#                 try:
+#                     ai_resp = client.chat.completions.create(
+#                         model='gpt-4.1',
+#                         messages=[{"role": "user", "content": f"Be a kind friend and casually respond to:\n{current_user_content}"}],
+#                         temperature=0.7
+#                     ).choices[0].message.content.strip()
+#                 except Exception as e2:
+#                     print("Fallback AI also failed:", e2)
+#                     return jsonify({"error": "AI service unavailable"}), 503
+
+#             # Save assistant response
+#             if user_id:
+#                 try:
+#                     save_conversation_message(user_id, "assistant", ai_resp)
+#                 except Exception as e:
+#                     print("⚠ Could not save assistant reply:", e)
+
+#             return jsonify({
+#                 "mode": "chat",
+#                 "response": ai_resp,
+#                 "streak": streak,
+#                 "rewards": rewards,
+#                 "message_rewards": message_rewards,
+#                 "missions_completed": missions_completed,
+#                 "new_mission_reward": new_mission_reward,
+#             })
+
+#         # ---------------------------
+#         # Spiral (reflection) flow
+#         # ---------------------------
+#         # Provide a small context string for classifier/question generator
+#         context_text = ""
+#         if user_id:
+#             try:
+#                 recent_small = get_recent_conversation(user_id, limit=3)
+#                 context_text = "\n".join([f"{m['role']}: {m['content']}" for m in recent_small])
+#             except Exception:
+#                 context_text = ""
+
+#         # classify_stage may accept context
+#         try:
+#             classification = classify_stage(entry, context=context_text)
+#         except TypeError:
+#             classification = classify_stage(entry)
+
+#         stage = classification.get("stage")
+#         # prefer classification-provided mind mirror if available
+#         mind_mirror_gen = classification.get("mind_mirror") or classification.get("mind_mirror_text") or None
+#         evolution_msg = check_evolution(last_stage, classification)
+
+#         xp_gain = 0
+#         badges = []
+#         if user_id and evolution_msg:
+#             progress = get_user_progress(user_id)
+#             progress["xp"] += XP_REWARDS.get("level_up", 10)
+#             if "level_up" not in progress.get("badges", []):
+#                 progress["badges"].append("level_up")
+#                 badges.append("🌱 Level Up")
+#             save_user_progress(user_id, progress)
+#             xp_gain = XP_REWARDS.get("level_up", 10)
+
+#         # gamified prompt treated as Mission
+#         gamified = generate_gamified_prompt(stage or last_stage, entry, evolution=bool(evolution_msg))
+
+#         # generate_reflective_question - backcompat handled
+#         try:
+#             question = generate_reflective_question(entry, reply_to=reply_to or None, context=context_text)
+#         except TypeError:
+#             question = generate_reflective_question(entry, reply_to)
+
+#         # Save assistant-generated question to conversation store
+#         if user_id and question:
+#             try:
+#                 save_conversation_message(user_id, "assistant", question)
+#             except Exception as e:
+#                 print("⚠ Could not save assistant question:", e)
+
+#         # --- Save a single structured assistant message containing Stage / Mind Mirror / Mission / Question
+#         if user_id:
+#             try:
+#                 # Build parseable block; prefer generated mind mirror, fallback to latest saved one if present
+#                 mm = mind_mirror_gen
+#                 if not mm:
+#                     # try to fetch existing latest Mind Mirror from previous assistant messages
+#                     prev_mind, prev_mission = _get_latest_mindmirror_mission(user_id)
+#                     if prev_mind:
+#                         mm = prev_mind
+
+#                 mission_text_block = gamified or (prev_mission if 'prev_mission' in locals() else None)
+#                 mission_lines = [
+#                     f"Stage: {stage or last_stage}",
+#                     f"Mind Mirror: {mm or '—'}",
+#                     f"Mission: {mission_text_block or '—'}",
+#                     f"Question: {question or '—'}"
+#                 ]
+#                 mission_block = "\n".join([ln for ln in mission_lines if ln.strip()])
+#                 save_conversation_message(user_id, "assistant", mission_block)
+#             except Exception as e:
+#                 print("⚠ Could not save mission/mind-mirror block:", e)
+
+#         response = {
+#             "mode": "spiral",
+#             "stage": stage,
+#             "evolution": evolution_msg,
+#             "xp_gain": xp_gain,
+#             "badges": badges,
+#             "question": question,
+#             "gamified": gamified,
+#             "confidence": classification.get("confidence"),
+#             "reason": classification.get("reason"),
+#             "streak": streak,
+#             "rewards": rewards,
+#             "message_rewards": message_rewards,
+#             "missions_completed": missions_completed,
+#             "new_mission_reward": new_mission_reward,
+#         }
+#         if classification.get("confidence", 1) < 0.7 and classification.get("secondary"):
+#             response["note"] = f"Also detected: {classification['secondary']}"
+#         return jsonify(response)
+
+#     except Exception:
+#         traceback.print_exc()
+#         return jsonify({"error": "Failed to process reflection"}), 500
 
 @bp.route('/merged', methods=['POST'])
 def merged():
     """
-    Main endpoint for both chat (casual) and spiral (reflection) processing.
-    This endpoint now:
-    - saves incoming user messages to Firestore (if user_id provided)
-    - fetches recent conversation history and includes it in the OpenAI chat call
-    - saves the assistant's reply back to Firestore
-    All existing gamification, streak and mission logic is preserved.
+    Backend-only: ensure model references 'Mind Mirror' and 'Mission' (or both).
+    Uses existing helpers. Also performs a quiet mood/stage detection on each user message
+    and stores it in user progress (invisible to the user).
     """
     try:
         data = request.json
@@ -314,7 +864,7 @@ def merged():
             rewards = check_streak_rewards(user_id, streak)
             message_rewards = check_message_rewards(user_id)
 
-        # ✅ Mission tracking if replying
+        # Mission completion if replying to a task
         if reply_to and user_id:
             try:
                 with open("daily_tasks.json") as f:
@@ -325,13 +875,9 @@ def merged():
                 )
                 if task_to_complete:
                     save_completed_task(user_id, task_to_complete)
-
-                    # Increment missions completed
                     progress = get_user_progress(user_id)
                     progress["missions_completed"] = progress.get("missions_completed", 0) + 1
                     missions_completed = progress["missions_completed"]
-
-                    # Check mission milestone rewards
                     if missions_completed in MISSION_REWARDS:
                         reward = MISSION_REWARDS[missions_completed]
                         progress["xp"] += reward["xp"]
@@ -342,36 +888,109 @@ def merged():
             except Exception as e:
                 print("⚠ Error marking growth prompt complete:", e)
 
-        # Save incoming user message to Firestore (memory) if user_id exists
+        # Save raw incoming user entry as memory
         if user_id:
             try:
-                # Save the raw incoming user entry as a 'user' role
                 save_conversation_message(user_id, "user", entry)
             except Exception as e:
                 print("⚠ Warning: could not save incoming message:", e)
 
+        # --- Hidden: detect mood / stage from user message (backend-only, not shown to user) ---
+        if user_id:
+            try:
+                # Small context to help classifier (fetch last few msgs quietly)
+                try:
+                    _recent_small = get_recent_conversation(user_id, limit=3)
+                    _context_text = "\n".join([f"{m['role']}: {m['content']}" for m in _recent_small])
+                except Exception:
+                    _context_text = ""
+
+                # Run the classifier quietly (it should return stage, confidence, maybe mood)
+                try:
+                    _classification_quiet = classify_stage(entry, context=_context_text)
+                except TypeError:
+                    _classification_quiet = classify_stage(entry)
+
+                # Extract values we care about
+                detected_stage = _classification_quiet.get("stage")
+                detected_confidence = float(_classification_quiet.get("confidence", 0) or 0)
+                detected_mood = _classification_quiet.get("mood") or _classification_quiet.get("emotion") or None
+
+                # Persist detection quietly in user's progress/profile (no frontend exposure)
+                try:
+                    progress = get_user_progress(user_id)
+                    progress["_last_detected_stage"] = detected_stage
+                    progress["_last_stage_confidence"] = detected_confidence
+                    progress["_last_detected_mood"] = detected_mood
+                    progress["_last_stage_ts"] = int(time.time() * 1000)
+                    save_user_progress(user_id, progress)
+                except Exception as e:
+                    print("⚠ Could not save quiet stage/mood metadata:", e)
+
+            except Exception as e:
+                print("⚠ Mood/stage detection failed (quiet):", e)
+
         # Build context messages for OpenAI
         messages_for_ai = []
-        # add a short system persona message (keeps behaviour consistent)
+        # persona/system message first
         system_msg = {
             "role": "system",
             "content": "You are a kind, reflective Spiral Dynamics mentor and supportive chatbot for RETVRN. Keep replies concise and empathetic."
         }
         messages_for_ai.append(system_msg)
 
-        # If we have a user_id, fetch recent messages and append
+        # Helper: parse latest assistant message for Mind Mirror and Mission
+        def _get_latest_mindmirror_mission(uid):
+            try:
+                recent = get_recent_conversation(uid, limit=12)  # look back a bit further for mission/mindmirror
+            except Exception:
+                return None, None
+            # search newest -> oldest
+            for m in reversed(recent):
+                if m.get("role") == "assistant" and m.get("content"):
+                    content = m["content"]
+                    mind = None
+                    mission = None
+                    for line in content.splitlines():
+                        ln = line.strip()
+                        if ln.lower().startswith("mind mirror:"):
+                            mind = ln.split(":", 1)[1].strip()
+                        elif ln.lower().startswith("mission:"):
+                            mission = ln.split(":", 1)[1].strip()
+                    if mind or mission:
+                        return mind, mission
+            return None, None
+
+        # If we have a user_id, fetch recent messages and append (oldest -> newest)
         if user_id:
             try:
                 recent = get_recent_conversation(user_id, limit=HISTORY_LIMIT)
-                # recent is oldest->newest
                 for m in recent:
-                    # Ensure role conforms to OpenAI roles
                     r = m.get("role", "user")
                     if r not in ("user", "assistant", "system"):
                         r = "user"
                     messages_for_ai.append({"role": r, "content": m.get("content", "")})
+                # explicit assistant snippet containing latest Mind Mirror / Mission (if any)
+                mind_mirror_text, mission_text = _get_latest_mindmirror_mission(user_id)
+                if mind_mirror_text or mission_text:
+                    explicit_snip = (
+                        f"Latest Mind Mirror: {mind_mirror_text or '—'}\n"
+                        f"Latest Mission: {mission_text or '—'}"
+                    )
+                    # Append as assistant role to ensure visibility (won't change UI)
+                    messages_for_ai.append({"role": "assistant", "content": explicit_snip})
             except Exception as e:
                 print("⚠ Could not fetch recent conversation:", e)
+
+        # Additional system instruction to nudge model to use Mind Mirror/Mission when present
+        messages_for_ai.insert(1, {
+            "role": "system",
+            "content": (
+                "When answering, first check for any 'Latest Mind Mirror' and 'Latest Mission' in the conversation. "
+                "If present, briefly reference them and tailor suggestions to align with that Mind Mirror and/or Mission. "
+                "If neither is present, answer normally and empathetically."
+            )
+        })
 
         # Append the current user message last
         current_user_content = entry if not reply_to else f"Previous: {reply_to}\nUser: {entry}"
@@ -394,7 +1013,6 @@ def merged():
             except Exception as e:
                 print("AI chat error, falling back:", e)
                 try:
-                    # fallback simple call without history
                     ai_resp = client.chat.completions.create(
                         model='gpt-4.1',
                         messages=[{"role": "user", "content": f"Be a kind friend and casually respond to:\n{current_user_content}"}],
@@ -404,7 +1022,7 @@ def merged():
                     print("Fallback AI also failed:", e2)
                     return jsonify({"error": "AI service unavailable"}), 503
 
-            # Save assistant response to Firestore
+            # Save assistant response
             if user_id:
                 try:
                     save_conversation_message(user_id, "assistant", ai_resp)
@@ -424,7 +1042,7 @@ def merged():
         # ---------------------------
         # Spiral (reflection) flow
         # ---------------------------
-        # Provide a small context string to pass to classifier & question generator
+        # Provide a small context string for classifier/question generator
         context_text = ""
         if user_id:
             try:
@@ -433,14 +1051,15 @@ def merged():
             except Exception:
                 context_text = ""
 
-        # Pass context into classify_stage (we adjusted signature to accept optional context)
+        # classify_stage may accept context
         try:
             classification = classify_stage(entry, context=context_text)
         except TypeError:
-            # back-compat: if classify_stage doesn't accept context, call old way
             classification = classify_stage(entry)
 
         stage = classification.get("stage")
+        # prefer classification-provided mind mirror if available
+        mind_mirror_gen = classification.get("mind_mirror") or classification.get("mind_mirror_text") or None
         evolution_msg = check_evolution(last_stage, classification)
 
         xp_gain = 0
@@ -454,20 +1073,46 @@ def merged():
             save_user_progress(user_id, progress)
             xp_gain = XP_REWARDS.get("level_up", 10)
 
+        # gamified prompt treated as Mission
         gamified = generate_gamified_prompt(stage or last_stage, entry, evolution=bool(evolution_msg))
 
-        # generate_reflective_question now may accept context as second arg (back-compat handled)
+        # generate_reflective_question - backcompat handled
         try:
             question = generate_reflective_question(entry, reply_to=reply_to or None, context=context_text)
         except TypeError:
             question = generate_reflective_question(entry, reply_to)
 
-        # Save assistant-generated question (assistant message) into conversation store
+        # Save assistant-generated question to conversation store
         if user_id and question:
             try:
                 save_conversation_message(user_id, "assistant", question)
             except Exception as e:
                 print("⚠ Could not save assistant question:", e)
+
+        # --- Save a single structured assistant message containing Stage / Mind Mirror / Mission / Question
+        if user_id:
+            try:
+                # Build parseable block; prefer generated mind mirror, fallback to latest saved one if present
+                mm = mind_mirror_gen
+                prev_mind = None
+                prev_mission = None
+                if not mm:
+                    # try to fetch existing latest Mind Mirror from previous assistant messages
+                    prev_mind, prev_mission = _get_latest_mindmirror_mission(user_id)
+                    if prev_mind:
+                        mm = prev_mind
+
+                mission_text_block = gamified or (prev_mission if prev_mission else None)
+                mission_lines = [
+                    f"Stage: {stage or last_stage}",
+                    f"Mind Mirror: {mm or '—'}",
+                    f"Mission: {mission_text_block or '—'}",
+                    f"Question: {question or '—'}"
+                ]
+                mission_block = "\n".join([ln for ln in mission_lines if ln.strip()])
+                save_conversation_message(user_id, "assistant", mission_block)
+            except Exception as e:
+                print("⚠ Could not save mission/mind-mirror block:", e)
 
         response = {
             "mode": "spiral",
@@ -669,8 +1314,6 @@ def finalize_stage():
     except Exception:
         traceback.print_exc()
         return jsonify({"error": "Failed to finalize stage"}), 500
-
-
 
 firebase_utils.py:
 py
