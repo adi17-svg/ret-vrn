@@ -1760,10 +1760,21 @@ def reflect_transcription():
         if poll_data.get("status") == "error":
             return jsonify({"error": "Transcription failed"}), 500
 
-        transcript_text = poll_data.get("text", "")
-        utterances = poll_data.get("utterances", [])
+        # transcript_text = poll_data.get("text", "")
+        transcript_text = poll_data.get("text", "") or ""
+        # utterances = poll_data.get("utterances", [])
+        utterances = poll_data.get("utterances") or []
+        # dialogue = "\n".join(f"Speaker {u['speaker']}: {u['text']}" for u in utterances)
         dialogue = "\n".join(f"Speaker {u['speaker']}: {u['text']}" for u in utterances)
 
+
+        if utterances:
+            dialogue = "\n".join(
+            f"Speaker {u.get('speaker')}: {u.get('text','')}" for u in utterances
+             )
+        else:
+    # diarization nahi mili, simple single-speaker transcript use karo
+            dialogue = transcript_text
         # intent = detect_intent(transcript_text)
         # if intent == "chat":
         #     ai_resp = client.chat.completions.create(
@@ -1806,10 +1817,14 @@ def reflect_transcription():
                 "missions_completed": missions_completed,
                 "new_mission_reward": new_mission_reward,
             })
+        # speaker_texts = defaultdict(str)
+        # for u in utterances:
+        #     speaker_name = f"Speaker {u['speaker']}"
+        #     speaker_texts[speaker_name] += u["text"] + " "
         speaker_texts = defaultdict(str)
         for u in utterances:
-            speaker_name = f"Speaker {u['speaker']}"
-            speaker_texts[speaker_name] += u["text"] + " "
+            speaker_name = f"Speaker {u.get('speaker')}"
+            speaker_texts[speaker_name] += (u.get("text", "") + " ")
 
         speaker_stages = {}
         for speaker_name, text in speaker_texts.items():
