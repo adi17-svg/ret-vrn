@@ -1681,6 +1681,15 @@ def merged():
         return jsonify({"error": "Failed to process reflection"}), 500
 
 
+# @bp.route('/reflect_transcription', methods=['POST'])
+# def reflect_transcription():
+#     try:
+#         if 'audio' not in request.files:
+#             return jsonify({"error": "Missing audio file"}), 400
+#         reply_to = request.form.get("reply_to", "")
+#         last_stage = request.form.get("last_stage", "")
+#         user_id = request.form.get("user_id", "")
+#         audio_file = request.files['audio']
 @bp.route('/reflect_transcription', methods=['POST'])
 def reflect_transcription():
     try:
@@ -1689,6 +1698,8 @@ def reflect_transcription():
         reply_to = request.form.get("reply_to", "")
         last_stage = request.form.get("last_stage", "")
         user_id = request.form.get("user_id", "")
+        # 🔹 voice mode se aaya force flag
+        force_spiral_flag = request.form.get("force_spiral", "").lower() == "true"
         audio_file = request.files['audio']
 
         streak = 0
@@ -1793,22 +1804,74 @@ def reflect_transcription():
         #         "missions_completed": missions_completed,
         #         "new_mission_reward": new_mission_reward,
         #     })
+        # intent = detect_intent(transcript_text)
+        # if intent == "chat":
+        #     ai_resp = client.chat.completions.create(
+        #         model='gpt-4.1',
+        #         messages=[{"role": "user", "content": f"Carefully respond to:\n{dialogue}"}],
+        #         temperature=0.7,
+        #     ).choices[0].message.content.strip()
+            
+        #     base_url = request.url_root.rstrip("/")
+        #     tts_text = ai_resp
+        #     audio_url = f"{base_url}/speak-stream?text={quote_plus(tts_text)}"
+
+        #     return jsonify({
+        #         "mode": "chat",
+        #         "response": ai_resp,
+        #         "audiourl": audio_url,  # 👈 sirf client ke liye
+        #         "transcription": dialogue,
+        #         "diarized": True,
+        #         "streak": streak,
+        #         "rewards": rewards,
+        #         "message_rewards": message_rewards,
+        #         "missions_completed": missions_completed,
+        #         "new_mission_reward": new_mission_reward,
+        #     })
+        # # speaker_texts = defaultdict(str)
+        # # for u in utterances:
+        # #     speaker_name = f"Speaker {u['speaker']}"
+        # #     speaker_texts[speaker_name] += u["text"] + " "
+        # speaker_texts = defaultdict(str)
+        # for u in utterances:
+        #     speaker_name = f"Speaker {u.get('speaker')}"
+        #     speaker_texts[speaker_name] += (u.get("text", "") + " ")
+
+        # speaker_stages = {}
+        # for speaker_name, text in speaker_texts.items():
+        #     try:
+        #         stage_info = classify_stage(text.strip())
+        #         speaker_stages[speaker_name] = {"stage": stage_info["stage"], "text": text.strip()}
+        #     except Exception as e:
+        #         speaker_stages[speaker_name] = {"stage": "Unknown", "text": text.strip(), "error": str(e)}
+
+        # return jsonify({
+        #     "mode": "spiral",
+        #     "transcription": dialogue,
+        #     "speaker_stages": speaker_stages,
+        #     "diarized": True,
+        #     "ask_speaker_pick": True,
+        #     "streak": streak,
+        #     "rewards": rewards,
+        #     "message_rewards": message_rewards,
+        #     "missions_completed": missions_completed,
+        #     "new_mission_reward": new_mission_reward,
+        # })
         intent = detect_intent(transcript_text)
+
+        # 🔹 agar voice mode ne force_spiral bheja hai to hamesha spiral hi lo
+        if force_spiral_flag:
+            intent = "spiral"
+
         if intent == "chat":
             ai_resp = client.chat.completions.create(
                 model='gpt-4.1',
                 messages=[{"role": "user", "content": f"Carefully respond to:\n{dialogue}"}],
                 temperature=0.7,
             ).choices[0].message.content.strip()
-            
-            base_url = request.url_root.rstrip("/")
-            tts_text = ai_resp
-            audio_url = f"{base_url}/speak-stream?text={quote_plus(tts_text)}"
-
             return jsonify({
                 "mode": "chat",
                 "response": ai_resp,
-                "audiourl": audio_url,  # 👈 sirf client ke liye
                 "transcription": dialogue,
                 "diarized": True,
                 "streak": streak,
@@ -1817,22 +1880,27 @@ def reflect_transcription():
                 "missions_completed": missions_completed,
                 "new_mission_reward": new_mission_reward,
             })
-        # speaker_texts = defaultdict(str)
-        # for u in utterances:
-        #     speaker_name = f"Speaker {u['speaker']}"
-        #     speaker_texts[speaker_name] += u["text"] + " "
+
+        # 👇 yahan se tumhara existing spiral / speaker_stages wala code same rahe
         speaker_texts = defaultdict(str)
         for u in utterances:
-            speaker_name = f"Speaker {u.get('speaker')}"
-            speaker_texts[speaker_name] += (u.get("text", "") + " ")
+            speaker_name = f"Speaker {u['speaker']}"
+            speaker_texts[speaker_name] += u["text"] + " "
 
         speaker_stages = {}
         for speaker_name, text in speaker_texts.items():
             try:
                 stage_info = classify_stage(text.strip())
-                speaker_stages[speaker_name] = {"stage": stage_info["stage"], "text": text.strip()}
+                speaker_stages[speaker_name] = {
+                    "stage": stage_info["stage"],
+                    "text": text.strip()
+                }
             except Exception as e:
-                speaker_stages[speaker_name] = {"stage": "Unknown", "text": text.strip(), "error": str(e)}
+                speaker_stages[speaker_name] = {
+                    "stage": "Unknown",
+                    "text": text.strip(),
+                    "error": str(e),
+                }
 
         return jsonify({
             "mode": "spiral",
@@ -1849,82 +1917,7 @@ def reflect_transcription():
     except Exception:
         traceback.print_exc()
         return jsonify({"error": "Failed to process transcription"}), 500
-# new endpoint for audio stream
-# in routes.py (replace existing speak_stream route)
 
-# @bp.route("/speak-stream", methods=["GET", "POST"])
-# def speak_stream():
-#     # log request immediately
-#     try:
-#         txt = ""
-#         if request.method == "GET":
-#             txt = request.args.get("text", "") or ""
-#         else:
-#             body = request.get_json(silent=True) or {}
-#             txt = body.get("text", "") or ""
-#         current_app.logger.info("==== SPEAK-STREAM ROUTE CALLED ====")
-#         current_app.logger.info("speak-stream preview=%s len=%d", (txt[:120] + ("..." if len(txt) > 120 else "")), len(txt))
-#     except Exception as e:
-#         current_app.logger.exception("Error reading speak-stream request: %s", e)
-
-#     if not txt:
-#         # return early so client sees a JSON error instead of empty audio
-#         return jsonify({"error": "missing text"}), 400
-
-#     generator = stream_tts_from_openai(txt)    # direct_passthrough prevents Flask from buffering the whole generator
-#     return Response(generator, mimetype="audio/mpeg", direct_passthrough=True)
-
-# @bp.route("/speak-stream", methods=["GET", "POST"])
-# # def speak_stream():
-# #     """
-# #     Streams OpenAI TTS audio (replaces ElevenLabs).
-# #     No audio files saved - streams directly to client.
-# #     """
-# #     try:
-# #         txt = ""
-# #         if request.method == "GET":
-# #             txt = request.args.get("text", "") or ""
-# #         else:
-# #             body = request.get_json(silent=True) or {}
-# #             txt = body.get("text", "") or ""
-# #         current_app.logger.info("==== SPEAK-STREAM ROUTE CALLED ====")
-# #         current_app.logger.info("speak-stream preview=%s len=%d", (txt[:120] + ("..." if len(txt) > 120 else "")), len(txt))
-# #     except Exception as e:
-# #         current_app.logger.exception("Error reading speak-stream request: %s", e)
-
-# #     if not txt:
-# #         return jsonify({"error": "missing text"}), 400
-
-# #     # CHANGED: Use OpenAI instead of ElevenLabs
-# #     generator = stream_tts_from_openai(txt)
-# #     return Response(generator, mimetype="audio/mpeg", direct_passthrough=True)
-# def speak_stream():
-#     try:
-#         if request.method == 'GET':
-#             txt = request.args.get('text', '')
-#             current_app.logger.info(f'SPEAK-STREAM GET called with text length: {len(txt)}')
-#         else:
-#             json_data = request.get_json(silent=True)
-#             txt = json_data.get('text', '') if json_data else ''
-#             current_app.logger.info(f'SPEAK-STREAM POST called with text length: {len(txt)}')
-
-#         if not txt:
-#             return {"error": "Missing text parameter"}, 400
-
-#         # Optionally limit text length for TTS
-#         preview_len = min(len(txt), 120)
-#         preview_text = txt[:preview_len]
-
-#         # Generate the audio stream response from OpenAI TTS stream generator function
-#         return Response(
-#             streamttsfromopenai(txt),
-#             mimetype='audio/mpeg',
-#             direct_passthrough=True
-#         )
-
-    # except Exception as e:
-    #     current_app.logger.exception(f"Error in speak-stream endpoint: {e}")
-    #     return {"error": "Internal server error"}, 500
 
 @bp.route("/speak-stream", methods=["GET", "POST"])
 def speak_stream():
