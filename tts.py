@@ -82,60 +82,28 @@
 #     except Exception as e:
 #         logger.exception("Unexpected error streaming OpenAI TTS: %s", e)
 #         yield b""
+# tts.py
 import os
-import logging
-from typing import Iterator
-from flask import Blueprint, request, jsonify
 from openai import OpenAI
-
-bp = Blueprint('tts', __name__)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
-    raise ValueError("❌ Missing OPENAI_API_KEY environment variable")
+    raise ValueError("Missing OPENAI_API_KEY for TTS")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+_client = OpenAI(api_key=OPENAI_API_KEY)
 
-def stream_tts_from_openai(text: str, chunk_size: int = 4096) -> Iterator[bytes]:
+def stream_tts_from_openai(text: str):
     """
-    Generator that streams OpenAI TTS audio chunks (MP3).
+    Generator that yields MP3 bytes from OpenAI TTS.
+    Flask Response(generator, mimetype='audio/mpeg') se use karo.
     """
-    if not text:
-        logging.warning("TTS called with empty text")
-        yield b""
-        return
-
-    try:
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice="alloy",
-            input=text,
-            response_format="mp3"
-        )
-        for chunk in response.iter_bytes(chunk_size=chunk_size):
-            if chunk:
-                yield chunk
-    except Exception as e:
-        logging.exception("Error streaming TTS: %s", e)
-        yield b""
-
-@bp.route('/tts', methods=['POST'])
-def generate_tts_audio():
-    data = request.get_json()
-    text = data.get("text", "")
-    if not text:
-        return jsonify({"error": "No text provided"}), 400
-    try:
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice="alloy",
-            input=text,
-            response_format="url"  # Return URL to generated audio file
-        )
-        audio_url = response.get("audio_url")
-        if not audio_url:
-            return jsonify({"error": "No audio URL returned"}), 500
-        return jsonify({"audio_url": audio_url})
-    except Exception as e:
-        logging.exception("TTS generation failed")
-        return jsonify({"error": str(e)}), 500
+    with _client.audio.speech.with_streaming_response.create(
+        model="gpt-4o-mini-tts",  # ya koi bhi supported TTS model
+        voice="alloy",
+        format="mp3",
+        input=text,
+    ) as response:
+        for chunk in response.iter_bytes(chunk_size=4096):
+            if not chunk:
+                continue
+            yield chunk
