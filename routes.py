@@ -2018,6 +2018,8 @@
 #     except Exception:
 #         traceback.print_exc()
 #         return jsonify({"error": "Failed to finalize stage"}), 500
+
+# Most latest working code
 from flask import Blueprint, request, jsonify, Response, current_app
 import json
 import os
@@ -2493,12 +2495,12 @@ def merged():
         traceback.print_exc()
         return jsonify({"error": "Failed to process reflection"}), 500
 
-
 @bp.route('/reflect_transcription', methods=['POST'])
 def reflect_transcription():
     try:
         if 'audio' not in request.files:
             return jsonify({"error": "Missing audio file"}), 400
+
         reply_to = request.form.get("reply_to", "")
         last_stage = request.form.get("last_stage", "")
         user_id = request.form.get("user_id", "")
@@ -2527,12 +2529,10 @@ def reflect_transcription():
                 if task_to_complete:
                     save_completed_task(user_id, task_to_complete)
 
-                    # Increment missions completed
                     progress = get_user_progress(user_id)
                     progress["missions_completed"] = progress.get("missions_completed", 0) + 1
                     missions_completed = progress["missions_completed"]
 
-                    # Check mission milestone rewards
                     if missions_completed in MISSION_REWARDS:
                         reward = MISSION_REWARDS[missions_completed]
                         progress["xp"] += reward["xp"]
@@ -2550,14 +2550,17 @@ def reflect_transcription():
 
         upload_resp = requests.post(
             "https://api.assemblyai.com/v2/upload",
-            headers={"authorization": os.getenv("ASSEMBLYAI_API_KEY"), "content-type": "application/octet-stream"},
-            data=open(path, "rb")
+            headers={
+                "authorization": os.getenv("ASSEMBLYAI_API_KEY"),
+                "content-type": "application/octet-stream",
+            },
+            data=open(path, "rb"),
         )
         audio_url = upload_resp.json().get("upload_url")
         transcript_post = requests.post(
             "https://api.assemblyai.com/v2/transcript",
             headers={"authorization": os.getenv("ASSEMBLYAI_API_KEY")},
-            json={"audio_url": audio_url, "speaker_labels": True}
+            json={"audio_url": audio_url, "speaker_labels": True},
         )
         transcript_id = transcript_post.json().get("id")
 
@@ -2573,30 +2576,36 @@ def reflect_transcription():
         if poll_data.get("status") == "error":
             return jsonify({"error": "Transcription failed"}), 500
 
-        # transcript_text = poll_data.get("text", "")
+        # 👉 plain text transcript (no Speaker labels)
         transcript_text = poll_data.get("text", "") or ""
-        # utterances = poll_data.get("utterances", [])
         utterances = poll_data.get("utterances") or []
-        # dialogue = "\n".join(f"Speaker {u['speaker']}: {u['text']}" for u in utterances)
-        dialogue = "\n".join(f"Speaker {u['speaker']}: {u['text']}" for u in utterances)
 
-
-        if utterances:
-            dialogue = "\n".join(
-            f"Speaker {u.get('speaker')}: {u.get('text','')}" for u in utterances
-             )
-        else:
-    # diarization nahi mili, simple single-speaker transcript use karo
-            dialogue = transcript_text
-   
+        # ---------------- INTENT ----------------
         intent = detect_intent(transcript_text)
+
+        # -------------- CHAT FLOW --------------
         if intent == "chat":
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a warm, supportive friend in the RETVRN app. "
+                        "Reply in simple, natural language, 2–4 short sentences. "
+                        "No roleplay, no speaker labels—just a normal, human reply."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": transcript_text,
+                },
+            ]
+
             ai_resp = client.chat.completions.create(
                 model='gpt-4.1',
-                messages=[{"role": "user", "content": f"Carefully respond to:\n{dialogue}"}],
+                messages=messages,
                 temperature=0.7,
             ).choices[0].message.content.strip()
-            
+
             base_url = request.url_root.rstrip("/")
             tts_text = ai_resp
             audio_url = f"{base_url}/speak-stream?text={quote_plus(tts_text)}"
@@ -2604,19 +2613,18 @@ def reflect_transcription():
             return jsonify({
                 "mode": "chat",
                 "response": ai_resp,
-                "audiourl": audio_url,  # 👈 sirf client ke liye
-                "transcription": dialogue,
-                "diarized": True,
+                "audiourl": audio_url,
+                "transcription": transcript_text,   # 🤍 UI ला इथे फक्त normal text
+                "diarized": bool(utterances),
                 "streak": streak,
                 "rewards": rewards,
                 "message_rewards": message_rewards,
                 "missions_completed": missions_completed,
                 "new_mission_reward": new_mission_reward,
             })
-        # speaker_texts = defaultdict(str)
-        # for u in utterances:
-        #     speaker_name = f"Speaker {u['speaker']}"
-        #     speaker_texts[speaker_name] += u["text"] + " "
+
+        # -------------- SPIRAL FLOW --------------
+        # इथे diarization फक्त stage analysis साठी वापरतो, UI ला labels पाठवत नाही
         speaker_texts = defaultdict(str)
         for u in utterances:
             speaker_name = f"Speaker {u.get('speaker')}"
@@ -2626,15 +2634,22 @@ def reflect_transcription():
         for speaker_name, text in speaker_texts.items():
             try:
                 stage_info = classify_stage(text.strip())
-                speaker_stages[speaker_name] = {"stage": stage_info["stage"], "text": text.strip()}
+                speaker_stages[speaker_name] = {
+                    "stage": stage_info["stage"],
+                    "text": text.strip(),
+                }
             except Exception as e:
-                speaker_stages[speaker_name] = {"stage": "Unknown", "text": text.strip(), "error": str(e)}
+                speaker_stages[speaker_name] = {
+                    "stage": "Unknown",
+                    "text": text.strip(),
+                    "error": str(e),
+                }
 
         return jsonify({
             "mode": "spiral",
-            "transcription": dialogue,
+            "transcription": transcript_text,   # इथेही plain text
             "speaker_stages": speaker_stages,
-            "diarized": True,
+            "diarized": bool(utterances),
             "ask_speaker_pick": True,
             "streak": streak,
             "rewards": rewards,
@@ -2642,9 +2657,165 @@ def reflect_transcription():
             "missions_completed": missions_completed,
             "new_mission_reward": new_mission_reward,
         })
+
     except Exception:
         traceback.print_exc()
         return jsonify({"error": "Failed to process transcription"}), 500
+
+
+
+# @bp.route('/reflect_transcription', methods=['POST'])
+# def reflect_transcription():
+#     try:
+#         if 'audio' not in request.files:
+#             return jsonify({"error": "Missing audio file"}), 400
+#         reply_to = request.form.get("reply_to", "")
+#         last_stage = request.form.get("last_stage", "")
+#         user_id = request.form.get("user_id", "")
+#         audio_file = request.files['audio']
+
+#         streak = 0
+#         rewards = []
+#         message_rewards = []
+#         missions_completed = 0
+#         new_mission_reward = None
+
+#         if user_id:
+#             streak = update_streak(user_id)
+#             rewards = check_streak_rewards(user_id, streak)
+#             message_rewards = check_message_rewards(user_id)
+
+#         # ✅ Mission tracking if replying (audio)
+#         if reply_to and user_id:
+#             try:
+#                 with open("daily_tasks.json") as f:
+#                     tasks = json.load(f)
+#                 task_to_complete = next(
+#                     (t for t in tasks if t.get("task") == reply_to or str(t.get("timestamp")) == reply_to),
+#                     None
+#                 )
+#                 if task_to_complete:
+#                     save_completed_task(user_id, task_to_complete)
+
+#                     # Increment missions completed
+#                     progress = get_user_progress(user_id)
+#                     progress["missions_completed"] = progress.get("missions_completed", 0) + 1
+#                     missions_completed = progress["missions_completed"]
+
+#                     # Check mission milestone rewards
+#                     if missions_completed in MISSION_REWARDS:
+#                         reward = MISSION_REWARDS[missions_completed]
+#                         progress["xp"] += reward["xp"]
+#                         if reward["badge"] not in progress.get("badges", []):
+#                             progress["badges"].append(reward["badge"])
+#                         new_mission_reward = reward
+#                     save_user_progress(user_id, progress)
+#             except Exception as e:
+#                 print("⚠ Error marking growth prompt complete (audio):", e)
+
+#         filename = f"{user_id or 'anon'}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.wav"
+#         os.makedirs("audios", exist_ok=True)
+#         path = os.path.join("audios", filename)
+#         audio_file.save(path)
+
+#         upload_resp = requests.post(
+#             "https://api.assemblyai.com/v2/upload",
+#             headers={"authorization": os.getenv("ASSEMBLYAI_API_KEY"), "content-type": "application/octet-stream"},
+#             data=open(path, "rb")
+#         )
+#         audio_url = upload_resp.json().get("upload_url")
+#         transcript_post = requests.post(
+#             "https://api.assemblyai.com/v2/transcript",
+#             headers={"authorization": os.getenv("ASSEMBLYAI_API_KEY")},
+#             json={"audio_url": audio_url, "speaker_labels": True}
+#         )
+#         transcript_id = transcript_post.json().get("id")
+
+#         while True:
+#             poll_resp = requests.get(
+#                 f"https://api.assemblyai.com/v2/transcript/{transcript_id}",
+#                 headers={"authorization": os.getenv("ASSEMBLYAI_API_KEY")},
+#             )
+#             poll_data = poll_resp.json()
+#             if poll_data.get("status") in ("completed", "error"):
+#                 break
+
+#         if poll_data.get("status") == "error":
+#             return jsonify({"error": "Transcription failed"}), 500
+
+#         # transcript_text = poll_data.get("text", "")
+#         transcript_text = poll_data.get("text", "") or ""
+#         # utterances = poll_data.get("utterances", [])
+#         utterances = poll_data.get("utterances") or []
+#         # dialogue = "\n".join(f"Speaker {u['speaker']}: {u['text']}" for u in utterances)
+#         dialogue = "\n".join(f"Speaker {u['speaker']}: {u['text']}" for u in utterances)
+
+
+#         if utterances:
+#             dialogue = "\n".join(
+#             f"Speaker {u.get('speaker')}: {u.get('text','')}" for u in utterances
+#              )
+#         else:
+#     # diarization nahi mili, simple single-speaker transcript use karo
+#             dialogue = transcript_text
+   
+#         intent = detect_intent(transcript_text)
+#         if intent == "chat":
+#             ai_resp = client.chat.completions.create(
+#                 model='gpt-4.1',
+#                 messages=[{"role": "user", "content": f"Carefully respond to:\n{dialogue}"}],
+#                 temperature=0.7,
+#             ).choices[0].message.content.strip()
+            
+#             base_url = request.url_root.rstrip("/")
+#             tts_text = ai_resp
+#             audio_url = f"{base_url}/speak-stream?text={quote_plus(tts_text)}"
+
+#             return jsonify({
+#                 "mode": "chat",
+#                 "response": ai_resp,
+#                 "audiourl": audio_url,  # 👈 sirf client ke liye
+#                 "transcription": dialogue,
+#                 "diarized": True,
+#                 "streak": streak,
+#                 "rewards": rewards,
+#                 "message_rewards": message_rewards,
+#                 "missions_completed": missions_completed,
+#                 "new_mission_reward": new_mission_reward,
+#             })
+#         # speaker_texts = defaultdict(str)
+#         # for u in utterances:
+#         #     speaker_name = f"Speaker {u['speaker']}"
+#         #     speaker_texts[speaker_name] += u["text"] + " "
+#         speaker_texts = defaultdict(str)
+#         for u in utterances:
+#             speaker_name = f"Speaker {u.get('speaker')}"
+#             speaker_texts[speaker_name] += (u.get("text", "") + " ")
+
+#         speaker_stages = {}
+#         for speaker_name, text in speaker_texts.items():
+#             try:
+#                 stage_info = classify_stage(text.strip())
+#                 speaker_stages[speaker_name] = {"stage": stage_info["stage"], "text": text.strip()}
+#             except Exception as e:
+#                 speaker_stages[speaker_name] = {"stage": "Unknown", "text": text.strip(), "error": str(e)}
+
+#         return jsonify({
+#             "mode": "spiral",
+#             "transcription": dialogue,
+#             "speaker_stages": speaker_stages,
+#             "diarized": True,
+#             "ask_speaker_pick": True,
+#             "streak": streak,
+#             "rewards": rewards,
+#             "message_rewards": message_rewards,
+#             "missions_completed": missions_completed,
+#             "new_mission_reward": new_mission_reward,
+#         })
+#     except Exception:
+#         traceback.print_exc()
+#         return jsonify({"error": "Failed to process transcription"}), 500
+    
 # new endpoint for audio stream
 @bp.route("/speak-stream", methods=["GET", "POST"])
 def speak_stream():
@@ -2744,3 +2915,4 @@ def finalize_stage():
     except Exception:
         traceback.print_exc()
         return jsonify({"error": "Failed to finalize stage"}), 500
+
