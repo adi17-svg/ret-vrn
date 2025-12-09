@@ -574,12 +574,54 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ----------------------------
 # Intent detection (deterministic)
-# ----------------------------
+
 def detect_intent(entry: str) -> str:
     """
-    Return 'spiral' if message is reflective/emotional/values-driven; otherwise 'chat'.
-    Deterministic (temperature=0) and expects exact word.
+    Return:
+      - 'ask_stage' if the message is the user asking about THEIR OWN Spiral Dynamics level
+      - 'spiral'    if message is reflective/emotional/values-driven
+      - 'chat'      otherwise (normal conversation)
+
+    For existing users who already have a stage:
+    - The endpoints decide what to do.
+    - This function ONLY classifies the message itself.
     """
+    if not entry or not entry.strip():
+        return "chat"
+
+    text = entry.strip()
+    lower = f" {text.lower()} "  # padding for simple word-boundary checks
+
+    # -------------------------
+    # 1️⃣ Fast heuristic: user asking "what is MY stage/level/colour?"
+    # -------------------------
+    stage_keywords = [
+        "spiral dynamics", "spiral dynamic", "spiral level", "spiral stage",
+        "which stage am i", "what is my stage", "what's my stage",
+        "what is my level", "what's my level",
+        "which colour am i", "which color am i",
+        "which spiral colour", "which spiral color",
+        "what colour am i", "what color am i",
+        "what stage am i in", "which stage in spiral",
+        "my spiral stage", "my spiral level",
+        "which stage do i belong", "which stage do i fit",
+        "where do i fit in spiral", "where do i fall in spiral",
+    ]
+
+    # User is clearly talking about Spiral Dynamics + themselves
+    if any(kw in lower for kw in stage_keywords):
+        if any(p in lower for p in [" my ", " me ", " i ", " i'm ", " im ", " am i "]):
+            return "ask_stage"
+
+    # Very short messages like "my level?" / "which stage?"
+    short = len(text.split()) <= 6
+    short_markers = ["my level", "my stage", "which stage", "which level"]
+    if short and any(kw in lower for kw in short_markers):
+        return "ask_stage"
+
+    # -------------------------
+    # 2️⃣ Original LLM-based spiral vs chat classification
+    # -------------------------
     prompt = (
         "You are a strict intent classifier. If the message expresses emotions, life struggle, "
         "deep reflection, longing for change, or values-based thought, reply exactly with the single word: spiral\n"
@@ -599,6 +641,33 @@ def detect_intent(entry: str) -> str:
         # on failure, default to chat to avoid over-triggering spiral logic
         print("detect_intent failed:", e)
         return "chat"
+
+
+# ----------------------------
+# def detect_intent(entry: str) -> str:
+#     """
+#     Return 'spiral' if message is reflective/emotional/values-driven; otherwise 'chat'.
+#     Deterministic (temperature=0) and expects exact word.
+#     """
+#     prompt = (
+#         "You are a strict intent classifier. If the message expresses emotions, life struggle, "
+#         "deep reflection, longing for change, or values-based thought, reply exactly with the single word: spiral\n"
+#         "Otherwise reply exactly with the single word: chat\n\n"
+#         f"Message: \"{entry}\""
+#     )
+#     try:
+#         resp = client.chat.completions.create(
+#             model="gpt-4o-mini",
+#             messages=[{"role": "user", "content": prompt}],
+#             temperature=0.0,
+#             max_tokens=8,
+#         )
+#         content = resp.choices[0].message.content.strip().lower()
+#         return "spiral" if content.startswith("spiral") else "chat"
+#     except Exception as e:
+#         # on failure, default to chat to avoid over-triggering spiral logic
+#         print("detect_intent failed:", e)
+#         return "chat"
 
 
 # ----------------------------
