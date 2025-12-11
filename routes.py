@@ -5245,6 +5245,7 @@ def reflect_transcription():
         return jsonify({"error": "Failed to process transcription"}), 500
 
 
+
 # @bp.route('/reflect_transcription', methods=['POST'])
 # def reflect_transcription():
 #     try:
@@ -5506,6 +5507,35 @@ def reflect_transcription():
 
 
 # new endpoint for audio stream
+
+# Add this to routes.py (paste near other @bp.route handlers)
+
+@bp.route('/send_welcome/<user_id>', methods=['POST', 'GET'])
+def api_send_welcome(user_id):
+    """
+    Admin/test endpoint to trigger the welcome notification for a given user_id.
+    It will write the welcome system message into users/{user_id}/mergedMessages
+    and try to send FCM if a token exists in the user's doc.
+    """
+    try:
+        # try to get stored fcm token from user doc (if present)
+        try:
+            doc = db.collection("users").document(user_id).get()
+            docdata = doc.to_dict() or {}
+            fcm_token = docdata.get("fcmToken") or docdata.get("fcm_token") or None
+        except Exception:
+            fcm_token = None
+
+        ok = send_welcome_notification(user_id, fcm_token)
+        if ok:
+            return jsonify({"ok": True, "user_id": user_id})
+        else:
+            return jsonify({"ok": False, "error": "send failed"}), 500
+    except Exception:
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": "server error"}), 500
+
+
 @bp.route("/speak-stream", methods=["GET", "POST"])
 def speak_stream():
     """

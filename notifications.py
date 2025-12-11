@@ -344,6 +344,38 @@ def send_night_reflection_prompt(user_id: str, fcm_token: str = None):
     except Exception:
         traceback.print_exc()
         return False
+def send_welcome_notification(user_id: str, fcm_token: str = None, body: str = None):
+    """
+    Backwards-compatible helper so routes.py can call send_welcome_notification(user_id).
+    Writes a welcome system message into users/{user_id}/mergedMessages and (best-effort)
+    sends an FCM push if fcm_token is provided.
+    """
+    try:
+        if body is None:
+            body = "What's on your mind right now? Write or speak freely—no filters."
+
+        # Save as a system merged message (so UI shows it)
+        save_system_merged_message(user_id, {
+            "type": "welcome",
+            "message": body,
+            "timestamp": datetime.now(timezone.utc),
+            "from": "system",
+            "is_notification": True,
+            "date": datetime.now(timezone.utc).date().isoformat()
+        })
+
+        # Best-effort: send FCM if token provided
+        if fcm_token:
+            try:
+                _send_fcm_to_token(fcm_token, "Welcome to RETVRN", body, data={"type": "welcome"})
+            except Exception:
+                # Log but don't raise (import-time safe)
+                traceback.print_exc()
+
+        return True
+    except Exception:
+        traceback.print_exc()
+        return False
 
 
 # --------- API endpoints for Intention flows (register this blueprint) ---------
