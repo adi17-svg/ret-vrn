@@ -6,6 +6,7 @@ load_dotenv()  # Load environment variables from .env file
 A4F_API_KEY = os.getenv("A4F_API_KEY")
 ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
 NOTIFICATION_TIME = os.getenv("NOTIFICATION_TIME", "09:00")
+MORNING_INTENTION_TIME = os.getenv("MORNING_INTENTION_TIME", "07:30")
 
 FIREBASE_CONFIG = {
     "type": os.getenv("FIREBASE_TYPE"),
