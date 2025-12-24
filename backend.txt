@@ -1,6 +1,5 @@
 spiral_dynamics.py:
 
-
 import os
 import json
 import re
@@ -336,7 +335,6 @@ def build_mission_feedback_line(stage: str, mood: str, completion: str = "full")
     # Other stages → no extra hint, keep it simple
 
     return (line + extra + stage_hint).strip()
-
 
 routes.py:
 
@@ -933,436 +931,6 @@ def merged():
         return jsonify({"error": "Failed to process reflection"}), 500
 
 
-# @bp.route('/merged', methods=['POST'])
-# def merged():
-#     """
-#     Backend-only: ensure model references 'Mind Mirror' and 'Mission' (or both).
-#     Uses existing helpers. Also performs a quiet mood/stage detection on each user message
-#     and stores it in user progress (invisible to the user).
-#     """
-#     try:
-#         data = request.json
-#         entry = data.get("text", "").strip()
-#         last_stage = data.get("last_stage", "").strip()
-#         reply_to = data.get("reply_to", "").strip()
-#         user_id = data.get("user_id")
-#         if not entry:
-#             return jsonify({"error": "Missing entry"}), 400
-
-#         streak = 0
-#         rewards = []
-#         message_rewards = []
-#         missions_completed = 0
-#         new_mission_reward = None
-
-#         # 🔹 NEW: load basic progress info (for stage logic)
-#         user_progress = None
-#         has_stage = False
-#         quick_stage_mode = False
-
-#         if user_id:
-#             try:
-#                 user_progress = get_user_progress(user_id)
-#                 has_stage = bool(
-#                     user_progress.get("assessed_stage") or
-#                     user_progress.get("_last_detected_stage")
-#                 )
-#                 quick_stage_mode = bool(user_progress.get("quick_stage_mode"))
-#             except Exception as e:
-#                 print("⚠ Could not load user_progress for stage logic:", e)
-
-#         if user_id:
-#             streak = update_streak(user_id)
-#             rewards = check_streak_rewards(user_id, streak)
-#             message_rewards = check_message_rewards(user_id)
-
-#         # Mission completion if replying to a task
-#         if reply_to and user_id:
-#             try:
-#                 with open("daily_tasks.json") as f:
-#                     tasks = json.load(f)
-#                 task_to_complete = next(
-#                     (t for t in tasks if t.get("task") == reply_to or str(t.get("timestamp")) == reply_to),
-#                     None
-#                 )
-#                 if task_to_complete:
-#                     save_completed_task(user_id, task_to_complete)
-#                     progress = get_user_progress(user_id)
-#                     progress["missions_completed"] = progress.get("missions_completed", 0) + 1
-#                     missions_completed = progress["missions_completed"]
-#                     if missions_completed in MISSION_REWARDS:
-#                         reward = MISSION_REWARDS[missions_completed]
-#                         progress["xp"] += reward["xp"]
-#                         if reward["badge"] not in progress.get("badges", []):
-#                             progress["badges"].append(reward["badge"])
-#                         new_mission_reward = reward
-
-#                     # 🔹 NEW: mark that user just completed a mission
-#                     progress["just_completed_mission"] = True
-
-#                     save_user_progress(user_id, progress)
-#             except Exception as e:
-#                 print("⚠ Error marking growth prompt complete:", e)
-
-#         # Save raw incoming user entry as memory
-#         if user_id:
-#             try:
-#                 save_conversation_message(user_id, "user", entry)
-#             except Exception as e:
-#                 print("⚠ Warning: could not save incoming message:", e)
-
-#         # --- Hidden: detect mood / stage from user message (backend-only, not shown to user) ---
-#         if user_id:
-#             try:
-#                 # Small context to help classifier (fetch last few msgs quietly)
-#                 try:
-#                     _recent_small = get_recent_conversation(user_id, limit=3)
-#                     _context_text = "\n".join([f"{m['role']}: {m['content']}" for m in _recent_small])
-#                 except Exception:
-#                     _context_text = ""
-
-#                 # Run the classifier quietly (it should return stage, confidence, maybe mood)
-#                 try:
-#                     _classification_quiet = classify_stage(entry, context=_context_text)
-#                 except TypeError:
-#                     _classification_quiet = classify_stage(entry)
-
-#                 # Extract values we care about
-#                 detected_stage = _classification_quiet.get("stage")
-#                 detected_confidence = float(_classification_quiet.get("confidence", 0) or 0)
-#                 detected_mood = _classification_quiet.get("mood") or _classification_quiet.get("emotion") or None
-
-#                 # Persist detection quietly in user's progress/profile (no frontend exposure)
-#                 try:
-#                     progress = get_user_progress(user_id)
-#                     progress["_last_detected_stage"] = detected_stage
-#                     progress["_last_stage_confidence"] = detected_confidence
-#                     progress["_last_detected_mood"] = detected_mood
-#                     progress["_last_stage_ts"] = int(time.time() * 1000)
-#                     save_user_progress(user_id, progress)
-#                 except Exception as e:
-#                     print("⚠ Could not save quiet stage/mood metadata:", e)
-
-#             except Exception as e:
-#                 print("⚠ Mood/stage detection failed (quiet):", e)
-
-#         # Build context messages for OpenAI
-#         messages_for_ai = []
-        
-#         system_msg = {
-#             "role": "system",
-#             "content": (
-#                 "You are a warm, natural, conversational companion for RETVRN who speaks like a supportive friend. "
-#                 "Be kind and reflective, but avoid formal or robotic phrasing — use contractions, short paragraphs, and "
-#                 "simple everyday language. If the user has just completed a mission, briefly celebrate (1–2 lines), "
-#                 "then follow with an open, friendly follow-up question to keep the chat going. Keep responses human, varied, "
-#                 "and gently encouraging while staying concise."
-#             )
-#         }
-
-#         messages_for_ai.append(system_msg)
-
-#         # Helper: parse latest assistant message for Mind Mirror and Mission
-#         def _get_latest_mindmirror_mission(uid):
-#             try:
-#                 recent = get_recent_conversation(uid, limit=12)  # look back a bit further for mission/mindmirror
-#             except Exception:
-#                 return None, None
-#             # search newest -> oldest
-#             for m in reversed(recent):
-#                 if m.get("role") == "assistant" and m.get("content"):
-#                     content = m["content"]
-#                     mind = None
-#                     mission = None
-#                     for line in content.splitlines():
-#                         ln = line.strip()
-#                         if ln.lower().startswith("mind mirror:"):
-#                             mind = ln.split(":", 1)[1].strip()
-#                         elif ln.lower().startswith("mission:"):
-#                             mission = ln.split(":", 1)[1].strip()
-#                     if mind or mission:
-#                         return mind, mission
-#             return None, None
-
-#         # If we have a user_id, fetch recent messages and append (oldest -> newest)
-#         if user_id:
-#             try:
-#                 recent = get_recent_conversation(user_id, limit=HISTORY_LIMIT)
-#                 for m in recent:
-#                     r = m.get("role", "user")
-#                     if r not in ("user", "assistant", "system"):
-#                         r = "user"
-#                     messages_for_ai.append({"role": r, "content": m.get("content", "")})
-#                 # explicit assistant snippet containing latest Mind Mirror / Mission (if any)
-#                 mind_mirror_text, mission_text = _get_latest_mindmirror_mission(user_id)
-#                 if mind_mirror_text or mission_text:
-#                     explicit_snip = (
-#                         f"Latest Mind Mirror: {mind_mirror_text or '—'}\n"
-#                         f"Latest Mission: {mission_text or '—'}"
-#                     )
-#                     # Append as assistant role to ensure visibility (won't change UI)
-#                     messages_for_ai.append({"role": "assistant", "content": explicit_snip})
-#             except Exception as e:
-#                 print("⚠ Could not fetch recent conversation:", e)
-
-#         messages_for_ai.insert(1, {
-#             "role": "system",
-#             "content": (
-#                 "When answering, first check for any 'Latest Mind Mirror' and 'Latest Mission' in the conversation. "
-#                 "If present, briefly reference them so your reply feels connected to the user's recent reflection or task. "
-#                 "If the user has just completed the mission, celebrate briefly (a warm, casual line), then ask a friendly, "
-#                 "open-ended follow-up that invites more sharing (e.g., 'How did that feel?' or 'Anything surprising?'). "
-#                 "Always avoid sounding formal or repetitive — aim to sound like a compassionate human companion."
-#             )
-#         })
-
-#         # Append the current user message last
-#         current_user_content = entry if not reply_to else f"Previous: {reply_to}\nUser: {entry}"
-#         messages_for_ai.append({"role": "user", "content": current_user_content})
-
-#         # Decide intent
-#         intent = detect_intent(entry)
-
-#         # 🔹 NEW: if we are in quick stage mode, force spiral (not chat)
-#         if user_id and quick_stage_mode:
-#             intent = "spiral"
-
-#         # 🔹 NEW: if user is asking for their stage & we have no stage yet → ask simple question
-#         if intent == "ask_stage" and user_id and (not has_stage) and (not quick_stage_mode):
-#             question_text = (
-#                 "Love that you’re exploring your Spiral Dynamics level 💫 "
-#                 "It shows you really care about understanding yourself.\n\n"
-#                 "We can start with a simple first snapshot of your stage.\n"
-#                 "For that, share one thing:\n"
-#                 "these days, what feels most important in your life — feeling secure, "
-#                 "achieving your goals, or having close and caring relationships? "
-#                 "Say it in your own words, just like you’d tell a friend."
-#             )
-
-#             try:
-#                 if user_progress is None:
-#                     user_progress = get_user_progress(user_id)
-#                 user_progress["quick_stage_mode"] = True
-#                 save_user_progress(user_id, user_progress)
-#             except Exception as e:
-#                 print("⚠ Could not save quick_stage_mode flag:", e)
-
-#             base_url = request.url_root.rstrip("/")
-#             audio_url = f"{base_url}/speak-stream?text={quote_plus(question_text)}"
-
-#             if user_id:
-#                 try:
-#                     save_conversation_message(user_id, "assistant", question_text)
-#                 except Exception as e:
-#                     print("⚠ Could not save stage question message:", e)
-
-#             return jsonify({
-#                 "mode": "chat",
-#                 "response": question_text,
-#                 "audiourl": audio_url,
-#                 "streak": streak,
-#                 "rewards": rewards,
-#                 "message_rewards": message_rewards,
-#                 "missions_completed": missions_completed,
-#                 "new_mission_reward": new_mission_reward,
-#                 "stage_assessment": True,
-#             })
-
-#         # ---------------- CHAT FLOW ----------------
-#         if intent == "chat":
-#             try:
-#                 resp = client.chat.completions.create(
-#                     model='gpt-4.1',
-#                     messages=messages_for_ai,
-#                     temperature=0.7,
-#                 )
-#                 ai_resp = resp.choices[0].message.content.strip()
-#             except Exception as e:
-#                 print("AI chat error, falling back:", e)
-#                 try:
-#                     ai_resp = client.chat.completions.create(
-#                         model='gpt-4.1',
-#                         messages=[{
-#                             "role": "user",
-#                             "content": f"Be a kind friend and casually respond to:\n{current_user_content}"
-#                         }],
-#                         temperature=0.7
-#                     ).choices[0].message.content.strip()
-#                 except Exception as e2:
-#                     print("Fallback AI also failed:", e2)
-#                     return jsonify({"error": "AI service unavailable"}), 503
-
-#             # 🔹 NEW: soft B-type follow-up after mission completion (text + voice mode)
-#             if user_id:
-#                 try:
-#                     progress = get_user_progress(user_id)
-#                     if progress.get("just_completed_mission"):
-#                         followup = (
-#                             "\n\nI’m really glad you showed up for yourself today. "
-#                             "If it feels right, we can stay with this feeling a bit more — "
-#                             "or you can talk about anything else that’s on your mind."
-#                         )
-#                         ai_resp = ai_resp + followup
-#                         progress["just_completed_mission"] = False
-#                         save_user_progress(user_id, progress)
-#                 except Exception as e:
-#                     print("⚠ mission follow-up blend failed:", e)
-
-#             # 🔊 TTS URL only for this response
-#             base_url = request.url_root.rstrip("/")
-#             tts_text = ai_resp
-#             audio_url = f"{base_url}/speak-stream?text={quote_plus(tts_text)}"
-
-#             if user_id:
-#                 try:
-#                     save_conversation_message(user_id, "assistant", ai_resp)
-#                 except Exception as e:
-#                     print("⚠ Could not save assistant reply:", e)
-
-#             return jsonify({
-#                 "mode": "chat",
-#                 "response": ai_resp,
-#                 "audiourl": audio_url,  # front-end uses this directly
-#                 "streak": streak,
-#                 "rewards": rewards,
-#                 "message_rewards": message_rewards,
-#                 "missions_completed": missions_completed,
-#                 "new_mission_reward": new_mission_reward,
-#             })
-
-#         # ---------------------------
-#         # Spiral (reflection) flow
-#         # ---------------------------
-#         context_text = ""
-#         if user_id:
-#             try:
-#                 recent_small = get_recent_conversation(user_id, limit=3)
-#                 context_text = "\n".join([f"{m['role']}: {m['content']}" for m in recent_small])
-#             except Exception:
-#                 context_text = ""
-
-#         # classify_stage may accept context
-#         try:
-#             classification = classify_stage(entry, context=context_text)
-#         except TypeError:
-#             classification = classify_stage(entry)
-
-#         stage = classification.get("stage")
-#         # prefer classification-provided mind mirror if available
-#         mind_mirror_gen = classification.get("mind_mirror") or classification.get("mind_mirror_text") or None
-#         evolution_msg = check_evolution(last_stage, classification)
-
-#         # 🔹 NEW: if this was quick-stage answer, save assessed_stage once
-#         if user_id and quick_stage_mode and stage:
-#             try:
-#                 progress = get_user_progress(user_id)
-#                 progress["assessed_stage"] = stage
-#                 progress["assessed_stage_confidence"] = classification.get("confidence")
-#                 if classification.get("secondary"):
-#                     progress["assessed_stage_secondary"] = classification.get("secondary")
-#                 progress["quick_stage_mode"] = False
-#                 save_user_progress(user_id, progress)
-#             except Exception as e:
-#                 print("⚠ Could not save assessed_stage from quick assessment:", e)
-
-#         xp_gain = 0
-#         badges = []
-#         if user_id and evolution_msg:
-#             progress = get_user_progress(user_id)
-#             progress["xp"] += XP_REWARDS.get("level_up", 10)
-#             if "level_up" not in progress.get("badges", []):
-#                 progress["badges"].append("level_up")
-#                 badges.append("🌱 Level Up")
-#             save_user_progress(user_id, progress)
-#             xp_gain = XP_REWARDS.get("level_up", 10)
-
-#         # gamified prompt treated as Mission
-#         gamified = generate_gamified_prompt(stage or last_stage, entry, evolution=bool(evolution_msg))
-
-#         # generate_reflective_question - backcompat handled
-#         try:
-#             question = generate_reflective_question(entry, reply_to=reply_to or None, context=context_text)
-#         except TypeError:
-#             question = generate_reflective_question(entry, reply_to)
-
-#         # Save assistant-generated question to conversation store
-#         if user_id and question:
-#             try:
-#                 save_conversation_message(user_id, "assistant", question)
-#             except Exception as e:
-#                 print("⚠ Could not save assistant question:", e)
-
-#         # --- Save a single structured assistant message containing Stage / Mind Mirror / Mission / Question
-#         if user_id:
-#             try:
-#                 mm = mind_mirror_gen
-#                 prev_mind = None
-#                 prev_mission = None
-#                 if not mm:
-#                     prev_mind, prev_mission = _get_latest_mindmirror_mission(user_id)
-#                     if prev_mind:
-#                         mm = prev_mind
-
-#                 mission_text_block = gamified or (prev_mission if prev_mission else None)
-#                 mission_lines = [
-#                     f"Stage: {stage or last_stage}",
-#                     f"Mind Mirror: {mm or '—'}",
-#                     f"Mission: {mission_text_block or '—'}",
-#                     f"Question: {question or '—'}"
-#                 ]
-#                 mission_block = "\n".join([ln for ln in mission_lines if ln.strip()])
-#                 save_conversation_message(user_id, "assistant", mission_block)
-#             except Exception as e:
-#                 print("⚠ Could not save mission/mind-mirror block:", e)
-
-#         # 🔊 Spiral reply TTS
-#         tts_parts = []
-#         if stage:
-#             tts_parts.append(f"Stage {stage}.")
-#         if evolution_msg:
-#             tts_parts.append(evolution_msg)
-#         if question:
-#             tts_parts.append(f"Mind Mirror question: {question}")
-#         if gamified:
-#             gq = gamified.get("gamified_question") or ""
-#             gp = gamified.get("gamified_prompt") or ""
-#             if gq:
-#                 tts_parts.append(gq)
-#             if gp:
-#                 tts_parts.append(gp)
-
-#         tts_text = " ".join(p for p in tts_parts if p)
-#         base_url = request.url_root.rstrip("/")
-#         spiral_audio_url = (
-#             f"{base_url}/speak-stream?text={quote_plus(tts_text)}"
-#             if tts_text else None
-#         )
-
-#         response = {
-#             "mode": "spiral",
-#             "stage": stage,
-#             "evolution": evolution_msg,
-#             "xp_gain": xp_gain,
-#             "badges": badges,
-#             "question": question,
-#             "gamified": gamified,
-#             "confidence": classification.get("confidence"),
-#             "reason": classification.get("reason"),
-#             "streak": streak,
-#             "rewards": rewards,
-#             "message_rewards": message_rewards,
-#             "missions_completed": missions_completed,
-#             "new_mission_reward": new_mission_reward,
-#             "audiourl": spiral_audio_url,
-#         }
-#         if classification.get("confidence", 1) < 0.7 and classification.get("secondary"):
-#             response["note"] = f"Also detected: {classification['secondary']}"
-#         return jsonify(response)
-
-#     except Exception:
-#         traceback.print_exc()
-#         return jsonify({"error": "Failed to process reflection"}), 500
-
 @bp.route('/reflect_transcription', methods=['POST'])
 def reflect_transcription():
     try:
@@ -1643,267 +1211,6 @@ def reflect_transcription():
         traceback.print_exc()
         return jsonify({"error": "Failed to process transcription"}), 500
 
-
-# @bp.route('/reflect_transcription', methods=['POST'])
-# def reflect_transcription():
-#     try:
-#         if 'audio' not in request.files:
-#             return jsonify({"error": "Missing audio file"}), 400
-
-#         reply_to = request.form.get("reply_to", "")
-#         last_stage = request.form.get("last_stage", "")
-#         user_id = request.form.get("user_id", "")
-#         audio_file = request.files['audio']
-
-#         streak = 0
-#         rewards = []
-#         message_rewards = []
-#         missions_completed = 0
-#         new_mission_reward = None
-
-#         if user_id:
-#             streak = update_streak(user_id)
-#             rewards = check_streak_rewards(user_id, streak)
-#             message_rewards = check_message_rewards(user_id)
-
-#         # 🔹 NEW: load quick stage flags for voice
-#         user_progress = None
-#         has_stage = False
-#         quick_stage_mode = False
-#         if user_id:
-#             try:
-#                 user_progress = get_user_progress(user_id)
-#                 has_stage = bool(
-#                     user_progress.get("assessed_stage") or
-#                     user_progress.get("_last_detected_stage")
-#                 )
-#                 quick_stage_mode = bool(user_progress.get("quick_stage_mode"))
-#             except Exception as e:
-#                 print("⚠ Could not load user_progress for stage (audio):", e)
-
-#         # ✅ Mission tracking if replying (audio)
-#         if reply_to and user_id:
-#             try:
-#                 with open("daily_tasks.json") as f:
-#                     tasks = json.load(f)
-#                 task_to_complete = next(
-#                     (t for t in tasks if t.get("task") == reply_to or str(t.get("timestamp")) == reply_to),
-#                     None
-#                 )
-#                 if task_to_complete:
-#                     save_completed_task(user_id, task_to_complete)
-
-#                     progress = get_user_progress(user_id)
-#                     progress["missions_completed"] = progress.get("missions_completed", 0) + 1
-#                     missions_completed = progress["missions_completed"]
-
-#                     if missions_completed in MISSION_REWARDS:
-#                         reward = MISSION_REWARDS[missions_completed]
-#                         progress["xp"] += reward["xp"]
-#                         if reward["badge"] not in progress.get("badges", []):
-#                             progress["badges"].append(reward["badge"])
-#                         new_mission_reward = reward
-
-#                     # 🔹 NEW: mark mission completion for voice flow as well
-#                     progress["just_completed_mission"] = True
-
-#                     save_user_progress(user_id, progress)
-#             except Exception as e:
-#                 print("⚠ Error marking growth prompt complete (audio):", e)
-
-#         # 🔊 save audio locally
-#         filename = f"{user_id or 'anon'}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.wav"
-#         os.makedirs("audios", exist_ok=True)
-#         path = os.path.join("audios", filename)
-#         audio_file.save(path)
-
-#         # 👉 TRANSCRIBE WITH OPENAI WHISPER
-#         try:
-#             with open(path, "rb") as f:
-#                 transcript = client.audio.transcriptions.create(
-#                     model="gpt-4o-transcribe",
-#                     file=f,
-#                 )
-#             transcript_text = getattr(transcript, "text", "") or (
-#                 transcript.get("text", "") if isinstance(transcript, dict) else ""
-#             )
-#             transcript_text = (transcript_text or "").strip()
-#         except Exception as e:
-#             print("⚠ Whisper transcription failed:", e)
-#             return jsonify({"error": "Transcription failed"}), 500
-
-#         # ---------------- INTENT ----------------
-#         intent = detect_intent(transcript_text)
-
-#         # 🔹 ask_stage for voice when no stage yet
-#         if intent == "ask_stage" and user_id and (not has_stage) and (not quick_stage_mode):
-#             question_text = (
-#                 "Love that you’re exploring your Spiral Dynamics level 💫 "
-#                 "It shows you really care about understanding yourself.\n\n"
-#                 "We can start with a simple first snapshot of your stage.\n"
-#                 "For that, share one thing:\n"
-#                 "these days, what feels most important in your life — feeling secure, "
-#                 "achieving your goals, or having close and caring relationships? "
-#                 "Say it in your own words, just like you’d tell a friend."
-#             )
-
-#             try:
-#                 if user_progress is None:
-#                     user_progress = get_user_progress(user_id)
-#                 user_progress["quick_stage_mode"] = True
-#                 save_user_progress(user_id, user_progress)
-#             except Exception as e:
-#                 print("⚠ Could not save quick_stage_mode flag (audio):", e)
-
-#             base_url = request.url_root.rstrip("/")
-#             audio_url = f"{base_url}/speak-stream?text={quote_plus(question_text)}"
-
-#             return jsonify({
-#                 "mode": "chat",
-#                 "response": question_text,
-#                 "audiourl": audio_url,
-#                 "transcription": transcript_text,
-#                 "diarized": False,
-#                 "streak": streak,
-#                 "rewards": rewards,
-#                 "message_rewards": message_rewards,
-#                 "missions_completed": missions_completed,
-#                 "new_mission_reward": new_mission_reward,
-#                 "stage_assessment": True,
-#             })
-
-#         # 🔹 if we are in quick stage mode, force spiral path
-#         if user_id and quick_stage_mode:
-#             intent = "spiral"
-
-#         # -------------- CHAT FLOW --------------
-#         if intent == "chat":
-#             messages = [
-#                 {
-#                     "role": "system",
-#                     "content": (
-#                         "You are a warm, supportive friend in the RETVRN app. "
-#                         "Reply in simple, natural language, 2–4 short sentences. "
-#                         "No roleplay—just a normal, human reply."
-#                     ),
-#                 },
-#                 {
-#                     "role": "user",
-#                     "content": transcript_text,
-#                 },
-#             ]
-
-#             ai_resp = client.chat.completions.create(
-#                 model='gpt-4.1',
-#                 messages=messages,
-#                 temperature=0.7,
-#             ).choices[0].message.content.strip()
-
-#             # 🔹 NEW: same B-type follow-up after mission completion (voice input)
-#             if user_id:
-#                 try:
-#                     progress = get_user_progress(user_id)
-#                     if progress.get("just_completed_mission"):
-#                         followup = (
-#                             "\n\nI’m really glad you showed up for yourself today. "
-#                             "If it feels right, we can stay with this feeling a bit more — "
-#                             "or you can talk about anything else that’s on your mind."
-#                         )
-#                         ai_resp = ai_resp + followup
-#                         progress["just_completed_mission"] = False
-#                         save_user_progress(user_id, progress)
-#                 except Exception as e:
-#                     print("⚠ mission follow-up blend failed (audio):", e)
-
-#             base_url = request.url_root.rstrip("/")
-#             tts_text = ai_resp
-#             audio_url = f"{base_url}/speak-stream?text={quote_plus(tts_text)}"
-
-#             return jsonify({
-#                 "mode": "chat",
-#                 "response": ai_resp,
-#                 "audiourl": audio_url,
-#                 "transcription": transcript_text,
-#                 "diarized": False,
-#                 "streak": streak,
-#                 "rewards": rewards,
-#                 "message_rewards": message_rewards,
-#                 "missions_completed": missions_completed,
-#                 "new_mission_reward": new_mission_reward,
-#             })
-
-#         # -------------- SPIRAL FLOW (single speaker) --------------
-#         try:
-#             classification = classify_stage(transcript_text)
-#         except TypeError:
-#             classification = classify_stage(transcript_text)
-
-#         stage = classification.get("stage")
-#         evolution_msg = check_evolution(last_stage, classification)
-
-#         # 🔹 if this was quick-stage answer, save assessed_stage once (voice)
-#         if user_id and quick_stage_mode and stage:
-#             try:
-#                 progress = get_user_progress(user_id)
-#                 progress["assessed_stage"] = stage
-#                 progress["assessed_stage_confidence"] = classification.get("confidence")
-#                 if classification.get("secondary"):
-#                     progress["assessed_stage_secondary"] = classification.get("secondary")
-#                 progress["quick_stage_mode"] = False
-#                 save_user_progress(user_id, progress)
-#             except Exception as e:
-#                 print("⚠ Could not save assessed_stage from quick assessment (audio):", e)
-
-#         xp_gain = 0
-#         badges = []
-#         if user_id and evolution_msg:
-#             progress = get_user_progress(user_id)
-#             progress["xp"] += XP_REWARDS.get("level_up", 10)
-#             if "level_up" not in progress.get("badges", []):
-#                 progress["badges"].append("level_up")
-#                 badges.append("🌱 Level Up")
-#             save_user_progress(user_id, progress)
-#             xp_gain = XP_REWARDS.get("level_up", 10)
-
-#         gamified = generate_gamified_prompt(
-#             stage or last_stage,
-#             transcript_text,
-#             evolution=bool(evolution_msg),
-#         )
-
-#         try:
-#             question = generate_reflective_question(
-#                 transcript_text,
-#                 reply_to=reply_to or None,
-#             )
-#         except TypeError:
-#             question = generate_reflective_question(transcript_text, reply_to)
-
-#         return jsonify({
-#             "mode": "spiral",
-#             "stage": stage,
-#             "evolution": evolution_msg,
-#             "xp_gain": xp_gain,
-#             "badges": badges,
-#             "question": question,
-#             "gamified": gamified,
-#             "confidence": classification.get("confidence"),
-#             "reason": classification.get("reason"),
-#             "transcription": transcript_text,
-#             "diarized": False,
-#             "ask_speaker_pick": False,
-#             "streak": streak,
-#             "rewards": rewards,
-#             "message_rewards": message_rewards,
-#             "missions_completed": missions_completed,
-#             "new_mission_reward": new_mission_reward,
-#         })
-
-#     except Exception:
-#         traceback.print_exc()
-#         return jsonify({"error": "Failed to process transcription"}), 500
-
-
 # new endpoint for audio stream
 @bp.route("/speak-stream", methods=["GET", "POST"])
 def speak_stream():
@@ -2004,10 +1311,8 @@ def finalize_stage():
         traceback.print_exc()
         return jsonify({"error": "Failed to finalize stage"}), 500
 
-
-
 firebase_utils.py:
-py
+
 import time
 import traceback
 import firebase_admin
@@ -2095,7 +1400,6 @@ def get_recent_conversation(user_id: str, limit: int = 6):
         print("Error fetching recent conversation:", e)
         traceback.print_exc()
         return []
-
 tasks.py:
 
 import os
@@ -2272,334 +1576,175 @@ def save_daily_task(task_data):
         print("Error saving daily task:", e)
 
 scheduling.py:
+
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from config import NOTIFICATION_TIME
-from notifications import send_all_daily_tasks  # Import function from notifications.py
+from firebase_utils import db
+from notifications import send_morning_intention_notification
+from config import MORNING_INTENTION_TIME
 
 scheduler = BackgroundScheduler(daemon=True)
-JOB_ID = "daily_task_notification"
+JOB_ID = "morning_intention_notification"
 
-def schedule_daily_notifications():
+
+def schedule_morning_intention():
+    """
+    Schedules ONLY the morning intention notification.
+    Time is controlled via Render ENV variable: MORNING_INTENTION_TIME (HH:MM in UTC)
+    """
+
     try:
-        # Remove previous job if it exists to avoid duplication
+        # 🔄 Remove old job if exists
         try:
             scheduler.remove_job(JOB_ID)
         except Exception:
-            pass  # No existing job to remove
+            pass
 
-        hour, minute = map(int, NOTIFICATION_TIME.split(':'))
-        trigger = CronTrigger(hour=hour, minute=minute, timezone="UTC")
+        # ⏰ Read time from ENV (default handled in config.py)
+        hour, minute = map(int, MORNING_INTENTION_TIME.split(":"))
+
+        trigger = CronTrigger(
+            hour=hour,
+            minute=minute,
+            timezone="UTC"
+        )
+
+        def notify_all_users():
+            users_ref = db.collection("users").stream()
+
+            for user_doc in users_ref:
+                user_data = user_doc.to_dict()
+                fcm_token = user_data.get("fcm_token")
+
+                if not fcm_token:
+                    continue
+
+                send_morning_intention_notification(fcm_token)
 
         scheduler.add_job(
-            func=send_all_daily_tasks,
+            func=notify_all_users,
             trigger=trigger,
             id=JOB_ID,
             replace_existing=True,
-            misfire_grace_time=60*60  # 1 hour grace period
+            misfire_grace_time=60 * 60  # 1 hour grace
         )
 
         if not scheduler.running:
             scheduler.start()
-            print(f"⏰ Scheduled daily notifications at {NOTIFICATION_TIME} UTC")
+
+        print(
+            f"🌅 Morning intention scheduler started at {MORNING_INTENTION_TIME} UTC"
+        )
 
     except Exception as e:
-        print(f"⚠ Error scheduling notifications: {e}")
+        print(f"⚠ Error scheduling morning intention: {e}")
 
     return scheduler
 
 notifications.py:
 
+
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timezone
 import traceback
-import hashlib
 from firebase_admin import messaging
-from firebase_utils import db  # Your Firestore client instance
-from tasks import generate_daily_task  # Adjust path as needed
+from firebase_utils import db
 
-bp = Blueprint('notifications', __name__)
+bp = Blueprint("notifications", __name__)
 
-# You need to define and manage these globally or in app context appropriately
-NOTIFICATION_TIME = "19:30"  # example initial notification time placeholder
-scheduler = None  # reference to your APScheduler instance
-def schedule_notifications():
-    # Implement your scheduler job registration here
-    pass
+# ============================================================
+# 1️⃣ SEND MORNING INTENTION NOTIFICATION (SAME WAY AS BEFORE)
+# ============================================================
 
-@bp.route('/set_notification_time', methods=['POST'])
-def set_notification_time():
-    global NOTIFICATION_TIME
+def send_morning_intention_notification(fcm_token: str):
     try:
-        data = request.get_json()
-        new_time = data.get('time')
-        # Validate time format HH:MM
-        try:
-            hour, minute = map(int, new_time.split(':'))
-            if not (0 <= hour <= 23 and 0 <= minute <= 59):
-                raise ValueError
-        except Exception:
-            return jsonify({'error': 'Invalid time format. Use HH:MM'}), 400
+        today = datetime.now(timezone.utc).date().isoformat()
 
-        NOTIFICATION_TIME = new_time
-        if scheduler:
-            try:
-                scheduler.remove_job("daily_task")
-            except Exception:
-                pass
-            schedule_notifications()
-        return jsonify({'status': 'success', 'new_time': NOTIFICATION_TIME})
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title="🌅 A gentle start to your day",
+                body="Would you like to set a small intention for today?"
+            ),
+            data={
+                "type": "morning_intention",
+                "screen": "intention",
+                "date": today
+            },
+            token=fcm_token,
+        )
+
+        response = messaging.send(message)
+        return response
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Error sending morning intention notification: {e}")
+        return None
 
-@bp.route('/send_welcome', methods=['POST'])
-def send_welcome():
+
+# ============================================================
+# 2️⃣ STORE USER SELECTED INTENTION
+# ============================================================
+
+@bp.route("/set_intention", methods=["POST"])
+def set_intention():
     try:
         data = request.get_json()
-        user_id = data.get('user_id')
-        fcm_token = data.get('fcm_token')
-        if not user_id or not fcm_token:
-            return jsonify({'error': 'Missing user_id or fcm_token'}), 400
+        user_id = data.get("user_id")
+        intention = data.get("intention")
 
-        response = send_welcome_notification(fcm_token)
+        if not user_id or not intention:
+            return jsonify({"error": "Missing user_id or intention"}), 400
 
-        db.collection('users').document(user_id).collection('mergedMessages').add({
-            'type': 'welcome',
-            'message': 'What’s on your mind right now? Write or speak freely—no filters.',
-            'timestamp': datetime.now(timezone.utc),
-            'from': 'system',
-            'is_notification': True
-        })
+        today = datetime.now(timezone.utc).date().isoformat()
 
-        return jsonify({'status': 'success', 'message': 'Welcome notification sent'})
+        # 🔹 Save intention in user document
+        db.collection("users").document(user_id).set(
+            {
+                "today_intention": intention,
+                "intention_date": today,
+                "intention_set_at": datetime.now(timezone.utc),
+            },
+            merge=True
+        )
+
+        # 🔹 Log system message (same pattern as before)
+        db.collection("users") \
+            .document(user_id) \
+            .collection("mergedMessages") \
+            .add({
+                "type": "intention",
+                "message": f"🎯 Today’s intention: {intention}",
+                "timestamp": datetime.now(timezone.utc),
+                "from": "system",
+                "is_notification": False,
+                "date": today,
+            })
+
+        return jsonify({"status": "success", "intention": intention})
+
     except Exception:
         traceback.print_exc()
-        return jsonify({'error': 'Failed to send welcome notification'}), 500
+        return jsonify({"error": "Failed to store intention"}), 500
+
+
+# ============================================================
+# 3️⃣ OPTIONAL: WELCOME NOTIFICATION (UNCHANGED)
+# ============================================================
 
 def send_welcome_notification(token):
     try:
         message = messaging.Message(
             notification=messaging.Notification(
-                title='Welcome to Spiral Dynamics',
-                body='What’s on your mind right now? Write or speak freely—no filters.'
+                title="Welcome to RETVRN",
+                body="What’s on your mind right now? Write or speak freely."
             ),
             token=token,
         )
-        response = messaging.send(message)
-        return response
+        return messaging.send(message)
     except Exception as e:
-        print(f'Error sending welcome notification: {e}')
+        print(f"Error sending welcome notification: {e}")
         return None
-
-def send_daily_task_notification(fcm_token, task_text):
-    try:
-        today = datetime.now(timezone.utc).date().isoformat()
-        notification_id = hashlib.md5(f"{today}_{task_text}".encode()).hexdigest()
-
-        message = messaging.Message(
-            notification=messaging.Notification(
-                title="🌱 Your Daily Spiral Task",
-                body=task_text
-            ),
-            data={
-                "type": "daily_task",
-                "task": task_text,
-                "screen": "chat",
-                "notification_id": notification_id
-            },
-            token=fcm_token,
-            android=messaging.AndroidConfig(collapse_key=notification_id),
-            apns=messaging.APNSConfig(headers={"apns-collapse-id": notification_id})
-        )
-
-        response = messaging.send(message)
-        return response
-    except Exception as e:
-        print(f"Error sending notification: {e}")
-        return None
-
-def has_received_today(user_id):
-    today = datetime.now(timezone.utc).date().isoformat()
-    messages_ref = db.collection('users').document(user_id).collection('mergedMessages')
-    query = messages_ref.where('is_notification', '==', True).where('date', '==', today).limit(1)
-    docs = query.stream()
-    return any(True for _ in docs)
-
-def send_daily_task_to_all():
-    try:
-        task_data = generate_daily_task()
-        task_text = task_data['task']
-        today = datetime.now(timezone.utc).date().isoformat()
-
-        message = messaging.Message(
-            notification=messaging.Notification(
-                title="🌱 Your Daily Spiral Task",
-                body=task_text
-            ),
-            data={
-                "type": "daily_task",
-                "task": task_text,
-                "screen": "chat"
-            },
-            topic="daily_task"
-        )
-        response = messaging.send(message)
-        print(f"✅ Topic notification sent: {response}")
-
-        users_ref = db.collection('users')
-        batch = db.batch()
-        for user_doc in users_ref.stream():
-            user_id = user_doc.id
-            if has_received_today(user_id):
-                continue
-            notification_ref = db.collection('users').document(user_id).collection('mergedMessages').document()
-            batch.set(notification_ref, {
-                'type': 'daily_task',
-                'message': task_text,
-                'timestamp': datetime.now(timezone.utc),
-                'from': 'system',
-                'is_notification': True,
-                'date': today
-            })
-        batch.commit()
-    except Exception as e:
-        print(f"Error in sending daily task notifications: {e}")
-
-def send_all_daily_tasks():
-    try:
-        # Generate or fetch today's shared task
-        task_data = generate_daily_task()
-        task_text = task_data["task"]
-        today = datetime.now(timezone.utc).date().isoformat()
-
-        # ✅ Send one message to the topic
-        message = messaging.Message(
-            notification=messaging.Notification(
-                title="🌱 Your Daily Spiral Task",
-                body=task_text
-            ),
-            data={
-                "type": "daily_task",
-                "task": task_text,
-                "screen": "chat"
-            },
-            topic="daily_task"
-        )
-
-        response = messaging.send(message)
-        print(f"✅ Topic notification sent: {response}")
-
-        # ✅ Log one bot-message per user in Firestore
-        users_ref = db.collection("users")
-        batch = db.batch()
-        for user_doc in users_ref.stream():
-            user_id = user_doc.id
-            if has_received_today(user_id):
-                continue
-            notification_ref = db.collection("users").document(user_id)\
-                .collection("mergedMessages").document()
-            batch.set(notification_ref, {
-                "type": "daily_task",
-                "message": task_text,
-                "timestamp": datetime.now(timezone.utc),
-                "from": "system",
-                "is_notification": True,
-                "date": today
-            })
-        batch.commit()
-
-    except Exception as e:
-        print(f"Error in send_all_daily_tasks: {e}")
-
-
-firebase_utils.py
-import time
-import traceback
-import firebase_admin
-from firebase_admin import credentials, firestore
-from config import FIREBASE_CONFIG
-
-def init_firebase():
-    """
-    Initialize Firebase app and Firestore client.
-    Returns the Firestore client instance or None if initialization fails.
-    """
-    try:
-        # Initialize Firebase app with service account credentials
-        cred = credentials.Certificate(FIREBASE_CONFIG)
-        if not firebase_admin._apps:
-            firebase_admin.initialize_app(cred)
-        db = firestore.client()
-        return db
-    except Exception as e:
-        print(f"Firebase initialization failed: {e}")
-        return None
-
-# Initialize Firestore client at module load
-db = init_firebase()
-
-
-# ------------------------
-# Conversation memory helpers
-# ------------------------
-
-def save_conversation_message(user_id: str, role: str, content: str, timestamp: int = None) -> bool:
-    """
-    Save a single conversation message for a user into Firestore.
-    Collection path: conversations/{user_id}/messages/{timestamp_doc}
-    role: 'user' | 'assistant' | 'system'
-    content: message text
-    timestamp: epoch ms, optional (generated if not provided)
-    Returns True on success, False on failure.
-    """
-    try:
-        if db is None:
-            print("Firestore db not initialized - cannot save message.")
-            return False
-        if timestamp is None:
-            timestamp = int(time.time() * 1000)
-        # Use timestamp as document id to keep ordering and avoid duplicates
-        doc_ref = db.collection("conversations").document(str(user_id)).collection("messages").document(str(timestamp))
-        payload = {
-            "role": role,
-            "content": content,
-            "ts": timestamp
-        }
-        doc_ref.set(payload)
-        return True
-    except Exception as e:
-        print("Error saving conversation message:", e)
-        traceback.print_exc()
-        return False
-
-
-def get_recent_conversation(user_id: str, limit: int = 6):
-    """
-    Return a list of recent messages for a user ordered oldest->newest.
-    Each item is a dict: {"role": "...", "content": "...", "ts": ...}
-    If db not initialized or error, returns [].
-    """
-    try:
-        if db is None:
-            print("Firestore db not initialized - cannot fetch messages.")
-            return []
-        coll = db.collection("conversations").document(str(user_id)).collection("messages")
-        # Query most recent first, then reverse to get oldest->newest
-        docs = coll.order_by("ts", direction=firestore.Query.DESCENDING).limit(limit).stream()
-        msgs = []
-        for d in docs:
-            data = d.to_dict()
-            msgs.append({
-                "role": data.get("role", "user"),
-                "content": data.get("content", ""),
-                "ts": data.get("ts", 0)
-            })
-        msgs.reverse()
-        return msgs
-    except Exception as e:
-        print("Error fetching recent conversation:", e)
-        traceback.print_exc()
-        return []
 
 
 config.py:
@@ -2611,6 +1756,7 @@ load_dotenv()  # Load environment variables from .env file
 A4F_API_KEY = os.getenv("A4F_API_KEY")
 ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
 NOTIFICATION_TIME = os.getenv("NOTIFICATION_TIME", "09:00")
+MORNING_INTENTION_TIME = os.getenv("MORNING_INTENTION_TIME", "07:30")
 
 FIREBASE_CONFIG = {
     "type": os.getenv("FIREBASE_TYPE"),
@@ -2625,3 +1771,178 @@ FIREBASE_CONFIG = {
     "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_CERT_URL"),
     "universe_domain": os.getenv("FIREBASE_UNIVERSE_DOMAIN", "googleapis.com")
 }
+
+__init__.py:
+
+from flask import Flask
+from flask_cors import CORS
+from routes import bp
+from notifications import bp as notifications_bp
+
+
+def create_app():
+    """
+    Application factory function to create and configure the Flask app.
+    """
+    app = Flask(__name__)
+    app.config.from_object("config")
+
+    # Enable CORS
+    CORS(app)
+
+    # Register blueprints
+    app.register_blueprint(bp)
+    app.register_blueprint(notifications_bp)
+
+    # 🔥 START ONLY MORNING INTENTION SCHEDULER
+    from scheduling import schedule_morning_intention
+    schedule_morning_intention()
+
+    return app
+
+rewards.py:
+import json
+from datetime import datetime, timedelta
+from tasks import USER_PROGRESS_FILE
+
+XP_REWARDS = {
+    "level_up": 10,
+    "daily_streak_3": 15,
+    "daily_streak_7": 30,
+    "daily_streak_14": 50,
+    "daily_streak_30": 100,
+    "message_streak_5": 20
+}
+
+BADGES = {
+    "level_up": "🌱 Level Up",
+    "daily_streak_3": "🔥 3-Day Streak",
+    "daily_streak_7": "🌟 Weekly Explorer",
+    "daily_streak_14": "🌙 Fortnight Champion",
+    "daily_streak_30": "🌕 Monthly Master",
+    "message_streak_5": "💬 Chatterbox"
+}
+
+def get_user_progress(user_id):
+    try:
+        with open(USER_PROGRESS_FILE, "r") as f:
+            all_progress = json.load(f)
+        return all_progress.get(user_id, {
+            "xp": 0,
+            "level": 1,
+            "last_level": 1,
+            "streak": 0,
+            "last_active_date": None,
+            "message_count": 0,
+            "badges": []
+        })
+    except Exception:
+        return {
+            "xp": 0,
+            "level": 1,
+            "last_level": 1,
+            "streak": 0,
+            "last_active_date": None,
+            "message_count": 0,
+            "badges": []
+        }
+
+def save_user_progress(user_id, progress):
+    try:
+        with open(USER_PROGRESS_FILE, "r") as f:
+            all_progress = json.load(f)
+        all_progress[user_id] = progress
+        with open(USER_PROGRESS_FILE, "w") as f:
+            json.dump(all_progress, f, indent=2)
+    except Exception as e:
+        print("Error saving user progress:", e)
+
+def update_streak(user_id):
+    progress = get_user_progress(user_id)
+    today = datetime.utcnow().date().isoformat()
+    last_active = progress.get("last_active_date")
+    
+    if last_active == today:
+        # Already updated today; return current streak
+        return progress["streak"]
+    
+    if last_active and (datetime.fromisoformat(last_active).date() + timedelta(days=1)) == datetime.utcnow().date():
+        # Continue the streak
+        progress["streak"] += 1
+    else:
+        # Reset streak
+        progress["streak"] = 1
+    
+    progress["last_active_date"] = today
+    save_user_progress(user_id, progress)
+    return progress["streak"]
+
+def check_streak_rewards(user_id, streak):
+    progress = get_user_progress(user_id)
+    rewards = []
+    
+    if streak == 3 and "daily_streak_3" not in progress["badges"]:
+        progress["xp"] += XP_REWARDS["daily_streak_3"]
+        progress["badges"].append("daily_streak_3")
+        rewards.append(BADGES["daily_streak_3"])
+    
+    if streak == 7 and "daily_streak_7" not in progress["badges"]:
+        progress["xp"] += XP_REWARDS["daily_streak_7"]
+        progress["badges"].append("daily_streak_7")
+        rewards.append(BADGES["daily_streak_7"])
+    
+    if streak == 14 and "daily_streak_14" not in progress["badges"]:
+        progress["xp"] += XP_REWARDS["daily_streak_14"]
+        progress["badges"].append("daily_streak_14")
+        rewards.append(BADGES["daily_streak_14"])
+    
+    if streak == 30 and "daily_streak_30" not in progress["badges"]:
+        progress["xp"] += XP_REWARDS["daily_streak_30"]
+        progress["badges"].append("daily_streak_30")
+        rewards.append(BADGES["daily_streak_30"])
+    
+    if rewards:
+        save_user_progress(user_id, progress)
+    
+    return rewards
+
+def check_message_rewards(user_id):
+    progress = get_user_progress(user_id)
+    progress["message_count"] += 1
+    rewards = []
+    
+    if progress["message_count"] >= 5 and "message_streak_5" not in progress["badges"]:
+        progress["xp"] += XP_REWARDS["message_streak_5"]
+        progress["badges"].append("message_streak_5")
+        rewards.append(BADGES["message_streak_5"])
+    
+    save_user_progress(user_id, progress)
+    return rewards
+
+tts.py:
+
+import os
+from openai import OpenAI
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError("Missing OPENAI_API_KEY for TTS")
+
+_client = OpenAI(api_key=OPENAI_API_KEY)
+
+def stream_tts_from_openai(text: str):
+    """
+    Generator: OpenAI TTS se PCM/MP3 bytes stream karta hai.
+    Flask Response(generator, mimetype='audio/mpeg') ke saath use karo.
+    """
+    # MP3 chahiye to response_format='mp3' ya fast streaming ke liye 'pcm'
+    with _client.audio.speech.with_streaming_response.create(
+        model="gpt-4o-mini-tts",   # ya tumhara jo TTS model ho
+        voice="alloy",             # ya koi bhi supported voice
+        input=text,
+        response_format="mp3",     # ⚠️ Yahi kaafi important change hai
+    ) as response:
+        for chunk in response.iter_bytes(chunk_size=4096):
+            if not chunk:
+                continue
+            yield chunk

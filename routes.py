@@ -970,3 +970,36 @@ def finalize_stage():
     except Exception:
         traceback.print_exc()
         return jsonify({"error": "Failed to finalize stage"}), 500
+    
+@bp.route("/set_support_focus", methods=["POST"])
+def set_support_focus():
+    try:
+        data = request.get_json()
+        user_id = data.get("user_id")
+        support_focus = data.get("support_focus")
+
+        if not user_id:
+            return jsonify({"error": "Missing user_id"}), 400
+
+        if not support_focus:
+            # user skipped → do nothing
+            return jsonify({"status": "skipped"}), 200
+
+        # Normalize to list
+        if isinstance(support_focus, str):
+            support_focus = [support_focus]
+
+        # 🔹 STORE IN SAME USER DOCUMENT (NO NEW COLLECTION)
+        db.collection("users").document(user_id).set(
+            {
+                "support_focus": support_focus,
+                "support_focus_set_at": datetime.utcnow(),
+            },
+            merge=True
+        )
+
+        return jsonify({"status": "saved", "support_focus": support_focus})
+
+    except Exception:
+        traceback.print_exc()
+        return jsonify({"error": "Failed to store support focus"}), 500
