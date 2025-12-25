@@ -1095,14 +1095,14 @@ def process_reflection_core(
     reply_to: str = "",
 ):
     """
-    🔥 SINGLE SOURCE OF TRUTH
-    Implements:
+    ✅ FINAL CORE PIPELINE (DETERMINISTIC)
+
     User input
       → Emotion + Spiral detection
-      → Mind Mirror + Mission
-      → Response style
-      → Support focus bias
-      → Final integrated response
+      → Mind Mirror + Mission (BACKEND GENERATED)
+      → Response style (validate / reflect / act / listen)
+      → Support focus bias (soft)
+      → FINAL integrated response (FORCED)
     """
 
     # --------------------------------------------------
@@ -1122,7 +1122,6 @@ def process_reflection_core(
     # --------------------------------------------------
     intent = detect_intent(entry)
 
-    classification = {}
     mood = None
     stage = None
     confidence = 0.0
@@ -1136,12 +1135,12 @@ def process_reflection_core(
         pass
 
     # --------------------------------------------------
-    # 3️⃣ RESPONSE TYPE (HOW to speak)
+    # 3️⃣ RESPONSE TYPE (HOW TO SPEAK)
     # --------------------------------------------------
     response_type = decide_response_type(mood, intent)
 
     # --------------------------------------------------
-    # 4️⃣ SHOULD WE ACTIVATE SPIRAL MODE?
+    # 4️⃣ SHOULD SPIRAL MODE ACTIVATE?
     # --------------------------------------------------
     spiral_active = False
 
@@ -1152,12 +1151,12 @@ def process_reflection_core(
     ):
         spiral_active = True
 
-    # Small talk / greetings guard
+    # Guard for casual / small talk
     if len(entry.split()) < 4:
         spiral_active = False
 
     # --------------------------------------------------
-    # 5️⃣ LOAD CONVERSATION CONTEXT (🔥 KEY FIX)
+    # 5️⃣ LOAD CONVERSATION CONTEXT (IMPORTANT)
     # --------------------------------------------------
     context_messages = []
 
@@ -1174,7 +1173,7 @@ def process_reflection_core(
             pass
 
     # --------------------------------------------------
-    # 6️⃣ BUILD MIND MIRROR + MISSION (NOT GPT-GUESS)
+    # 6️⃣ BUILD MIND MIRROR + MISSION (BACKEND LOGIC)
     # --------------------------------------------------
     mind_mirror = None
     mission = None
@@ -1183,7 +1182,7 @@ def process_reflection_core(
         try:
             mind_mirror = generate_reflective_question(entry, reply_to)
         except Exception:
-            mind_mirror = None
+            pass
 
         try:
             mission = build_mission_feedback_line(
@@ -1192,10 +1191,10 @@ def process_reflection_core(
                 mood=mood
             )
         except Exception:
-            mission = None
+            pass
 
     # --------------------------------------------------
-    # 7️⃣ SYSTEM PROMPT (STRICT & CONTROLLED)
+    # 7️⃣ SYSTEM PROMPT (STRICT BEHAVIOR CONTROL)
     # --------------------------------------------------
     system_prompt = (
         "You are a warm, grounded companion in the RETVRN app.\n\n"
@@ -1209,15 +1208,8 @@ def process_reflection_core(
         "Never mention it explicitly.\n"
     )
 
-    if spiral_active:
-        system_prompt += (
-            "\nYou will integrate the following naturally:\n"
-            f"Mind Mirror: {mind_mirror or ''}\n"
-            f"Mission: {mission or ''}\n"
-        )
-
     # --------------------------------------------------
-    # 8️⃣ FINAL MESSAGE PAYLOAD
+    # 8️⃣ FINAL GPT MESSAGE PAYLOAD
     # --------------------------------------------------
     messages = [
         {"role": "system", "content": system_prompt},
@@ -1226,7 +1218,7 @@ def process_reflection_core(
     ]
 
     # --------------------------------------------------
-    # 9️⃣ GPT RESPONSE
+    # 9️⃣ GPT RESPONSE (NARRATIVE ONLY)
     # --------------------------------------------------
     resp = client.chat.completions.create(
         model="gpt-4.1",
@@ -1237,21 +1229,33 @@ def process_reflection_core(
     ai_text = resp.choices[0].message.content.strip()
 
     # --------------------------------------------------
-    # 🔟 SAVE MEMORY (UNCHANGED)
+    # 🔟 FORCE-INTEGRATE MIND MIRROR + MISSION
+    # --------------------------------------------------
+    final_response = ai_text
+
+    if spiral_active:
+        if mind_mirror:
+            final_response += f"\n\n🧠 Mind Mirror:\n{mind_mirror}"
+
+        if mission:
+            final_response += f"\n\n🎯 Mission:\n{mission}"
+
+    # --------------------------------------------------
+    # 11️⃣ SAVE MEMORY
     # --------------------------------------------------
     if user_id:
         try:
             save_conversation_message(user_id, "user", entry)
-            save_conversation_message(user_id, "assistant", ai_text)
+            save_conversation_message(user_id, "assistant", final_response)
         except Exception:
             pass
 
     # --------------------------------------------------
-    # 11️⃣ RETURN (NO FRONTEND CHANGE REQUIRED)
+    # 12️⃣ RETURN (NO FRONTEND CHANGE NEEDED)
     # --------------------------------------------------
     return {
         "mode": "spiral" if spiral_active else "chat",
-        "response": ai_text,
+        "response": final_response,
         "stage": stage,
         "confidence": confidence,
         "mind_mirror": mind_mirror,
