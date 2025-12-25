@@ -1095,16 +1095,16 @@ def process_reflection_core(
     reply_to: str = "",
 ):
     """
-    FINAL CLEAN CORE
+    FINAL CLEAN CORE (GUARANTEED)
 
     Flow:
     User input
       → Intent + Emotion + Spiral stage detect
-      → IF stage detected:
-            Mind Mirror + Mission generate
+      → IF spiral stage detected:
+            Mind Mirror + Mission (from SAME user input)
       → Response type decide (validate / reflect / act / listen)
       → Support focus (soft bias)
-      → Final integrated response
+      → FINAL integrated response
     """
 
     # --------------------------------------------------
@@ -1130,21 +1130,21 @@ def process_reflection_core(
     try:
         classification = classify_stage(entry)
         mood = classification.get("mood") or classification.get("emotion")
-        stage = classification.get("stage")   # 🔥 ONLY THIS MATTERS
+        stage = classification.get("stage")   # 🔥 ONLY THIS DECIDES SPIRAL
     except Exception:
         pass
 
     # --------------------------------------------------
-    # 3️⃣ RESPONSE TYPE (HOW TO SPEAK)
+    # 3️⃣ RESPONSE TYPE (HOW TO RESPOND)
     # --------------------------------------------------
     response_type = decide_response_type(mood, intent)
 
     # --------------------------------------------------
-    # 4️⃣ SPIRAL ACTIVE OR NOT (🔥 NO CONFIDENCE LOGIC)
+    # 4️⃣ SPIRAL ACTIVE OR NOT (NO CONFIDENCE LOGIC)
     # --------------------------------------------------
     spiral_active = True if stage else False
 
-    # Very small casual messages → force normal chat
+    # very small / casual messages → force normal chat
     if len(entry.split()) < 4:
         spiral_active = False
 
@@ -1186,7 +1186,7 @@ def process_reflection_core(
             pass
 
     # --------------------------------------------------
-    # 7️⃣ SYSTEM PROMPT (CONTROLLED)
+    # 7️⃣ SYSTEM PROMPT
     # --------------------------------------------------
     system_prompt = (
         "You are a warm, grounded companion in the RETVRN app.\n\n"
@@ -1200,15 +1200,8 @@ def process_reflection_core(
         "Never mention it explicitly.\n"
     )
 
-    if spiral_active:
-        system_prompt += (
-            "\nIntegrate these naturally:\n"
-            f"Mind Mirror: {mind_mirror}\n"
-            f"Mission: {mission}\n"
-        )
-
     # --------------------------------------------------
-    # 8️⃣ FINAL MESSAGE PAYLOAD
+    # 8️⃣ BUILD MESSAGE PAYLOAD
     # --------------------------------------------------
     messages = [
         {"role": "system", "content": system_prompt},
@@ -1228,7 +1221,16 @@ def process_reflection_core(
     ai_text = resp.choices[0].message.content.strip()
 
     # --------------------------------------------------
-    # 🔟 SAVE MEMORY
+    # 🔟 GUARANTEE MIND MIRROR + MISSION (🔥 FINAL FIX)
+    # --------------------------------------------------
+    if spiral_active:
+        if mind_mirror:
+            ai_text += f"\n\n🧠 Mind Mirror:\n{mind_mirror}"
+        if mission:
+            ai_text += f"\n\n🎯 Mission:\n{mission}"
+
+    # --------------------------------------------------
+    # 11️⃣ SAVE MEMORY
     # --------------------------------------------------
     if user_id:
         try:
@@ -1238,14 +1240,14 @@ def process_reflection_core(
             pass
 
     # --------------------------------------------------
-    # 11️⃣ RETURN (FRONTEND UNCHANGED)
+    # 12️⃣ RETURN (FRONTEND UNCHANGED)
     # --------------------------------------------------
     return {
         "mode": "spiral" if spiral_active else "chat",
         "response": ai_text,
         "stage": stage,
-        "mind_mirror": mind_mirror,
-        "mission": mission,
+        "mind_mirror": mind_mirror if spiral_active else None,
+        "mission": mission if spiral_active else None,
     }
 
 
