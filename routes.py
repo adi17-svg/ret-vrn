@@ -1099,9 +1099,11 @@ def process_reflection_core(
     Text / Audio / Voice — all go through this
     """
 
-    # ---------------- defaults (IMPORTANT FIX) ----------------
+    # --------------------------------------------------
+    # 1️⃣ BASIC INTENT DETECTION (ALWAYS)
+    # --------------------------------------------------
     intent = detect_intent(entry)
-    response_type = "listen"   # 👈 DEFAULT (bug fix)
+    response_type = "listen"   # safe default
     support_focus = []
 
     if user_id:
@@ -1109,19 +1111,62 @@ def process_reflection_core(
             user_doc = db.collection("users").document(user_id).get()
             if user_doc.exists:
                 support_focus = user_doc.to_dict().get("support_focus", [])
-        except:
+        except Exception:
             pass
 
-    # ---------------- quiet classification ----------------
+    # --------------------------------------------------
+    # 2️⃣ QUIET CLASSIFICATION (emotion + spiral)
+    # --------------------------------------------------
+    classification = {}
+    mood = None
+    stage = None
+    confidence = 0.0
+
     try:
         classification = classify_stage(entry)
         mood = classification.get("mood") or classification.get("emotion")
+        stage = classification.get("stage")
+        confidence = float(classification.get("confidence") or 0)
         response_type = decide_response_type(mood, intent)
-    except:
+    except Exception:
         classification = {}
-        mood = None
 
-    # ---------------- SYSTEM PROMPT ----------------
+    # --------------------------------------------------
+    # 3️⃣ DECIDE: SHOW MIND MIRROR / MISSION or NOT
+    # --------------------------------------------------
+    show_spiral_output = False
+
+    if (
+        intent == "spiral"
+        or confidence >= 0.65
+        or mood in ["sad", "anxious", "confused", "stressed", "overwhelmed"]
+    ):
+        show_spiral_output = True
+
+    # very small / casual messages → normal chat
+    if len(entry.split()) < 4:
+        show_spiral_output = False
+
+    # --------------------------------------------------
+    # 4️⃣ LOAD CONTEXT (🔥 MAIN FIX)
+    # --------------------------------------------------
+    context_messages = []
+
+    if user_id:
+        try:
+            recent = get_recent_conversation(user_id, limit=HISTORY_LIMIT)
+            for m in recent:
+                if m.get("role") in ["user", "assistant"] and m.get("content"):
+                    context_messages.append({
+                        "role": m["role"],
+                        "content": m["content"]
+                    })
+        except Exception:
+            pass
+
+    # --------------------------------------------------
+    # 5️⃣ SYSTEM PROMPT (DYNAMIC)
+    # --------------------------------------------------
     system_prompt = (
         "You are a warm, natural companion in the RETVRN app.\n\n"
         f"Response style: {response_type}\n\n"
@@ -1131,18 +1176,28 @@ def process_reflection_core(
         "- reflect → mirror insight\n"
         "- act → suggest 1 gentle action\n\n"
         f"User support focus (soft bias): {', '.join(support_focus) or 'none'}\n"
-        "Never mention it explicitly.\n\n"
-        "Always end with:\n"
-        "Mind Mirror:\n"
-        "Mission:"
+        "Never mention it explicitly.\n"
     )
 
+    if show_spiral_output:
+        system_prompt += (
+            "\nEnd with:\n"
+            "Mind Mirror:\n"
+            "Mission:\n"
+        )
+
+    # --------------------------------------------------
+    # 6️⃣ BUILD FINAL MESSAGE LIST (CONTEXT + USER)
+    # --------------------------------------------------
     messages = [
         {"role": "system", "content": system_prompt},
+        *context_messages,
         {"role": "user", "content": entry},
     ]
 
-    # ---------------- AI RESPONSE ----------------
+    # --------------------------------------------------
+    # 7️⃣ AI RESPONSE
+    # --------------------------------------------------
     resp = client.chat.completions.create(
         model="gpt-4.1",
         messages=messages,
@@ -1151,18 +1206,25 @@ def process_reflection_core(
 
     ai_text = resp.choices[0].message.content.strip()
 
-    # ---------------- SAVE MEMORY ----------------
+    # --------------------------------------------------
+    # 8️⃣ SAVE MEMORY (UNCHANGED)
+    # --------------------------------------------------
     if user_id:
-        save_conversation_message(user_id, "user", entry)
-        save_conversation_message(user_id, "assistant", ai_text)
+        try:
+            save_conversation_message(user_id, "user", entry)
+            save_conversation_message(user_id, "assistant", ai_text)
+        except Exception:
+            pass
 
+    # --------------------------------------------------
+    # 9️⃣ RETURN (frontend unchanged)
+    # --------------------------------------------------
     return {
-        "mode": "chat" if intent == "chat" else "spiral",
+        "mode": "spiral" if show_spiral_output else "chat",
         "response": ai_text,
-        "confidence": classification.get("confidence"),
-        "stage": classification.get("stage"),
+        "confidence": confidence,
+        "stage": stage,
     }
-
 
 
 @bp.route('/')
