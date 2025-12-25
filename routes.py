@@ -1095,20 +1095,21 @@ def process_reflection_core(
     reply_to: str = "",
 ):
     """
-    FINAL CLEAN CORE (GUARANTEED)
+    ✅ FINAL CLEAN CORE (FRONTEND-COMPATIBLE)
 
     Flow:
     User input
-      → Intent + Emotion + Spiral stage detect
-      → IF spiral stage detected:
-            Mind Mirror + Mission (from SAME user input)
-      → Response type decide (validate / reflect / act / listen)
-      → Support focus (soft bias)
-      → FINAL integrated response
+      → Intent + Emotion + Spiral Stage detect
+      → IF stage detected:
+            - Mind Mirror  → question
+            - Mission      → gamified.gamified_prompt
+      → Response type decide
+      → Support focus bias
+      → Final response
     """
 
     # --------------------------------------------------
-    # 1️⃣ LOAD USER SUPPORT FOCUS (SOFT BIAS)
+    # 1️⃣ SUPPORT FOCUS (SOFT BIAS)
     # --------------------------------------------------
     support_focus = []
     if user_id:
@@ -1120,43 +1121,42 @@ def process_reflection_core(
             pass
 
     # --------------------------------------------------
-    # 2️⃣ INTENT + EMOTION + SPIRAL STAGE DETECTION
+    # 2️⃣ INTENT + EMOTION + SPIRAL STAGE
     # --------------------------------------------------
     intent = detect_intent(entry)
-
     mood = None
     stage = None
 
     try:
-        classification = classify_stage(entry)
-        mood = classification.get("mood") or classification.get("emotion")
-        stage = classification.get("stage")   # 🔥 ONLY THIS DECIDES SPIRAL
+        result = classify_stage(entry)
+        mood = result.get("mood") or result.get("emotion")
+        stage = result.get("stage")  # 🔥 THIS decides spiral
     except Exception:
         pass
 
     # --------------------------------------------------
-    # 3️⃣ RESPONSE TYPE (HOW TO RESPOND)
+    # 3️⃣ RESPONSE TYPE (EVEN FOR CHAT)
     # --------------------------------------------------
     response_type = decide_response_type(mood, intent)
 
     # --------------------------------------------------
-    # 4️⃣ SPIRAL ACTIVE OR NOT (NO CONFIDENCE LOGIC)
+    # 4️⃣ SPIRAL MODE ON / OFF
     # --------------------------------------------------
-    spiral_active = True if stage else False
+    spiral_active = bool(stage)
 
-    # very small / casual messages → force normal chat
+    # Casual guard
     if len(entry.split()) < 4:
         spiral_active = False
 
     # --------------------------------------------------
-    # 5️⃣ LOAD CONVERSATION CONTEXT
+    # 5️⃣ CONTEXT (PAST CHAT)
     # --------------------------------------------------
     context_messages = []
     if user_id:
         try:
             recent = get_recent_conversation(user_id, limit=HISTORY_LIMIT)
             for m in recent:
-                if m.get("role") in ["user", "assistant"] and m.get("content"):
+                if m.get("role") in ("user", "assistant"):
                     context_messages.append({
                         "role": m["role"],
                         "content": m["content"]
@@ -1165,25 +1165,21 @@ def process_reflection_core(
             pass
 
     # --------------------------------------------------
-    # 6️⃣ MIND MIRROR + MISSION (ONLY IF SPIRAL ACTIVE)
+    # 6️⃣ MIND MIRROR + MISSION (ONLY IF SPIRAL)
     # --------------------------------------------------
-    mind_mirror = None
-    mission = None
+    question = ""
+    gamified = {}
 
     if spiral_active:
         try:
-            mind_mirror = generate_reflective_question(entry, reply_to)
+            question = generate_reflective_question(entry, reply_to) or ""
         except Exception:
-            pass
+            question = ""
 
         try:
-            mission = build_mission_feedback_line(
-                stage=stage,
-                text=entry,
-                mood=mood
-            )
+            gamified = generate_gamified_prompt(stage, entry) or {}
         except Exception:
-            pass
+            gamified = {}
 
     # --------------------------------------------------
     # 7️⃣ SYSTEM PROMPT
@@ -1200,8 +1196,15 @@ def process_reflection_core(
         "Never mention it explicitly.\n"
     )
 
+    if spiral_active:
+        system_prompt += (
+            "\nIntegrate naturally:\n"
+            f"Mind Mirror: {question}\n"
+            f"Mission: {gamified.get('gamified_prompt', '')}\n"
+        )
+
     # --------------------------------------------------
-    # 8️⃣ BUILD MESSAGE PAYLOAD
+    # 8️⃣ GPT CALL
     # --------------------------------------------------
     messages = [
         {"role": "system", "content": system_prompt},
@@ -1209,9 +1212,6 @@ def process_reflection_core(
         {"role": "user", "content": entry},
     ]
 
-    # --------------------------------------------------
-    # 9️⃣ GPT RESPONSE
-    # --------------------------------------------------
     resp = client.chat.completions.create(
         model="gpt-4.1",
         messages=messages,
@@ -1221,16 +1221,7 @@ def process_reflection_core(
     ai_text = resp.choices[0].message.content.strip()
 
     # --------------------------------------------------
-    # 🔟 GUARANTEE MIND MIRROR + MISSION (🔥 FINAL FIX)
-    # --------------------------------------------------
-    if spiral_active:
-        if mind_mirror:
-            ai_text += f"\n\n🧠 Mind Mirror:\n{mind_mirror}"
-        if mission:
-            ai_text += f"\n\n🎯 Mission:\n{mission}"
-
-    # --------------------------------------------------
-    # 11️⃣ SAVE MEMORY
+    # 9️⃣ SAVE MEMORY
     # --------------------------------------------------
     if user_id:
         try:
@@ -1240,14 +1231,20 @@ def process_reflection_core(
             pass
 
     # --------------------------------------------------
-    # 12️⃣ RETURN (FRONTEND UNCHANGED)
+    # 🔟 RETURN (🔥 MATCHES FRONTEND EXACTLY)
     # --------------------------------------------------
+    if not spiral_active:
+        return {
+            "mode": "chat",
+            "response": ai_text,
+        }
+
     return {
-        "mode": "spiral" if spiral_active else "chat",
+        "mode": "spiral",
         "response": ai_text,
         "stage": stage,
-        "mind_mirror": mind_mirror if spiral_active else None,
-        "mission": mission if spiral_active else None,
+        "question": question,              # 🧠 Mind Mirror
+        "gamified": gamified,              # 🎯 Mission inside
     }
 
 
