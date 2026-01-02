@@ -87,66 +87,214 @@
 #         print(f"⚠ Error scheduling morning intention: {e}")
 
 #     return scheduler
+# from apscheduler.schedulers.background import BackgroundScheduler
+# from apscheduler.triggers.cron import CronTrigger
+# from firebase_utils import db
+# from notifications import send_morning_intention_notification
+# from config import MORNING_INTENTION_TIME
+
+# scheduler = BackgroundScheduler(daemon=True)
+# JOB_ID = "morning_intention_notification"
+
+
+# def schedule_morning_intention():
+#     """
+#     Schedules ONLY the morning intention notification.
+#     Time is controlled via Render ENV variable: MORNING_INTENTION_TIME (HH:MM in UTC)
+#     """
+
+#     try:
+#         # 🔄 Remove old job if exists
+#         try:
+#             scheduler.remove_job(JOB_ID)
+#         except Exception:
+#             pass
+
+#         # ⏰ Read time from ENV (default handled in config.py)
+#         hour, minute = map(int, MORNING_INTENTION_TIME.split(":"))
+
+#         trigger = CronTrigger(
+#             hour=hour,
+#             minute=minute,
+#             timezone="UTC"
+#         )
+
+#         def notify_all_users():
+#             users_ref = db.collection("users").stream()
+
+#             for user_doc in users_ref:
+#                 user_data = user_doc.to_dict()
+#                 fcm_token = user_data.get("fcm_token")
+
+#                 if not fcm_token:
+#                     continue
+
+#                 send_morning_intention_notification(fcm_token)
+
+#         scheduler.add_job(
+#             func=notify_all_users,
+#             trigger=trigger,
+#             id=JOB_ID,
+#             replace_existing=True,
+#             misfire_grace_time=60 * 60  # 1 hour grace
+#         )
+
+#         if not scheduler.running:
+#             scheduler.start()
+
+#         print(
+#             f"🌅 Morning intention scheduler started at {MORNING_INTENTION_TIME} UTC"
+#         )
+
+#     except Exception as e:
+#         print(f"⚠ Error scheduling morning intention: {e}")
+
+#     return scheduler
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+import os
+
 from firebase_utils import db
-from notifications import send_morning_intention_notification
-from config import MORNING_INTENTION_TIME
+from notifications import (
+    send_morning_intention_notification,
+    send_night_reflection_notification
+)
+
+# --------------------------------------------------
+# ENV CONFIG
+# --------------------------------------------------
+MORNING_TIME = os.getenv("MORNING_TIME", "09:00")  # HH:MM
+MORNING_GRACE_MINUTES = int(os.getenv("MORNING_GRACE_MINUTES", "10"))
+
+NIGHT_TIME = os.getenv("NIGHT_TIME", "21:30")  # HH:MM
+NIGHT_GRACE_MINUTES = int(os.getenv("NIGHT_GRACE_MINUTES", "15"))
 
 scheduler = BackgroundScheduler(daemon=True)
-JOB_ID = "morning_intention_notification"
 
 
+# --------------------------------------------------
+# HELPERS
+# --------------------------------------------------
+def minutes_since_midnight(dt):
+    return dt.hour * 60 + dt.minute
+
+
+# --------------------------------------------------
+# MORNING SCHEDULER
+# --------------------------------------------------
 def schedule_morning_intention():
-    """
-    Schedules ONLY the morning intention notification.
-    Time is controlled via Render ENV variable: MORNING_INTENTION_TIME (HH:MM in UTC)
-    """
+    JOB_ID = "morning_intention_windowed"
 
-    try:
-        # 🔄 Remove old job if exists
-        try:
-            scheduler.remove_job(JOB_ID)
-        except Exception:
-            pass
+    def notify_users():
+        now_utc = datetime.now(timezone.utc)
+        today_utc = now_utc.date().isoformat()
 
-        # ⏰ Read time from ENV (default handled in config.py)
-        hour, minute = map(int, MORNING_INTENTION_TIME.split(":"))
+        users = db.collection("users").stream()
 
-        trigger = CronTrigger(
-            hour=hour,
-            minute=minute,
-            timezone="UTC"
-        )
+        for user_doc in users:
+            user = user_doc.to_dict()
+            user_id = user_doc.id
 
-        def notify_all_users():
-            users_ref = db.collection("users").stream()
+            fcm_token = user.get("fcm_token")
+            user_timezone = user.get("timezone")
 
-            for user_doc in users_ref:
-                user_data = user_doc.to_dict()
-                fcm_token = user_data.get("fcm_token")
+            if not fcm_token or not user_timezone:
+                continue
 
-                if not fcm_token:
-                    continue
+            if user.get("last_morning_notification_date") == today_utc:
+                continue
 
+            try:
+                user_now = now_utc.astimezone(ZoneInfo(user_timezone))
+            except Exception:
+                continue
+
+            h, m = map(int, MORNING_TIME.split(":"))
+            now_minutes = minutes_since_midnight(user_now)
+            target_minutes = h * 60 + m
+
+            if target_minutes <= now_minutes <= target_minutes + MORNING_GRACE_MINUTES:
                 send_morning_intention_notification(fcm_token)
 
-        scheduler.add_job(
-            func=notify_all_users,
-            trigger=trigger,
-            id=JOB_ID,
-            replace_existing=True,
-            misfire_grace_time=60 * 60  # 1 hour grace
-        )
+                db.collection("users").document(user_id).set(
+                    {
+                        "last_morning_notification_date": today_utc,
+                        "last_morning_notification_at": now_utc,
+                    },
+                    merge=True,
+                )
 
-        if not scheduler.running:
-            scheduler.start()
+    scheduler.add_job(
+        notify_users,
+        CronTrigger(minute="*", timezone="UTC"),
+        id=JOB_ID,
+        replace_existing=True,
+    )
 
-        print(
-            f"🌅 Morning intention scheduler started at {MORNING_INTENTION_TIME} UTC"
-        )
 
-    except Exception as e:
-        print(f"⚠ Error scheduling morning intention: {e}")
+# --------------------------------------------------
+# NIGHT SCHEDULER
+# --------------------------------------------------
+def schedule_night_reflection():
+    JOB_ID = "night_reflection_windowed"
 
-    return scheduler
+    def notify_users():
+        now_utc = datetime.now(timezone.utc)
+        today_utc = now_utc.date().isoformat()
+
+        users = db.collection("users").stream()
+
+        for user_doc in users:
+            user = user_doc.to_dict()
+            user_id = user_doc.id
+
+            fcm_token = user.get("fcm_token")
+            user_timezone = user.get("timezone")
+
+            if not fcm_token or not user_timezone:
+                continue
+
+            if user.get("last_night_notification_date") == today_utc:
+                continue
+
+            try:
+                user_now = now_utc.astimezone(ZoneInfo(user_timezone))
+            except Exception:
+                continue
+
+            h, m = map(int, NIGHT_TIME.split(":"))
+            now_minutes = minutes_since_midnight(user_now)
+            target_minutes = h * 60 + m
+
+            if target_minutes <= now_minutes <= target_minutes + NIGHT_GRACE_MINUTES:
+                send_night_reflection_notification(fcm_token)
+
+                db.collection("users").document(user_id).set(
+                    {
+                        "last_night_notification_date": today_utc,
+                        "last_night_notification_at": now_utc,
+                    },
+                    merge=True,
+                )
+
+    scheduler.add_job(
+        notify_users,
+        CronTrigger(minute="*", timezone="UTC"),
+        id=JOB_ID,
+        replace_existing=True,
+    )
+
+
+# --------------------------------------------------
+# START ALL SCHEDULERS
+# --------------------------------------------------
+def start_schedulers():
+    schedule_morning_intention()
+    schedule_night_reflection()
+
+    if not scheduler.running:
+        scheduler.start()
+
+    print("🌅🌙 Morning & Night schedulers started")

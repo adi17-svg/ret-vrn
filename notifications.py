@@ -200,16 +200,117 @@
 #     except Exception as e:
 #         print(f"Error in send_all_daily_tasks: {e}")
 
+# from flask import Blueprint, request, jsonify
+# from datetime import datetime, timezone
+# import traceback
+# from firebase_admin import messaging
+# from firebase_utils import db
+
+# bp = Blueprint("notifications", __name__)
+
+# # ============================================================
+# # 1️⃣ SEND MORNING INTENTION NOTIFICATION (SAME WAY AS BEFORE)
+# # ============================================================
+
+# def send_morning_intention_notification(fcm_token: str):
+#     try:
+#         today = datetime.now(timezone.utc).date().isoformat()
+
+#         message = messaging.Message(
+#             notification=messaging.Notification(
+#                 title="🌅 A gentle start to your day",
+#                 body="Would you like to set a small intention for today?"
+#             ),
+#             data={
+#                 "type": "morning_intention",
+#                 "screen": "intention",
+#                 "date": today
+#             },
+#             token=fcm_token,
+#         )
+
+#         response = messaging.send(message)
+#         return response
+
+#     except Exception as e:
+#         print(f"❌ Error sending morning intention notification: {e}")
+#         return None
+
+
+# # ============================================================
+# # 2️⃣ STORE USER SELECTED INTENTION
+# # ============================================================
+
+# @bp.route("/set_intention", methods=["POST"])
+# def set_intention():
+#     try:
+#         data = request.get_json()
+#         user_id = data.get("user_id")
+#         intention = data.get("intention")
+
+#         if not user_id or not intention:
+#             return jsonify({"error": "Missing user_id or intention"}), 400
+
+#         today = datetime.now(timezone.utc).date().isoformat()
+
+#         # 🔹 Save intention in user document
+#         db.collection("users").document(user_id).set(
+#             {
+#                 "today_intention": intention,
+#                 "intention_date": today,
+#                 "intention_set_at": datetime.now(timezone.utc),
+#             },
+#             merge=True
+#         )
+
+#         # 🔹 Log system message (same pattern as before)
+#         db.collection("users") \
+#             .document(user_id) \
+#             .collection("mergedMessages") \
+#             .add({
+#                 "type": "intention",
+#                 "message": f"🎯 Today’s intention: {intention}",
+#                 "timestamp": datetime.now(timezone.utc),
+#                 "from": "system",
+#                 "is_notification": False,
+#                 "date": today,
+#             })
+
+#         return jsonify({"status": "success", "intention": intention})
+
+#     except Exception:
+#         traceback.print_exc()
+#         return jsonify({"error": "Failed to store intention"}), 500
+
+
+# # ============================================================
+# # 3️⃣ OPTIONAL: WELCOME NOTIFICATION (UNCHANGED)
+# # ============================================================
+
+# def send_welcome_notification(token):
+#     try:
+#         message = messaging.Message(
+#             notification=messaging.Notification(
+#                 title="Welcome to RETVRN",
+#                 body="What’s on your mind right now? Write or speak freely."
+#             ),
+#             token=token,
+#         )
+#         return messaging.send(message)
+#     except Exception as e:
+#         print(f"Error sending welcome notification: {e}")
+#         return None
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timezone
 import traceback
 from firebase_admin import messaging
+
 from firebase_utils import db
 
 bp = Blueprint("notifications", __name__)
 
 # ============================================================
-# 1️⃣ SEND MORNING INTENTION NOTIFICATION (SAME WAY AS BEFORE)
+# 🌅 MORNING INTENTION NOTIFICATION
 # ============================================================
 
 def send_morning_intention_notification(fcm_token: str):
@@ -229,16 +330,65 @@ def send_morning_intention_notification(fcm_token: str):
             token=fcm_token,
         )
 
-        response = messaging.send(message)
-        return response
+        return messaging.send(message)
 
     except Exception as e:
-        print(f"❌ Error sending morning intention notification: {e}")
+        print(f"❌ Error sending morning notification: {e}")
         return None
 
 
 # ============================================================
-# 2️⃣ STORE USER SELECTED INTENTION
+# 🌙 NIGHT REFLECTION NOTIFICATION (ROTATING)
+# ============================================================
+
+NIGHT_PROMPTS = [
+    {
+        "title": "🌙 Before you rest",
+        "body": "How did today feel for you — not good or bad, just honestly?"
+    },
+    {
+        "title": "🌙 A quiet moment",
+        "body": "Was there one small moment today that stayed with you?"
+    },
+    {
+        "title": "🌙 End of the day",
+        "body": "Is there anything you’d like to leave behind before sleeping?"
+    },
+    {
+        "title": "🌙 Just check in",
+        "body": "What’s sitting with you right now?"
+    }
+]
+
+
+def send_night_reflection_notification(fcm_token: str):
+    try:
+        today = datetime.now(timezone.utc).date()
+        index = today.toordinal() % len(NIGHT_PROMPTS)
+        prompt = NIGHT_PROMPTS[index]
+
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title=prompt["title"],
+                body=prompt["body"]
+            ),
+            data={
+                "type": "night_reflection",
+                "screen": "chat",
+                "date": today.isoformat()
+            },
+            token=fcm_token,
+        )
+
+        return messaging.send(message)
+
+    except Exception as e:
+        print(f"❌ Error sending night notification: {e}")
+        return None
+
+
+# ============================================================
+# 🎯 STORE USER SELECTED INTENTION
 # ============================================================
 
 @bp.route("/set_intention", methods=["POST"])
@@ -253,7 +403,6 @@ def set_intention():
 
         today = datetime.now(timezone.utc).date().isoformat()
 
-        # 🔹 Save intention in user document
         db.collection("users").document(user_id).set(
             {
                 "today_intention": intention,
@@ -263,7 +412,6 @@ def set_intention():
             merge=True
         )
 
-        # 🔹 Log system message (same pattern as before)
         db.collection("users") \
             .document(user_id) \
             .collection("mergedMessages") \
@@ -276,7 +424,7 @@ def set_intention():
                 "date": today,
             })
 
-        return jsonify({"status": "success", "intention": intention})
+        return jsonify({"status": "success"})
 
     except Exception:
         traceback.print_exc()
@@ -284,7 +432,7 @@ def set_intention():
 
 
 # ============================================================
-# 3️⃣ OPTIONAL: WELCOME NOTIFICATION (UNCHANGED)
+# 👋 OPTIONAL WELCOME NOTIFICATION
 # ============================================================
 
 def send_welcome_notification(token):
@@ -298,5 +446,5 @@ def send_welcome_notification(token):
         )
         return messaging.send(message)
     except Exception as e:
-        print(f"Error sending welcome notification: {e}")
+        print(f"❌ Welcome notification error: {e}")
         return None
