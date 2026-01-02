@@ -69,34 +69,25 @@
 from flask import Flask
 from flask_cors import CORS
 
-# Main API routes
 from routes import bp
-
-# Notification routes (optional APIs like /set_intention)
 from notifications import bp as notifications_bp
 
 
 def create_app():
     """
-    Application factory function
+    Application factory function to create and configure the Flask app.
     """
     app = Flask(__name__)
     app.config.from_object("config")
 
-    # --------------------------------------------------
-    # CORS
-    # --------------------------------------------------
+    # Enable CORS
     CORS(app)
 
-    # --------------------------------------------------
-    # REGISTER BLUEPRINTS
-    # --------------------------------------------------
+    # Register blueprints
     app.register_blueprint(bp)
     app.register_blueprint(notifications_bp)
 
-    # --------------------------------------------------
-    # 🔔 START SCHEDULERS (MORNING + NIGHT)
-    # --------------------------------------------------
+    # 🔥 START BOTH MORNING + NIGHT SCHEDULERS
     from scheduling import start_schedulers
     start_schedulers()
 
