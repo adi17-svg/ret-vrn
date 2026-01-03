@@ -300,8 +300,7 @@
 #     print("🌅🌙 Morning & Night schedulers started")
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from datetime import datetime, timezone, timedelta
 import os
 
 from firebase_utils import db
@@ -311,12 +310,12 @@ from notifications import (
 )
 
 # --------------------------------------------------
-# ENV CONFIG
+# ENV CONFIG (USER LOCAL TIME)
 # --------------------------------------------------
-MORNING_TIME = os.getenv("MORNING_TIME", "09:00")  # HH:MM (USER LOCAL)
+MORNING_TIME = os.getenv("MORNING_TIME", "09:00")  # HH:MM
 MORNING_GRACE_MINUTES = int(os.getenv("MORNING_GRACE_MINUTES", "10"))
 
-NIGHT_TIME = os.getenv("NIGHT_TIME", "21:30")  # HH:MM (USER LOCAL)
+NIGHT_TIME = os.getenv("NIGHT_TIME", "21:30")  # HH:MM
 NIGHT_GRACE_MINUTES = int(os.getenv("NIGHT_GRACE_MINUTES", "15"))
 
 scheduler = BackgroundScheduler(daemon=True)
@@ -328,15 +327,11 @@ def minutes_since_midnight(dt):
     return dt.hour * 60 + dt.minute
 
 
-def get_user_now(now_utc, user_timezone):
+def get_user_now(now_utc, offset_minutes):
     """
-    Convert UTC -> user local time safely.
-    Falls back to UTC if timezone is invalid.
+    Convert UTC -> user local time using offset minutes.
     """
-    try:
-        return now_utc.astimezone(ZoneInfo(user_timezone))
-    except (ZoneInfoNotFoundError, Exception):
-        return now_utc
+    return now_utc + timedelta(minutes=offset_minutes)
 
 
 # --------------------------------------------------
@@ -354,13 +349,13 @@ def schedule_morning_intention():
             user_id = user_doc.id
 
             fcm_token = user.get("fcm_token")
-            user_timezone = user.get("timezone")
+            offset = user.get("timezone_offset_minutes")
 
-            if not fcm_token or not user_timezone:
+            if not fcm_token or offset is None:
                 continue
 
             # --- user local time ---
-            user_now = get_user_now(now_utc, user_timezone)
+            user_now = get_user_now(now_utc, offset)
             user_today = user_now.date().isoformat()
 
             # --- already sent today (user-local) ---
@@ -406,13 +401,13 @@ def schedule_night_reflection():
             user_id = user_doc.id
 
             fcm_token = user.get("fcm_token")
-            user_timezone = user.get("timezone")
+            offset = user.get("timezone_offset_minutes")
 
-            if not fcm_token or not user_timezone:
+            if not fcm_token or offset is None:
                 continue
 
             # --- user local time ---
-            user_now = get_user_now(now_utc, user_timezone)
+            user_now = get_user_now(now_utc, offset)
             user_today = user_now.date().isoformat()
 
             # --- already sent today (user-local) ---
