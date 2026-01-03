@@ -149,11 +149,159 @@
 #     except Exception as e:
 #         print(f"⚠ Error scheduling morning intention: {e}")
 
-#     return scheduler
+# #     return scheduler
+# from apscheduler.schedulers.background import BackgroundScheduler
+# from apscheduler.triggers.cron import CronTrigger
+# from datetime import datetime, timezone
+# from zoneinfo import ZoneInfo
+# import os
+
+# from firebase_utils import db
+# from notifications import (
+#     send_morning_intention_notification,
+#     send_night_reflection_notification
+# )
+
+# # --------------------------------------------------
+# # ENV CONFIG
+# # --------------------------------------------------
+# MORNING_TIME = os.getenv("MORNING_TIME", "09:00")  # HH:MM
+# MORNING_GRACE_MINUTES = int(os.getenv("MORNING_GRACE_MINUTES", "10"))
+
+# NIGHT_TIME = os.getenv("NIGHT_TIME", "21:30")  # HH:MM
+# NIGHT_GRACE_MINUTES = int(os.getenv("NIGHT_GRACE_MINUTES", "15"))
+
+# scheduler = BackgroundScheduler(daemon=True)
+
+
+# # --------------------------------------------------
+# # HELPERS
+# # --------------------------------------------------
+# def minutes_since_midnight(dt):
+#     return dt.hour * 60 + dt.minute
+
+
+# # --------------------------------------------------
+# # MORNING SCHEDULER
+# # --------------------------------------------------
+# def schedule_morning_intention():
+#     JOB_ID = "morning_intention_windowed"
+
+#     def notify_users():
+#         now_utc = datetime.now(timezone.utc)
+#         today_utc = now_utc.date().isoformat()
+
+#         users = db.collection("users").stream()
+
+#         for user_doc in users:
+#             user = user_doc.to_dict()
+#             user_id = user_doc.id
+
+#             fcm_token = user.get("fcm_token")
+#             user_timezone = user.get("timezone")
+
+#             if not fcm_token or not user_timezone:
+#                 continue
+
+#             if user.get("last_morning_notification_date") == today_utc:
+#                 continue
+
+#             try:
+#                 user_now = now_utc.astimezone(ZoneInfo(user_timezone))
+#             except Exception:
+#                 continue
+
+#             h, m = map(int, MORNING_TIME.split(":"))
+#             now_minutes = minutes_since_midnight(user_now)
+#             target_minutes = h * 60 + m
+
+#             if target_minutes <= now_minutes <= target_minutes + MORNING_GRACE_MINUTES:
+#                 send_morning_intention_notification(fcm_token)
+
+#                 db.collection("users").document(user_id).set(
+#                     {
+#                         "last_morning_notification_date": today_utc,
+#                         "last_morning_notification_at": now_utc,
+#                     },
+#                     merge=True,
+#                 )
+
+#     scheduler.add_job(
+#         notify_users,
+#         CronTrigger(minute="*", timezone="UTC"),
+#         id=JOB_ID,
+#         replace_existing=True,
+#     )
+
+
+# # --------------------------------------------------
+# # NIGHT SCHEDULER
+# # --------------------------------------------------
+# def schedule_night_reflection():
+#     JOB_ID = "night_reflection_windowed"
+
+#     def notify_users():
+#         now_utc = datetime.now(timezone.utc)
+#         today_utc = now_utc.date().isoformat()
+
+#         users = db.collection("users").stream()
+
+#         for user_doc in users:
+#             user = user_doc.to_dict()
+#             user_id = user_doc.id
+
+#             fcm_token = user.get("fcm_token")
+#             user_timezone = user.get("timezone")
+
+#             if not fcm_token or not user_timezone:
+#                 continue
+
+#             if user.get("last_night_notification_date") == today_utc:
+#                 continue
+
+#             try:
+#                 user_now = now_utc.astimezone(ZoneInfo(user_timezone))
+#             except Exception:
+#                 continue
+
+#             h, m = map(int, NIGHT_TIME.split(":"))
+#             now_minutes = minutes_since_midnight(user_now)
+#             target_minutes = h * 60 + m
+
+#             if target_minutes <= now_minutes <= target_minutes + NIGHT_GRACE_MINUTES:
+#                 send_night_reflection_notification(fcm_token)
+
+#                 db.collection("users").document(user_id).set(
+#                     {
+#                         "last_night_notification_date": today_utc,
+#                         "last_night_notification_at": now_utc,
+#                     },
+#                     merge=True,
+#                 )
+
+#     scheduler.add_job(
+#         notify_users,
+#         CronTrigger(minute="*", timezone="UTC"),
+#         id=JOB_ID,
+#         replace_existing=True,
+#     )
+
+
+# # --------------------------------------------------
+# # START ALL SCHEDULERS
+# # --------------------------------------------------
+# def start_schedulers():
+#     schedule_morning_intention()
+#     schedule_night_reflection()
+
+#     if not scheduler.running:
+#         scheduler.start()
+
+#     print("🌅🌙 Morning & Night schedulers started")
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import os
 
 from firebase_utils import db
@@ -165,20 +313,30 @@ from notifications import (
 # --------------------------------------------------
 # ENV CONFIG
 # --------------------------------------------------
-MORNING_TIME = os.getenv("MORNING_TIME", "09:00")  # HH:MM
+MORNING_TIME = os.getenv("MORNING_TIME", "09:00")  # HH:MM (USER LOCAL)
 MORNING_GRACE_MINUTES = int(os.getenv("MORNING_GRACE_MINUTES", "10"))
 
-NIGHT_TIME = os.getenv("NIGHT_TIME", "21:30")  # HH:MM
+NIGHT_TIME = os.getenv("NIGHT_TIME", "21:30")  # HH:MM (USER LOCAL)
 NIGHT_GRACE_MINUTES = int(os.getenv("NIGHT_GRACE_MINUTES", "15"))
 
 scheduler = BackgroundScheduler(daemon=True)
-
 
 # --------------------------------------------------
 # HELPERS
 # --------------------------------------------------
 def minutes_since_midnight(dt):
     return dt.hour * 60 + dt.minute
+
+
+def get_user_now(now_utc, user_timezone):
+    """
+    Convert UTC -> user local time safely.
+    Falls back to UTC if timezone is invalid.
+    """
+    try:
+        return now_utc.astimezone(ZoneInfo(user_timezone))
+    except (ZoneInfoNotFoundError, Exception):
+        return now_utc
 
 
 # --------------------------------------------------
@@ -189,8 +347,6 @@ def schedule_morning_intention():
 
     def notify_users():
         now_utc = datetime.now(timezone.utc)
-        today_utc = now_utc.date().isoformat()
-
         users = db.collection("users").stream()
 
         for user_doc in users:
@@ -203,14 +359,15 @@ def schedule_morning_intention():
             if not fcm_token or not user_timezone:
                 continue
 
-            if user.get("last_morning_notification_date") == today_utc:
+            # --- user local time ---
+            user_now = get_user_now(now_utc, user_timezone)
+            user_today = user_now.date().isoformat()
+
+            # --- already sent today (user-local) ---
+            if user.get("last_morning_notification_date") == user_today:
                 continue
 
-            try:
-                user_now = now_utc.astimezone(ZoneInfo(user_timezone))
-            except Exception:
-                continue
-
+            # --- target window ---
             h, m = map(int, MORNING_TIME.split(":"))
             now_minutes = minutes_since_midnight(user_now)
             target_minutes = h * 60 + m
@@ -220,7 +377,7 @@ def schedule_morning_intention():
 
                 db.collection("users").document(user_id).set(
                     {
-                        "last_morning_notification_date": today_utc,
+                        "last_morning_notification_date": user_today,
                         "last_morning_notification_at": now_utc,
                     },
                     merge=True,
@@ -242,8 +399,6 @@ def schedule_night_reflection():
 
     def notify_users():
         now_utc = datetime.now(timezone.utc)
-        today_utc = now_utc.date().isoformat()
-
         users = db.collection("users").stream()
 
         for user_doc in users:
@@ -256,14 +411,15 @@ def schedule_night_reflection():
             if not fcm_token or not user_timezone:
                 continue
 
-            if user.get("last_night_notification_date") == today_utc:
+            # --- user local time ---
+            user_now = get_user_now(now_utc, user_timezone)
+            user_today = user_now.date().isoformat()
+
+            # --- already sent today (user-local) ---
+            if user.get("last_night_notification_date") == user_today:
                 continue
 
-            try:
-                user_now = now_utc.astimezone(ZoneInfo(user_timezone))
-            except Exception:
-                continue
-
+            # --- target window ---
             h, m = map(int, NIGHT_TIME.split(":"))
             now_minutes = minutes_since_midnight(user_now)
             target_minutes = h * 60 + m
@@ -273,7 +429,7 @@ def schedule_night_reflection():
 
                 db.collection("users").document(user_id).set(
                     {
-                        "last_night_notification_date": today_utc,
+                        "last_night_notification_date": user_today,
                         "last_night_notification_at": now_utc,
                     },
                     merge=True,
