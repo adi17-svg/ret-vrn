@@ -10,7 +10,7 @@ import time
 from urllib.parse import quote_plus
 
 from tasks import generate_daily_task, save_completed_task, get_user_tasks
-from tools.action_tool import process_action_tool
+# from tools.action_tool import process_action_tool
 from rewards import (
     get_user_progress,
     save_user_progress,
@@ -343,27 +343,6 @@ def user_progress():
         traceback.print_exc()
         return jsonify({"error": "Failed to fetch user progress"}), 500
 
-# @bp.route("/merged", methods=["POST"])
-# def merged():
-#     data = request.json
-#     entry = (data.get("text") or "").strip()
-
-#     if not entry:
-#         return jsonify({"error": "Missing text"}), 400
-
-#     result = process_reflection_core(
-#         entry=entry,
-#         user_id=data.get("user_id"),
-#         last_stage=data.get("last_stage", ""),
-#         reply_to=data.get("reply_to", ""),
-#     )
-
-#     # 🔊 TTS
-#     audio_url = f"{request.url_root.rstrip('/')}/speak-stream?text={quote_plus(result['response'])}"
-
-#     result["audiourl"] = audio_url
-#     return jsonify(result)
-
 @bp.route("/merged", methods=["POST"])
 def merged():
     data = request.json
@@ -372,40 +351,61 @@ def merged():
     if not entry:
         return jsonify({"error": "Missing text"}), 400
 
-    # 👇 Frontend कडून येणारा tool flag
-    tool = data.get("tool")
-
-    # ==================================================
-    # 🔴 TOOL MODE: Getting Going With Action
-    # ==================================================
-    if tool == "START_ACTION":
-        result = process_action_tool(
-            entry=entry,
-            stage=data.get("last_stage"),
-            mood=None,  # (optional)
-        )
-
-    # ==================================================
-    # 🔵 NORMAL CHAT / SPIRAL MODE (UNCHANGED)
-    # ==================================================
-    else:
-        result = process_reflection_core(
-            entry=entry,
-            user_id=data.get("user_id"),
-            last_stage=data.get("last_stage", ""),
-            reply_to=data.get("reply_to", ""),
-        )
-
-    # ==================================================
-    # 🔊 TTS (WORKS FOR BOTH MODES)
-    # ==================================================
-    audio_url = (
-        f"{request.url_root.rstrip('/')}"
-        f"/speak-stream?text={quote_plus(result['response'])}"
+    result = process_reflection_core(
+        entry=entry,
+        user_id=data.get("user_id"),
+        last_stage=data.get("last_stage", ""),
+        reply_to=data.get("reply_to", ""),
     )
+
+    # 🔊 TTS
+    audio_url = f"{request.url_root.rstrip('/')}/speak-stream?text={quote_plus(result['response'])}"
 
     result["audiourl"] = audio_url
     return jsonify(result)
+
+# @bp.route("/merged", methods=["POST"])
+# def merged():
+#     data = request.json
+#     entry = (data.get("text") or "").strip()
+
+#     if not entry:
+#         return jsonify({"error": "Missing text"}), 400
+
+#     # 👇 Frontend कडून येणारा tool flag
+#     tool = data.get("tool")
+
+#     # ==================================================
+#     # 🔴 TOOL MODE: Getting Going With Action
+#     # ==================================================
+#     if tool == "START_ACTION":
+#         result = process_action_tool(
+#             entry=entry,
+#             stage=data.get("last_stage"),
+#             mood=None,  # (optional)
+#         )
+
+#     # ==================================================
+#     # 🔵 NORMAL CHAT / SPIRAL MODE (UNCHANGED)
+#     # ==================================================
+#     else:
+#         result = process_reflection_core(
+#             entry=entry,
+#             user_id=data.get("user_id"),
+#             last_stage=data.get("last_stage", ""),
+#             reply_to=data.get("reply_to", ""),
+#         )
+
+#     # ==================================================
+#     # 🔊 TTS (WORKS FOR BOTH MODES)
+#     # ==================================================
+#     audio_url = (
+#         f"{request.url_root.rstrip('/')}"
+#         f"/speak-stream?text={quote_plus(result['response'])}"
+#     )
+
+#     result["audiourl"] = audio_url
+#     return jsonify(result)
 
 
 @bp.route("/reflect_transcription", methods=["POST"])
