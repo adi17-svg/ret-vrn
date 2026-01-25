@@ -527,22 +527,320 @@
 #         traceback.print_exc()
 #         return jsonify({"error": "Failed to store support focus"}), 500
 
+# from flask import Blueprint, request, jsonify, Response, current_app
+# import json
+# import os
+# import traceback
+# from datetime import datetime
+# import time
+# from urllib.parse import quote_plus
+
+# from tasks import generate_daily_task, save_completed_task, get_user_tasks
+# from rewards import (
+#     get_user_progress,
+#     save_user_progress,
+#     update_streak,
+#     check_streak_rewards,
+#     check_message_rewards,
+# )
+# from spiral_dynamics import (
+#     detect_intent,
+#     classify_stage,
+#     check_evolution,
+#     generate_reflective_question,
+#     generate_gamified_prompt,
+#     client,
+# )
+# from firebase_utils import db, save_conversation_message, get_recent_conversation
+# from tts import stream_tts_from_openai
+
+# bp = Blueprint("main", __name__)
+
+# HISTORY_LIMIT = 6
+# AUDIO_FOLDER = "audios"
+# os.makedirs(AUDIO_FOLDER, exist_ok=True)
+
+# DYSREGULATED_MOODS = [
+#     "angry", "sad", "anxious", "overwhelmed", "confused", "stressed", "tired"
+# ]
+
+# # ======================================================
+# # RESPONSE TYPE DECIDER (Wysa-style)
+# # ======================================================
+# def decide_response_type(mood: str, intent: str) -> str:
+#     if intent == "chat":
+#         return "listen"
+#     if mood in ["sad", "anxious", "overwhelmed", "tired", "stressed"]:
+#         return "validate"
+#     if mood in ["confused", "stuck", "uncertain"]:
+#         return "reflect"
+#     return "act"
+
+
+# # ======================================================
+# # CORE BRAIN
+# # ======================================================
+# def process_reflection_core(
+#     entry: str,
+#     user_id: str | None,
+#     last_stage: str = "",
+#     reply_to: str = "",
+# ):
+#     """
+#     Unified response format (NO chat / spiral mode)
+
+#     Returns:
+#     {
+#       message: { text, tone },
+#       reflection: { mind_mirror },
+#       action: { mission, requires_permission },
+#       pattern: { stage, evolution }
+#     }
+#     """
+
+#     # -----------------------------
+#     # 1️⃣ Support focus (soft bias)
+#     # -----------------------------
+#     support_focus = []
+#     if user_id:
+#         try:
+#             doc = db.collection("users").document(user_id).get()
+#             if doc.exists:
+#                 support_focus = doc.to_dict().get("support_focus", [])
+#         except Exception:
+#             pass
+
+#     # -----------------------------
+#     # 2️⃣ Intent + Stage detection
+#     # -----------------------------
+#     intent = detect_intent(entry)
+
+#     mood = None
+#     stage = None
+#     confidence = 0.0
+
+#     try:
+#         result = classify_stage(entry)
+#         mood = result.get("mood")
+#         stage = result.get("stage")
+#         confidence = result.get("confidence", 0.0)
+#     except Exception:
+#         pass
+
+#     # -----------------------------
+#     # 3️⃣ Response style
+#     # -----------------------------
+#     response_type = decide_response_type(mood, intent)
+
+#     # -----------------------------
+#     # 4️⃣ Spiral allowed or not
+#     # -----------------------------
+#     spiral_active = bool(stage) and mood not in DYSREGULATED_MOODS
+#     if len(entry.split()) < 4:
+#         spiral_active = False
+
+#     # -----------------------------
+#     # 5️⃣ Context (memory)
+#     # -----------------------------
+#     context_messages = []
+#     if user_id:
+#         try:
+#             recent = get_recent_conversation(user_id, limit=HISTORY_LIMIT)
+#             for m in recent:
+#                 if m.get("role") in ("user", "assistant"):
+#                     context_messages.append(
+#                         {"role": m["role"], "content": m["content"]}
+#                     )
+#         except Exception:
+#             pass
+
+#     # -----------------------------
+#     # 6️⃣ Mind Mirror vs Mission
+#     # -----------------------------
+#     question = None
+#     mission = None
+
+#     # 🧠 Mind Mirror → awareness (no action)
+#     if response_type in ["validate", "reflect"]:
+#         try:
+#             question = generate_reflective_question(entry, reply_to)
+#         except Exception:
+#             question = None
+
+#     # 🎯 Mission → only if user is ready
+#     if response_type == "act" and spiral_active:
+#         try:
+#             gamified = generate_gamified_prompt(stage, entry)
+#             mission = gamified.get("gamified_prompt")
+#         except Exception:
+#             mission = None
+
+#     # -----------------------------
+#     # 7️⃣ Evolution (growth only)
+#     # -----------------------------
+#     evolution_msg = None
+#     if spiral_active and last_stage:
+#         evolution_msg = check_evolution(
+#             last_stage,
+#             {"stage": stage, "confidence": confidence},
+#         )
+
+#     # -----------------------------
+#     # 8️⃣ System prompt (language only)
+#     # -----------------------------
+#     system_prompt = (
+#         "You are a warm, grounded companion in the RETVRN app.\n\n"
+#         f"Response tone: {response_type}\n\n"
+#         "Rules:\n"
+#         "- Validate emotions first\n"
+#         "- Slow the pace\n"
+#         "- Keep sentences short\n"
+#         "- Never force action\n"
+#         "- Offer choice gently\n\n"
+#         f"User support focus (do NOT mention): {', '.join(support_focus) or 'none'}\n"
+#     )
+
+#     if question:
+#         system_prompt += f"\nAsk gently (Mind Mirror): {question}\n"
+
+#     if mission:
+#         system_prompt += (
+#             "\nOffer this only if the user agrees:\n"
+#             f"{mission}\n"
+#         )
+
+#     # -----------------------------
+#     # 9️⃣ GPT Call
+#     # -----------------------------
+#     messages = [
+#         {"role": "system", "content": system_prompt},
+#         *context_messages,
+#         {"role": "user", "content": entry},
+#     ]
+
+#     resp = client.chat.completions.create(
+#         model="gpt-4.1",
+#         messages=messages,
+#         temperature=0.7,
+#     )
+
+#     ai_text = resp.choices[0].message.content.strip()
+
+#     # -----------------------------
+#     # 🔟 Save conversation
+#     # -----------------------------
+#     if user_id:
+#         try:
+#             save_conversation_message(user_id, "user", entry)
+#             save_conversation_message(user_id, "assistant", ai_text)
+#         except Exception:
+#             pass
+
+#     # -----------------------------
+#     # ✅ FINAL UNIFIED RESPONSE
+#     # -----------------------------
+#     return {
+#         "message": {
+#             "text": ai_text,
+#             "tone": response_type,
+#         },
+#         "reflection": {
+#             "mind_mirror": question,
+#         },
+#         "action": {
+#             "mission": mission,
+#             "requires_permission": True if mission else False,
+#         },
+#         "pattern": {
+#             "stage": stage if spiral_active else None,
+#             "evolution": evolution_msg,
+#         },
+#     }
+
+
+# # ======================================================
+# # ROUTES
+# # ======================================================
+# @bp.route("/")
+# def home():
+#     return "Backend is running"
+
+
+# @bp.route("/merged", methods=["POST"])
+# def merged():
+#     data = request.json
+#     entry = (data.get("text") or "").strip()
+
+#     if not entry:
+#         return jsonify({"error": "Missing text"}), 400
+
+#     result = process_reflection_core(
+#         entry=entry,
+#         user_id=data.get("user_id"),
+#         last_stage=data.get("last_stage", ""),
+#         reply_to=data.get("reply_to", ""),
+#     )
+
+#     audio_url = f"{request.url_root.rstrip('/')}/speak-stream?text={quote_plus(result['message']['text'])}"
+#     result["audiourl"] = audio_url
+
+#     return jsonify(result)
+
+
+# @bp.route("/reflect_transcription", methods=["POST"])
+# def reflect_transcription():
+#     if "audio" not in request.files:
+#         return jsonify({"error": "Missing audio"}), 400
+
+#     user_id = request.form.get("user_id")
+#     audio_file = request.files["audio"]
+
+#     path = f"audios/{int(time.time())}.wav"
+#     audio_file.save(path)
+
+#     with open(path, "rb") as f:
+#         transcript = client.audio.transcriptions.create(
+#             model="gpt-4o-transcribe",
+#             file=f,
+#         )
+
+#     text = (transcript.text or "").strip()
+
+#     result = process_reflection_core(
+#         entry=text,
+#         user_id=user_id,
+#     )
+
+#     audio_url = f"{request.url_root.rstrip('/')}/speak-stream?text={quote_plus(result['message']['text'])}"
+#     result["audiourl"] = audio_url
+#     result["transcription"] = text
+
+#     return jsonify(result)
+
+
+# @bp.route("/speak-stream", methods=["GET", "POST"])
+# def speak_stream():
+#     try:
+#         if request.method == "GET":
+#             txt = request.args.get("text", "") or ""
+#         else:
+#             body = request.get_json(silent=True) or {}
+#             txt = body.get("text", "") or ""
+
+#         if not txt.strip():
+#             return jsonify({"error": "missing text"}), 400
+
+#         generator = stream_tts_from_openai(txt)
+#         return Response(generator, mimetype="audio/mpeg", direct_passthrough=True)
+
+#     except Exception as e:
+#         current_app.logger.exception(f"TTS error: {e}")
+#         return jsonify({"error": "Internal server error"}), 500
 from flask import Blueprint, request, jsonify, Response, current_app
-import json
 import os
-import traceback
-from datetime import datetime
 import time
 from urllib.parse import quote_plus
 
-from tasks import generate_daily_task, save_completed_task, get_user_tasks
-from rewards import (
-    get_user_progress,
-    save_user_progress,
-    update_streak,
-    check_streak_rewards,
-    check_message_rewards,
-)
 from spiral_dynamics import (
     detect_intent,
     classify_stage,
@@ -551,7 +849,11 @@ from spiral_dynamics import (
     generate_gamified_prompt,
     client,
 )
-from firebase_utils import db, save_conversation_message, get_recent_conversation
+from firebase_utils import (
+    db,
+    save_conversation_message,
+    get_recent_conversation,
+)
 from tts import stream_tts_from_openai
 
 bp = Blueprint("main", __name__)
@@ -560,25 +862,26 @@ HISTORY_LIMIT = 6
 AUDIO_FOLDER = "audios"
 os.makedirs(AUDIO_FOLDER, exist_ok=True)
 
-DYSREGULATED_MOODS = [
-    "angry", "sad", "anxious", "overwhelmed", "confused", "stressed", "tired"
-]
+DYSREGULATED_MOODS = {
+    "angry", "sad", "anxious", "overwhelmed",
+    "confused", "stressed", "tired",
+}
 
 # ======================================================
-# RESPONSE TYPE DECIDER (Wysa-style)
+# 🧠 RESPONSE STYLE DECIDER (Wysa-style)
 # ======================================================
-def decide_response_type(mood: str, intent: str) -> str:
+def decide_response_type(mood: str | None, intent: str) -> str:
     if intent == "chat":
         return "listen"
-    if mood in ["sad", "anxious", "overwhelmed", "tired", "stressed"]:
+    if mood in {"sad", "anxious", "overwhelmed", "tired", "stressed"}:
         return "validate"
-    if mood in ["confused", "stuck", "uncertain"]:
+    if mood in {"confused", "stuck", "uncertain"}:
         return "reflect"
     return "act"
 
 
 # ======================================================
-# CORE BRAIN
+# 🧠 SINGLE BRAIN (TEXT → RESPONSE)
 # ======================================================
 def process_reflection_core(
     entry: str,
@@ -587,20 +890,10 @@ def process_reflection_core(
     reply_to: str = "",
 ):
     """
-    Unified response format (NO chat / spiral mode)
-
-    Returns:
-    {
-      message: { text, tone },
-      reflection: { mind_mirror },
-      action: { mission, requires_permission },
-      pattern: { stage, evolution }
-    }
+    THE ONLY PLACE WHERE THINKING HAPPENS
     """
 
-    # -----------------------------
-    # 1️⃣ Support focus (soft bias)
-    # -----------------------------
+    # 1️⃣ User support focus (soft bias only)
     support_focus = []
     if user_id:
         try:
@@ -610,9 +903,7 @@ def process_reflection_core(
         except Exception:
             pass
 
-    # -----------------------------
-    # 2️⃣ Intent + Stage detection
-    # -----------------------------
+    # 2️⃣ Intent + Spiral classification (INTERNAL)
     intent = detect_intent(entry)
 
     mood = None
@@ -627,21 +918,15 @@ def process_reflection_core(
     except Exception:
         pass
 
-    # -----------------------------
-    # 3️⃣ Response style
-    # -----------------------------
+    # 3️⃣ Decide response tone (Wysa rule)
     response_type = decide_response_type(mood, intent)
 
-    # -----------------------------
-    # 4️⃣ Spiral allowed or not
-    # -----------------------------
+    # 4️⃣ Spiral guardrail (HIDDEN)
     spiral_active = bool(stage) and mood not in DYSREGULATED_MOODS
     if len(entry.split()) < 4:
         spiral_active = False
 
-    # -----------------------------
-    # 5️⃣ Context (memory)
-    # -----------------------------
+    # 5️⃣ Context memory
     context_messages = []
     if user_id:
         try:
@@ -654,30 +939,24 @@ def process_reflection_core(
         except Exception:
             pass
 
-    # -----------------------------
-    # 6️⃣ Mind Mirror vs Mission
-    # -----------------------------
+    # 6️⃣ Mind mirror vs mission
     question = None
     mission = None
 
-    # 🧠 Mind Mirror → awareness (no action)
-    if response_type in ["validate", "reflect"]:
+    if response_type in {"validate", "reflect"}:
         try:
             question = generate_reflective_question(entry, reply_to)
         except Exception:
-            question = None
+            pass
 
-    # 🎯 Mission → only if user is ready
     if response_type == "act" and spiral_active:
         try:
             gamified = generate_gamified_prompt(stage, entry)
             mission = gamified.get("gamified_prompt")
         except Exception:
-            mission = None
+            pass
 
-    # -----------------------------
-    # 7️⃣ Evolution (growth only)
-    # -----------------------------
+    # 7️⃣ Evolution (growth only, not chat)
     evolution_msg = None
     if spiral_active and last_stage:
         evolution_msg = check_evolution(
@@ -685,9 +964,7 @@ def process_reflection_core(
             {"stage": stage, "confidence": confidence},
         )
 
-    # -----------------------------
-    # 8️⃣ System prompt (language only)
-    # -----------------------------
+    # 8️⃣ System prompt (language control only)
     system_prompt = (
         "You are a warm, grounded companion in the RETVRN app.\n\n"
         f"Response tone: {response_type}\n\n"
@@ -697,7 +974,7 @@ def process_reflection_core(
         "- Keep sentences short\n"
         "- Never force action\n"
         "- Offer choice gently\n\n"
-        f"User support focus (do NOT mention): {', '.join(support_focus) or 'none'}\n"
+        f"User support focus (DO NOT mention): {', '.join(support_focus) or 'none'}\n"
     )
 
     if question:
@@ -709,9 +986,7 @@ def process_reflection_core(
             f"{mission}\n"
         )
 
-    # -----------------------------
-    # 9️⃣ GPT Call
-    # -----------------------------
+    # 9️⃣ GPT CALL (ONLY PLACE)
     messages = [
         {"role": "system", "content": system_prompt},
         *context_messages,
@@ -726,9 +1001,7 @@ def process_reflection_core(
 
     ai_text = resp.choices[0].message.content.strip()
 
-    # -----------------------------
-    # 🔟 Save conversation
-    # -----------------------------
+    # 🔟 Save memory
     if user_id:
         try:
             save_conversation_message(user_id, "user", entry)
@@ -736,9 +1009,7 @@ def process_reflection_core(
         except Exception:
             pass
 
-    # -----------------------------
-    # ✅ FINAL UNIFIED RESPONSE
-    # -----------------------------
+    # ✅ Unified response
     return {
         "message": {
             "text": ai_text,
@@ -766,9 +1037,10 @@ def home():
     return "Backend is running"
 
 
+# 🧠 TEXT → RESPONSE (MAIN ENTRY)
 @bp.route("/merged", methods=["POST"])
 def merged():
-    data = request.json
+    data = request.json or {}
     entry = (data.get("text") or "").strip()
 
     if not entry:
@@ -781,21 +1053,24 @@ def merged():
         reply_to=data.get("reply_to", ""),
     )
 
-    audio_url = f"{request.url_root.rstrip('/')}/speak-stream?text={quote_plus(result['message']['text'])}"
+    # Optional voice reply
+    audio_url = (
+        f"{request.url_root.rstrip('/')}"
+        f"/speak-stream?text={quote_plus(result['message']['text'])}"
+    )
     result["audiourl"] = audio_url
 
     return jsonify(result)
 
 
+# 👂 AUDIO → TEXT ONLY (NO THINKING)
 @bp.route("/reflect_transcription", methods=["POST"])
 def reflect_transcription():
     if "audio" not in request.files:
         return jsonify({"error": "Missing audio"}), 400
 
-    user_id = request.form.get("user_id")
     audio_file = request.files["audio"]
-
-    path = f"audios/{int(time.time())}.wav"
+    path = f"{AUDIO_FOLDER}/{int(time.time())}.wav"
     audio_file.save(path)
 
     with open(path, "rb") as f:
@@ -805,19 +1080,10 @@ def reflect_transcription():
         )
 
     text = (transcript.text or "").strip()
-
-    result = process_reflection_core(
-        entry=text,
-        user_id=user_id,
-    )
-
-    audio_url = f"{request.url_root.rstrip('/')}/speak-stream?text={quote_plus(result['message']['text'])}"
-    result["audiourl"] = audio_url
-    result["transcription"] = text
-
-    return jsonify(result)
+    return jsonify({"text": text})
 
 
+# 🔊 TEXT → SPEECH (STREAM)
 @bp.route("/speak-stream", methods=["GET", "POST"])
 def speak_stream():
     try:
@@ -831,7 +1097,11 @@ def speak_stream():
             return jsonify({"error": "missing text"}), 400
 
         generator = stream_tts_from_openai(txt)
-        return Response(generator, mimetype="audio/mpeg", direct_passthrough=True)
+        return Response(
+            generator,
+            mimetype="audio/mpeg",
+            direct_passthrough=True,
+        )
 
     except Exception as e:
         current_app.logger.exception(f"TTS error: {e}")
