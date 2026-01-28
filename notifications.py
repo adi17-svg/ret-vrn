@@ -432,6 +432,90 @@ def set_intention():
 
 
 # ============================================================
+# 🌱 GRATITUDE JOURNAL NOTIFICATION
+# ============================================================
+
+def send_gratitude_notification(fcm_token: str):
+    try:
+        today = datetime.now(timezone.utc).date().isoformat()
+
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title="🌱 A small pause",
+                body="Is there one thing today that felt quietly supportive or meaningful?"
+            ),
+            data={
+                "type": "gratitude_journal",
+                "screen": "chat",
+                "date": today
+            },
+            token=fcm_token,
+        )
+
+        return messaging.send(message)
+
+    except Exception as e:
+        print(f"❌ Gratitude notification error: {e}")
+        return None
+
+
+# ============================================================
+# 🧩 CBT REFLECTION NOTIFICATION
+# ============================================================
+
+def send_cbt_reflection_notification(fcm_token: str):
+    try:
+        today = datetime.now(timezone.utc).date().isoformat()
+
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title="🧩 Let’s unpack this gently",
+                body="Something may have stayed with you today. What happened — and what did it bring up for you?"
+            ),
+            data={
+                "type": "cbt_reflection",
+                "screen": "chat",
+                "date": today
+            },
+            token=fcm_token,
+        )
+
+        return messaging.send(message)
+
+    except Exception as e:
+        print(f"❌ CBT notification error: {e}")
+        return None
+
+
+
+# ============================================================
+# 🌬️ AWARENESS CHECK-IN NOTIFICATION
+# ============================================================
+
+def send_awareness_checkin_notification(fcm_token: str):
+    try:
+        today = datetime.now(timezone.utc).date().isoformat()
+
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title="🌬️ A moment to arrive",
+                body="Before anything else — how does your body feel right now?"
+            ),
+            data={
+                "type": "awareness_checkin",
+                "screen": "chat",
+                "date": today
+            },
+            token=fcm_token,
+        )
+
+        return messaging.send(message)
+
+    except Exception as e:
+        print(f"❌ Awareness notification error: {e}")
+        return None
+
+# ============================================================
 # 👋 OPTIONAL WELCOME NOTIFICATION
 # ============================================================
 

@@ -883,6 +883,152 @@ def decide_response_type(mood: str | None, intent: str) -> str:
 # ======================================================
 # 🧠 SINGLE BRAIN (TEXT → RESPONSE)
 # ======================================================
+# def process_reflection_core(
+#     entry: str,
+#     user_id: str | None,
+#     last_stage: str = "",
+#     reply_to: str = "",
+# ):
+#     """
+#     THE ONLY PLACE WHERE THINKING HAPPENS
+#     """
+
+#     # 1️⃣ User support focus (soft bias only)
+#     support_focus = []
+#     if user_id:
+#         try:
+#             doc = db.collection("users").document(user_id).get()
+#             if doc.exists:
+#                 support_focus = doc.to_dict().get("support_focus", [])
+#         except Exception:
+#             pass
+
+#     # 2️⃣ Intent + Spiral classification (INTERNAL)
+#     intent = detect_intent(entry)
+
+#     mood = None
+#     stage = None
+#     confidence = 0.0
+
+#     try:
+#         result = classify_stage(entry)
+#         mood = result.get("mood")
+#         stage = result.get("stage")
+#         confidence = result.get("confidence", 0.0)
+#     except Exception:
+#         pass
+
+#     # 3️⃣ Decide response tone (Wysa rule)
+#     response_type = decide_response_type(mood, intent)
+
+#     # 4️⃣ Spiral guardrail (HIDDEN)
+#     spiral_active = bool(stage) and mood not in DYSREGULATED_MOODS
+#     if len(entry.split()) < 4:
+#         spiral_active = False
+
+#     # 5️⃣ Context memory
+#     context_messages = []
+#     if user_id:
+#         try:
+#             recent = get_recent_conversation(user_id, limit=HISTORY_LIMIT)
+#             for m in recent:
+#                 if m.get("role") in ("user", "assistant"):
+#                     context_messages.append(
+#                         {"role": m["role"], "content": m["content"]}
+#                     )
+#         except Exception:
+#             pass
+
+#     # 6️⃣ Mind mirror vs mission
+#     question = None
+#     mission = None
+
+#     if response_type in {"validate", "reflect"}:
+#         try:
+#             question = generate_reflective_question(entry, reply_to)
+#         except Exception:
+#             pass
+
+#     if response_type == "act" and spiral_active:
+#         try:
+#             gamified = generate_gamified_prompt(stage, entry)
+#             mission = gamified.get("gamified_prompt")
+#         except Exception:
+#             pass
+
+#     # 7️⃣ Evolution (growth only, not chat)
+#     evolution_msg = None
+#     if spiral_active and last_stage:
+#         evolution_msg = check_evolution(
+#             last_stage,
+#             {"stage": stage, "confidence": confidence},
+#         )
+
+#     # 8️⃣ System prompt (language control only)
+#     system_prompt = (
+#         "You are a warm, grounded companion in the RETVRN app.\n\n"
+#         f"Response tone: {response_type}\n\n"
+#         "Rules:\n"
+#         "- Validate emotions first\n"
+#         "- Slow the pace\n"
+#         "- Keep sentences short\n"
+#         "- Never force action\n"
+#         "- Offer choice gently\n\n"
+#         f"User support focus (DO NOT mention): {', '.join(support_focus) or 'none'}\n"
+#     )
+
+#     if question:
+#         system_prompt += f"\nAsk gently (Mind Mirror): {question}\n"
+
+#     if mission:
+#         system_prompt += (
+#             "\nOffer this only if the user agrees:\n"
+#             f"{mission}\n"
+#         )
+
+#     # 9️⃣ GPT CALL (ONLY PLACE)
+#     messages = [
+#         {"role": "system", "content": system_prompt},
+#         *context_messages,
+#         {"role": "user", "content": entry},
+#     ]
+
+#     resp = client.chat.completions.create(
+#         model="gpt-4.1",
+#         messages=messages,
+#         temperature=0.7,
+#     )
+
+#     ai_text = resp.choices[0].message.content.strip()
+
+#     # 🔟 Save memory
+#     if user_id:
+#         try:
+#             save_conversation_message(user_id, "user", entry)
+#             save_conversation_message(user_id, "assistant", ai_text)
+#         except Exception:
+#             pass
+
+#     # ✅ Unified response
+#     return {
+#         "message": {
+#             "text": ai_text,
+#             "tone": response_type,
+#         },
+#         "reflection": {
+#             "mind_mirror": question,
+#         },
+#         "action": {
+#             "mission": mission,
+#             "requires_permission": True if mission else False,
+#         },
+#         "pattern": {
+#             "stage": stage if spiral_active else None,
+#             "evolution": evolution_msg,
+#         },
+#     }
+
+
 def process_reflection_core(
     entry: str,
     user_id: str | None,
@@ -920,6 +1066,10 @@ def process_reflection_core(
 
     # 3️⃣ Decide response tone (Wysa rule)
     response_type = decide_response_type(mood, intent)
+
+    # 🔧 CHANGE 1: Soft bias for gratitude notification replies
+    if reply_to == "gratitude_prompt":
+        response_type = "listen"
 
     # 4️⃣ Spiral guardrail (HIDDEN)
     spiral_active = bool(stage) and mood not in DYSREGULATED_MOODS
@@ -1004,7 +1154,16 @@ def process_reflection_core(
     # 🔟 Save memory
     if user_id:
         try:
-            save_conversation_message(user_id, "user", entry)
+            # 🔧 CHANGE 2 (OPTIONAL, SAFE):
+            # If your save_conversation_message supports metadata, you can extend it.
+            save_conversation_message(
+                user_id,
+                "user",
+                entry,
+                # meta={
+                #     "reply_to": reply_to,
+                # }
+            )
             save_conversation_message(user_id, "assistant", ai_text)
         except Exception:
             pass
