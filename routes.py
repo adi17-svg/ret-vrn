@@ -841,6 +841,8 @@ import os
 import time
 from urllib.parse import quote_plus
 from google.cloud import firestore #new import 
+from tools.tool_registry import get_tool #new import
+
 
 from spiral_dynamics import (
     detect_intent,
@@ -1217,11 +1219,186 @@ def decide_response_type(mood: str | None, intent: str) -> str:
 #         },
 #     }
 
+# def process_reflection_core(
+#     entry: str,
+#     user_id: str | None,
+#     last_stage: str = "",
+#     reply_to: str = "",
+# ):
+#     """
+#     THE ONLY PLACE WHERE THINKING HAPPENS
+#     """
+
+#     # 1️⃣ User support focus (soft bias only)
+#     support_focus = []
+#     if user_id:
+#         try:
+#             doc = db.collection("users").document(user_id).get()
+#             if doc.exists:
+#                 support_focus = doc.to_dict().get("support_focus", [])
+#         except Exception:
+#             pass
+
+#     # 2️⃣ Intent + Spiral classification (INTERNAL)
+#     intent = detect_intent(entry)
+
+#     mood = None
+#     stage = None
+#     confidence = 0.0
+
+#     try:
+#         result = classify_stage(entry)
+#         mood = result.get("mood")
+#         stage = result.get("stage")
+#         confidence = result.get("confidence", 0.0)
+#     except Exception:
+#         pass
+
+#     # 3️⃣ Decide response tone (Wysa rule)
+#     response_type = decide_response_type(mood, intent)
+
+#     if reply_to == "gratitude_prompt":
+#         response_type = "listen"
+
+#     # 4️⃣ Spiral guardrail
+#     spiral_active = bool(stage) and mood not in DYSREGULATED_MOODS
+#     if len(entry.split()) < 4:
+#         spiral_active = False
+
+#     # 🔄 Spiral tracking (kami / jasta + history)
+#     direction = "unknown"
+#     previous_stage = None
+
+#     if user_id and stage:
+#         user_ref = db.collection("users").document(user_id)
+#         snap = user_ref.get()
+
+#         if snap.exists:
+#             previous_stage = snap.to_dict().get("last_spiral_stage")
+
+#         direction = compare_spiral_levels(previous_stage, stage)
+
+#         user_ref.set(
+#             {
+#                 "last_spiral_stage": stage,
+#                 "last_confidence": confidence,
+#                 "updated_at": firestore.SERVER_TIMESTAMP,
+#             },
+#             merge=True,
+#         )
+
+#         if spiral_active:
+#             user_ref.collection("mergedMessages").add(
+#                 {
+#                     "type": "spiral",
+#                     "stage": stage,
+#                     "confidence": confidence,
+#                     "timestamp": firestore.SERVER_TIMESTAMP,
+#                 }
+#             )
+
+#     # 5️⃣ Context memory
+#     context_messages = []
+#     if user_id:
+#         try:
+#             recent = get_recent_conversation(user_id, limit=HISTORY_LIMIT)
+#             for m in recent:
+#                 if m.get("role") in ("user", "assistant"):
+#                     context_messages.append(
+#                         {"role": m["role"], "content": m["content"]}
+#                     )
+#         except Exception:
+#             pass
+
+#     # 6️⃣ Mind mirror vs mission
+#     question = None
+#     mission = None
+
+#     if response_type in {"validate", "reflect"}:
+#         try:
+#             question = generate_reflective_question(entry, reply_to)
+#         except Exception:
+#             pass
+
+#     if response_type == "act" and spiral_active:
+#         try:
+#             gamified = generate_gamified_prompt(stage, entry)
+#             mission = gamified.get("gamified_prompt")
+#         except Exception:
+#             pass
+
+#     # 7️⃣ System prompt
+#     system_prompt = (
+#         "You are a warm, grounded companion in the RETVRN app.\n\n"
+#         f"Response tone: {response_type}\n\n"
+#         "Rules:\n"
+#         "- Validate emotions first\n"
+#         "- Slow the pace\n"
+#         "- Keep sentences short\n"
+#         "- Never force action\n"
+#         "- Offer choice gently\n\n"
+#         f"User support focus (DO NOT mention): {', '.join(support_focus) or 'none'}\n"
+#     )
+
+#     if question:
+#         system_prompt += f"\nAsk gently (Mind Mirror): {question}\n"
+
+#     if mission:
+#         system_prompt += f"\nOffer this only if the user agrees:\n{mission}\n"
+
+#     # 8️⃣ GPT CALL
+#     messages = [
+#         {"role": "system", "content": system_prompt},
+#         *context_messages,
+#         {"role": "user", "content": entry},
+#     ]
+
+#     resp = client.chat.completions.create(
+#         model="gpt-4.1",
+#         messages=messages,
+#         temperature=0.7,
+#     )
+
+#     ai_text = resp.choices[0].message.content.strip()
+
+#     # 9️⃣ Save memory
+#     if user_id:
+#         try:
+#             save_conversation_message(user_id, "user", entry)
+#             save_conversation_message(user_id, "assistant", ai_text)
+#         except Exception:
+#             pass
+
+#     # ✅ FINAL unified response
+#     return {
+#         "message": {
+#             "text": ai_text,
+#             "tone": response_type,
+#         },
+#         "reflection": {
+#             "mind_mirror": question,
+#         },
+#         "action": {
+#             "mission": mission,
+#             "requires_permission": True if mission else False,
+#         },
+#         "pattern": {
+#             "stage": stage if spiral_active else None,
+#         },
+#         "spiral_tracking": {
+#             "current_stage": stage,
+#             "previous_stage": previous_stage,
+#             "direction": direction,
+#             "confidence": confidence,
+#         },
+#     }
+
 def process_reflection_core(
     entry: str,
     user_id: str | None,
     last_stage: str = "",
     reply_to: str = "",
+    tool_id: str | None = None,   # ✅ NEW (OPTIONAL)
 ):
     """
     THE ONLY PLACE WHERE THINKING HAPPENS
@@ -1263,11 +1440,16 @@ def process_reflection_core(
     if len(entry.split()) < 4:
         spiral_active = False
 
-    # 🔄 Spiral tracking (kami / jasta + history)
+    # 🚫 TOOL MODE → spiral / growth OFF
+    if tool_id:
+        spiral_active = False
+        response_type = "listen"   # ✅ ADD THIS LINE
+
+    # 🔄 Spiral tracking (ONLY for main chat)
     direction = "unknown"
     previous_stage = None
 
-    if user_id and stage:
+    if user_id and stage and not tool_id:
         user_ref = db.collection("users").document(user_id)
         snap = user_ref.get()
 
@@ -1359,7 +1541,7 @@ def process_reflection_core(
 
     ai_text = resp.choices[0].message.content.strip()
 
-    # 9️⃣ Save memory
+    # 9️⃣ Save memory (chat history only, safe for tools too)
     if user_id:
         try:
             save_conversation_message(user_id, "user", entry)
@@ -1384,12 +1566,13 @@ def process_reflection_core(
             "stage": stage if spiral_active else None,
         },
         "spiral_tracking": {
-            "current_stage": stage,
+            "current_stage": stage if not tool_id else None,
             "previous_stage": previous_stage,
             "direction": direction,
             "confidence": confidence,
         },
     }
+
 
 # ======================================================
 # ROUTES
@@ -1400,6 +1583,30 @@ def home():
 
 
 # 🧠 TEXT → RESPONSE (MAIN ENTRY)
+# @bp.route("/merged", methods=["POST"])
+# def merged():
+#     data = request.json or {}
+#     entry = (data.get("text") or "").strip()
+
+#     if not entry:
+#         return jsonify({"error": "Missing text"}), 400
+
+#     result = process_reflection_core(
+#         entry=entry,
+#         user_id=data.get("user_id"),
+#         last_stage=data.get("last_stage", ""),
+#         reply_to=data.get("reply_to", ""),
+#     )
+
+#     # Optional voice reply
+#     audio_url = (
+#         f"{request.url_root.rstrip('/')}"
+#         f"/speak-stream?text={quote_plus(result['message']['text'])}"
+#     )
+#     result["audiourl"] = audio_url
+
+#     return jsonify(result)
+
 @bp.route("/merged", methods=["POST"])
 def merged():
     data = request.json or {}
@@ -1408,14 +1615,19 @@ def merged():
     if not entry:
         return jsonify({"error": "Missing text"}), 400
 
+    # 🔹 NEW (SAFE, OPTIONAL)
+    tool_id = data.get("tool_id")  # main chat मध्ये None असेल
+    tool = get_tool(tool_id)   # ✅ ADD THIS
+
     result = process_reflection_core(
         entry=entry,
         user_id=data.get("user_id"),
         last_stage=data.get("last_stage", ""),
         reply_to=data.get("reply_to", ""),
+        tool_id=tool_id,   # 🔹 NEW
     )
 
-    # Optional voice reply
+    # Optional voice reply (UNCHANGED)
     audio_url = (
         f"{request.url_root.rstrip('/')}"
         f"/speak-stream?text={quote_plus(result['message']['text'])}"
@@ -1423,6 +1635,7 @@ def merged():
     result["audiourl"] = audio_url
 
     return jsonify(result)
+
 
 
 # 👂 AUDIO → TEXT ONLY (NO THINKING)
