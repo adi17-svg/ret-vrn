@@ -299,6 +299,238 @@
 #         return messaging.send(message)
 #     except Exception as e:
 #         print(f"Error sending welcome notification: {e}")
+# #         return None
+# from flask import Blueprint, request, jsonify
+# from datetime import datetime, timezone
+# import traceback
+# from firebase_admin import messaging
+
+# from firebase_utils import db
+
+# bp = Blueprint("notifications", __name__)
+
+# # ============================================================
+# # 🌅 MORNING INTENTION NOTIFICATION
+# # ============================================================
+
+# def send_morning_intention_notification(fcm_token: str):
+#     try:
+#         today = datetime.now(timezone.utc).date().isoformat()
+
+#         message = messaging.Message(
+#             notification=messaging.Notification(
+#                 title="🌅 A gentle start to your day",
+#                 body="Would you like to set a small intention for today?"
+#             ),
+#             data={
+#                 "type": "morning_intention",
+#                 "screen": "intention",
+#                 "date": today
+#             },
+#             token=fcm_token,
+#         )
+
+#         return messaging.send(message)
+
+#     except Exception as e:
+#         print(f"❌ Error sending morning notification: {e}")
+#         return None
+
+
+# # ============================================================
+# # 🌙 NIGHT REFLECTION NOTIFICATION (ROTATING)
+# # ============================================================
+
+# NIGHT_PROMPTS = [
+#     {
+#         "title": "🌙 Before you rest",
+#         "body": "How did today feel for you — not good or bad, just honestly?"
+#     },
+#     {
+#         "title": "🌙 A quiet moment",
+#         "body": "Was there one small moment today that stayed with you?"
+#     },
+#     {
+#         "title": "🌙 End of the day",
+#         "body": "Is there anything you’d like to leave behind before sleeping?"
+#     },
+#     {
+#         "title": "🌙 Just check in",
+#         "body": "What’s sitting with you right now?"
+#     }
+# ]
+
+
+# def send_night_reflection_notification(fcm_token: str):
+#     try:
+#         today = datetime.now(timezone.utc).date()
+#         index = today.toordinal() % len(NIGHT_PROMPTS)
+#         prompt = NIGHT_PROMPTS[index]
+
+#         message = messaging.Message(
+#             notification=messaging.Notification(
+#                 title=prompt["title"],
+#                 body=prompt["body"]
+#             ),
+#             data={
+#                 "type": "night_reflection",
+#                 "screen": "chat",
+#                 "date": today.isoformat()
+#             },
+#             token=fcm_token,
+#         )
+
+#         return messaging.send(message)
+
+#     except Exception as e:
+#         print(f"❌ Error sending night notification: {e}")
+#         return None
+
+
+# # ============================================================
+# # 🎯 STORE USER SELECTED INTENTION
+# # ============================================================
+
+# @bp.route("/set_intention", methods=["POST"])
+# def set_intention():
+#     try:
+#         data = request.get_json()
+#         user_id = data.get("user_id")
+#         intention = data.get("intention")
+
+#         if not user_id or not intention:
+#             return jsonify({"error": "Missing user_id or intention"}), 400
+
+#         today = datetime.now(timezone.utc).date().isoformat()
+
+#         db.collection("users").document(user_id).set(
+#             {
+#                 "today_intention": intention,
+#                 "intention_date": today,
+#                 "intention_set_at": datetime.now(timezone.utc),
+#             },
+#             merge=True
+#         )
+
+#         db.collection("users") \
+#             .document(user_id) \
+#             .collection("mergedMessages") \
+#             .add({
+#                 "type": "intention",
+#                 "message": f"🎯 Today’s intention: {intention}",
+#                 "timestamp": datetime.now(timezone.utc),
+#                 "from": "system",
+#                 "is_notification": False,
+#                 "date": today,
+#             })
+
+#         return jsonify({"status": "success"})
+
+#     except Exception:
+#         traceback.print_exc()
+#         return jsonify({"error": "Failed to store intention"}), 500
+
+
+# # ============================================================
+# # 🌱 GRATITUDE JOURNAL NOTIFICATION
+# # ============================================================
+
+# def send_gratitude_notification(fcm_token: str):
+#     try:
+#         today = datetime.now(timezone.utc).date().isoformat()
+
+#         message = messaging.Message(
+#             notification=messaging.Notification(
+#                 title="🌱 A small pause",
+#                 body="Is there one thing today that felt quietly supportive or meaningful?"
+#             ),
+#             data={
+#                 "type": "gratitude_journal",
+#                 "screen": "chat",
+#                 "date": today
+#             },
+#             token=fcm_token,
+#         )
+
+#         return messaging.send(message)
+
+#     except Exception as e:
+#         print(f"❌ Gratitude notification error: {e}")
+#         return None
+
+
+# # ============================================================
+# # 🧩 CBT REFLECTION NOTIFICATION
+# # ============================================================
+
+# def send_cbt_reflection_notification(fcm_token: str):
+#     try:
+#         today = datetime.now(timezone.utc).date().isoformat()
+
+#         message = messaging.Message(
+#             notification=messaging.Notification(
+#                 title="🧩 Let’s unpack this gently",
+#                 body="Something may have stayed with you today. What happened — and what did it bring up for you?"
+#             ),
+#             data={
+#                 "type": "cbt_reflection",
+#                 "screen": "chat",
+#                 "date": today
+#             },
+#             token=fcm_token,
+#         )
+
+#         return messaging.send(message)
+
+#     except Exception as e:
+#         print(f"❌ CBT notification error: {e}")
+#         return None
+
+
+
+# # ============================================================
+# # 🌬️ AWARENESS CHECK-IN NOTIFICATION
+# # ============================================================
+
+# def send_awareness_checkin_notification(fcm_token: str):
+#     try:
+#         today = datetime.now(timezone.utc).date().isoformat()
+
+#         message = messaging.Message(
+#             notification=messaging.Notification(
+#                 title="🌬️ A moment to arrive",
+#                 body="Before anything else — how does your body feel right now?"
+#             ),
+#             data={
+#                 "type": "awareness_checkin",
+#                 "screen": "chat",
+#                 "date": today
+#             },
+#             token=fcm_token,
+#         )
+
+#         return messaging.send(message)
+
+#     except Exception as e:
+#         print(f"❌ Awareness notification error: {e}")
+#         return None
+
+# # ============================================================
+# # 👋 OPTIONAL WELCOME NOTIFICATION
+# # ============================================================
+
+# def send_welcome_notification(token):
+#     try:
+#         message = messaging.Message(
+#             notification=messaging.Notification(
+#                 title="Welcome to RETVRN",
+#                 body="What’s on your mind right now? Write or speak freely."
+#             ),
+#             token=token,
+#         )
+#         return messaging.send(message)
+#     except Exception as e:
+#         print(f"❌ Welcome notification error: {e}")
 #         return None
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timezone
@@ -310,7 +542,7 @@ from firebase_utils import db
 bp = Blueprint("notifications", __name__)
 
 # ============================================================
-# 🌅 MORNING INTENTION NOTIFICATION
+# 🌅 MORNING INTENTION NOTIFICATION (❌ NO CHANGE)
 # ============================================================
 
 def send_morning_intention_notification(fcm_token: str):
@@ -338,7 +570,7 @@ def send_morning_intention_notification(fcm_token: str):
 
 
 # ============================================================
-# 🌙 NIGHT REFLECTION NOTIFICATION (ROTATING)
+# 🌙 NIGHT REFLECTION NOTIFICATION (ROTATING) ✅ FIXED
 # ============================================================
 
 NIGHT_PROMPTS = [
@@ -375,6 +607,7 @@ def send_night_reflection_notification(fcm_token: str):
             data={
                 "type": "night_reflection",
                 "screen": "chat",
+                "body": prompt["body"],   # ✅ IMPORTANT
                 "date": today.isoformat()
             },
             token=fcm_token,
@@ -388,7 +621,7 @@ def send_night_reflection_notification(fcm_token: str):
 
 
 # ============================================================
-# 🎯 STORE USER SELECTED INTENTION
+# 🎯 STORE USER SELECTED INTENTION (NO CHANGE)
 # ============================================================
 
 @bp.route("/set_intention", methods=["POST"])
@@ -432,21 +665,23 @@ def set_intention():
 
 
 # ============================================================
-# 🌱 GRATITUDE JOURNAL NOTIFICATION
+# 🌱 GRATITUDE JOURNAL NOTIFICATION ✅ FIXED
 # ============================================================
 
 def send_gratitude_notification(fcm_token: str):
     try:
         today = datetime.now(timezone.utc).date().isoformat()
+        body = "Is there one thing today that felt quietly supportive or meaningful?"
 
         message = messaging.Message(
             notification=messaging.Notification(
                 title="🌱 A small pause",
-                body="Is there one thing today that felt quietly supportive or meaningful?"
+                body=body
             ),
             data={
                 "type": "gratitude_journal",
                 "screen": "chat",
+                "body": body,            # ✅ IMPORTANT
                 "date": today
             },
             token=fcm_token,
@@ -460,21 +695,26 @@ def send_gratitude_notification(fcm_token: str):
 
 
 # ============================================================
-# 🧩 CBT REFLECTION NOTIFICATION
+# 🧩 CBT REFLECTION NOTIFICATION ✅ FIXED
 # ============================================================
 
 def send_cbt_reflection_notification(fcm_token: str):
     try:
         today = datetime.now(timezone.utc).date().isoformat()
+        body = (
+            "Something may have stayed with you today. "
+            "What happened — and what did it bring up for you?"
+        )
 
         message = messaging.Message(
             notification=messaging.Notification(
                 title="🧩 Let’s unpack this gently",
-                body="Something may have stayed with you today. What happened — and what did it bring up for you?"
+                body=body
             ),
             data={
                 "type": "cbt_reflection",
                 "screen": "chat",
+                "body": body,            # ✅ IMPORTANT
                 "date": today
             },
             token=fcm_token,
@@ -487,23 +727,24 @@ def send_cbt_reflection_notification(fcm_token: str):
         return None
 
 
-
 # ============================================================
-# 🌬️ AWARENESS CHECK-IN NOTIFICATION
+# 🌬️ AWARENESS CHECK-IN NOTIFICATION ✅ FIXED
 # ============================================================
 
 def send_awareness_checkin_notification(fcm_token: str):
     try:
         today = datetime.now(timezone.utc).date().isoformat()
+        body = "Before anything else — how does your body feel right now?"
 
         message = messaging.Message(
             notification=messaging.Notification(
                 title="🌬️ A moment to arrive",
-                body="Before anything else — how does your body feel right now?"
+                body=body
             ),
             data={
                 "type": "awareness_checkin",
                 "screen": "chat",
+                "body": body,            # ✅ IMPORTANT
                 "date": today
             },
             token=fcm_token,
@@ -515,8 +756,9 @@ def send_awareness_checkin_notification(fcm_token: str):
         print(f"❌ Awareness notification error: {e}")
         return None
 
+
 # ============================================================
-# 👋 OPTIONAL WELCOME NOTIFICATION
+# 👋 OPTIONAL WELCOME NOTIFICATION (UNCHANGED)
 # ============================================================
 
 def send_welcome_notification(token):
