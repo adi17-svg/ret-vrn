@@ -763,209 +763,6 @@
 
 #     SCHEDULERS_STARTED = True
 # #     print("🌅🌱🧩🌬️🌙 All schedulers started (single instance)")
-# from apscheduler.schedulers.background import BackgroundScheduler
-# from apscheduler.triggers.cron import CronTrigger
-# from datetime import datetime, timezone, timedelta
-# import os
-
-# from firebase_utils import db
-# from notifications import (
-#     send_morning_intention_notification,
-#     send_night_reflection_notification,
-#     send_gratitude_notification,
-#     send_cbt_reflection_notification,
-#     send_awareness_checkin_notification,
-# )
-
-# # ============================================================
-# # 🔐 HARD SINGLE-SCHEDULER CONTROL
-# # ============================================================
-# IS_SCHEDULER_PROCESS = os.getenv("RUN_SCHEDULER", "false") == "true"
-# SCHEDULERS_STARTED = False
-
-# # ============================================================
-# # ⏰ TIME CONFIG
-# # ============================================================
-# MORNING_TIME = os.getenv("MORNING_TIME", "09:00")
-# MORNING_GRACE_MINUTES = int(os.getenv("MORNING_GRACE_MINUTES", "10"))
-
-# GRATITUDE_TIME = os.getenv("GRATITUDE_TIME", "13:00")
-# CBT_TIME = os.getenv("CBT_TIME", "17:00")
-# AWARENESS_TIME = os.getenv("AWARENESS_TIME", "20:00")
-
-# NIGHT_TIME = os.getenv("NIGHT_TIME", "21:30")
-# NIGHT_GRACE_MINUTES = int(os.getenv("NIGHT_GRACE_MINUTES", "15"))
-
-# GENERIC_GRACE_MINUTES = 10
-
-# scheduler = BackgroundScheduler(daemon=True)
-
-# # ============================================================
-# # 🧠 HELPERS
-# # ============================================================
-# def minutes_since_midnight(dt):
-#     return dt.hour * 60 + dt.minute
-
-
-# def get_user_now(now_utc, offset_minutes):
-#     return now_utc + timedelta(minutes=offset_minutes)
-
-
-# def transactional_send(
-#     user_ref,
-#     user,
-#     now_utc,
-#     target_time,
-#     grace,
-#     last_key,
-#     send_fn,
-# ):
-#     token = user.get("fcm_token")
-#     offset = user.get("timezone_offset_minutes")
-
-#     if not token or offset is None:
-#         return
-
-#     user_now = get_user_now(now_utc, offset)
-#     today = user_now.date().isoformat()
-
-#     if user.get(last_key) == today:
-#         return
-
-#     h, m = map(int, target_time.split(":"))
-#     now_min = minutes_since_midnight(user_now)
-#     target = h * 60 + m
-
-#     if target <= now_min <= target + grace:
-#         send_fn(token)
-#         user_ref.update({
-#             last_key: today,
-#             f"{last_key}_at": now_utc,
-#         })
-
-
-# # ============================================================
-# # 🌅 MORNING
-# # ============================================================
-# def schedule_morning_intention():
-#     def job():
-#         now_utc = datetime.now(timezone.utc)
-#         for doc in db.collection("users").stream():
-#             transactional_send(
-#                 db.collection("users").document(doc.id),
-#                 doc.to_dict() or {},
-#                 now_utc,
-#                 MORNING_TIME,
-#                 MORNING_GRACE_MINUTES,
-#                 "last_morning_notification_date",
-#                 send_morning_intention_notification,
-#             )
-
-#     scheduler.add_job(job, CronTrigger(minute="*", timezone="UTC"), id="morning", replace_existing=True)
-
-
-# # ============================================================
-# # 🌱 GRATITUDE
-# # ============================================================
-# def schedule_gratitude():
-#     def job():
-#         now_utc = datetime.now(timezone.utc)
-#         for doc in db.collection("users").stream():
-#             transactional_send(
-#                 db.collection("users").document(doc.id),
-#                 doc.to_dict() or {},
-#                 now_utc,
-#                 GRATITUDE_TIME,
-#                 GENERIC_GRACE_MINUTES,
-#                 "last_gratitude_notification_date",
-#                 send_gratitude_notification,
-#             )
-
-#     scheduler.add_job(job, CronTrigger(minute="*", timezone="UTC"), id="gratitude", replace_existing=True)
-
-
-# # ============================================================
-# # 🧩 CBT
-# # ============================================================
-# def schedule_cbt():
-#     def job():
-#         now_utc = datetime.now(timezone.utc)
-#         for doc in db.collection("users").stream():
-#             transactional_send(
-#                 db.collection("users").document(doc.id),
-#                 doc.to_dict() or {},
-#                 now_utc,
-#                 CBT_TIME,
-#                 GENERIC_GRACE_MINUTES,
-#                 "last_cbt_notification_date",
-#                 send_cbt_reflection_notification,
-#             )
-
-#     scheduler.add_job(job, CronTrigger(minute="*", timezone="UTC"), id="cbt", replace_existing=True)
-
-
-# # ============================================================
-# # 🌬️ AWARENESS
-# # ============================================================
-# def schedule_awareness():
-#     def job():
-#         now_utc = datetime.now(timezone.utc)
-#         for doc in db.collection("users").stream():
-#             transactional_send(
-#                 db.collection("users").document(doc.id),
-#                 doc.to_dict() or {},
-#                 now_utc,
-#                 AWARENESS_TIME,
-#                 GENERIC_GRACE_MINUTES,
-#                 "last_awareness_notification_date",
-#                 send_awareness_checkin_notification,
-#             )
-
-#     scheduler.add_job(job, CronTrigger(minute="*", timezone="UTC"), id="awareness", replace_existing=True)
-
-
-# # ============================================================
-# # 🌙 NIGHT
-# # ============================================================
-# def schedule_night():
-#     def job():
-#         now_utc = datetime.now(timezone.utc)
-#         for doc in db.collection("users").stream():
-#             transactional_send(
-#                 db.collection("users").document(doc.id),
-#                 doc.to_dict() or {},
-#                 now_utc,
-#                 NIGHT_TIME,
-#                 NIGHT_GRACE_MINUTES,
-#                 "last_night_notification_date",
-#                 send_night_reflection_notification,
-#             )
-
-#     scheduler.add_job(job, CronTrigger(minute="*", timezone="UTC"), id="night", replace_existing=True)
-
-
-# # ============================================================
-# # 🚀 START
-# # ============================================================
-# def start_schedulers():
-#     global SCHEDULERS_STARTED
-
-#     if not IS_SCHEDULER_PROCESS:
-#         print("⛔ Scheduler disabled on this worker")
-#         return
-
-#     if SCHEDULERS_STARTED:
-#         return
-
-#     schedule_morning_intention()
-#     schedule_gratitude()
-#     schedule_cbt()
-#     schedule_awareness()
-#     schedule_night()
-
-#     scheduler.start()
-#     SCHEDULERS_STARTED = True
-#     print("✅ Scheduler started (SINGLE INSTANCE)")
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime, timezone, timedelta
@@ -986,8 +783,6 @@ from notifications import (
 IS_SCHEDULER_PROCESS = os.getenv("RUN_SCHEDULER", "false") == "true"
 SCHEDULERS_STARTED = False
 
-scheduler = BackgroundScheduler(daemon=True)
-
 # ============================================================
 # ⏰ TIME CONFIG
 # ============================================================
@@ -1003,6 +798,8 @@ NIGHT_GRACE_MINUTES = int(os.getenv("NIGHT_GRACE_MINUTES", "15"))
 
 GENERIC_GRACE_MINUTES = 10
 
+scheduler = BackgroundScheduler(daemon=True)
+
 # ============================================================
 # 🧠 HELPERS
 # ============================================================
@@ -1014,22 +811,7 @@ def get_user_now(now_utc, offset_minutes):
     return now_utc + timedelta(minutes=offset_minutes)
 
 
-def insert_chat_message(user_ref, body, now_utc):
-    """
-    🔥 SINGLE SOURCE OF TRUTH
-    Chat message is inserted ONLY here, ONLY once.
-    """
-    user_ref.collection("mergedMessages").add({
-        "type": "assistant",
-        "text": body,
-        "from": "assistant",
-        "is_notification": True,
-        "timestamp": now_utc,
-    })
-
-
 def transactional_send(
-    *,
     user_ref,
     user,
     now_utc,
@@ -1037,7 +819,6 @@ def transactional_send(
     grace,
     last_key,
     send_fn,
-    chat_body=None,   # ⬅️ None = no chat insert (morning)
 ):
     token = user.get("fcm_token")
     offset = user.get("timezone_offset_minutes")
@@ -1048,7 +829,6 @@ def transactional_send(
     user_now = get_user_now(now_utc, offset)
     today = user_now.date().isoformat()
 
-    # 🔒 HARD DAILY LOCK
     if user.get(last_key) == today:
         return
 
@@ -1057,14 +837,7 @@ def transactional_send(
     target = h * 60 + m
 
     if target <= now_min <= target + grace:
-        # 🔔 SEND NOTIFICATION
         send_fn(token)
-
-        # 💬 INSERT CHAT MESSAGE (ONLY IF PROVIDED)
-        if chat_body:
-            insert_chat_message(user_ref, chat_body, now_utc)
-
-        # 🔒 SAVE LOCK
         user_ref.update({
             last_key: today,
             f"{last_key}_at": now_utc,
@@ -1072,148 +845,107 @@ def transactional_send(
 
 
 # ============================================================
-# 🌅 MORNING (NOTIFICATION ONLY)
+# 🌅 MORNING
 # ============================================================
-def schedule_morning():
+def schedule_morning_intention():
     def job():
         now_utc = datetime.now(timezone.utc)
         for doc in db.collection("users").stream():
             transactional_send(
-                user_ref=db.collection("users").document(doc.id),
-                user=doc.to_dict() or {},
-                now_utc=now_utc,
-                target_time=MORNING_TIME,
-                grace=MORNING_GRACE_MINUTES,
-                last_key="last_morning_notification_date",
-                send_fn=send_morning_intention_notification,
-                chat_body=None,   # ❌ NO CHAT
+                db.collection("users").document(doc.id),
+                doc.to_dict() or {},
+                now_utc,
+                MORNING_TIME,
+                MORNING_GRACE_MINUTES,
+                "last_morning_notification_date",
+                send_morning_intention_notification,
             )
 
-    scheduler.add_job(
-        job,
-        CronTrigger(minute="*", timezone="UTC"),
-        id="morning",
-        replace_existing=True,
-    )
+    scheduler.add_job(job, CronTrigger(minute="*", timezone="UTC"), id="morning", replace_existing=True)
 
 
 # ============================================================
 # 🌱 GRATITUDE
 # ============================================================
 def schedule_gratitude():
-    BODY = "Is there one thing today that felt quietly supportive or meaningful?"
-
     def job():
         now_utc = datetime.now(timezone.utc)
         for doc in db.collection("users").stream():
             transactional_send(
-                user_ref=db.collection("users").document(doc.id),
-                user=doc.to_dict() or {},
-                now_utc=now_utc,
-                target_time=GRATITUDE_TIME,
-                grace=GENERIC_GRACE_MINUTES,
-                last_key="last_gratitude_notification_date",
-                send_fn=send_gratitude_notification,
-                chat_body=BODY,
+                db.collection("users").document(doc.id),
+                doc.to_dict() or {},
+                now_utc,
+                GRATITUDE_TIME,
+                GENERIC_GRACE_MINUTES,
+                "last_gratitude_notification_date",
+                send_gratitude_notification,
             )
 
-    scheduler.add_job(
-        job,
-        CronTrigger(minute="*", timezone="UTC"),
-        id="gratitude",
-        replace_existing=True,
-    )
+    scheduler.add_job(job, CronTrigger(minute="*", timezone="UTC"), id="gratitude", replace_existing=True)
 
 
 # ============================================================
 # 🧩 CBT
 # ============================================================
 def schedule_cbt():
-    BODY = (
-        "Something may have stayed with you today. "
-        "What happened — and what did it bring up for you?"
-    )
-
     def job():
         now_utc = datetime.now(timezone.utc)
         for doc in db.collection("users").stream():
             transactional_send(
-                user_ref=db.collection("users").document(doc.id),
-                user=doc.to_dict() or {},
-                now_utc=now_utc,
-                target_time=CBT_TIME,
-                grace=GENERIC_GRACE_MINUTES,
-                last_key="last_cbt_notification_date",
-                send_fn=send_cbt_reflection_notification,
-                chat_body=BODY,
+                db.collection("users").document(doc.id),
+                doc.to_dict() or {},
+                now_utc,
+                CBT_TIME,
+                GENERIC_GRACE_MINUTES,
+                "last_cbt_notification_date",
+                send_cbt_reflection_notification,
             )
 
-    scheduler.add_job(
-        job,
-        CronTrigger(minute="*", timezone="UTC"),
-        id="cbt",
-        replace_existing=True,
-    )
+    scheduler.add_job(job, CronTrigger(minute="*", timezone="UTC"), id="cbt", replace_existing=True)
 
 
 # ============================================================
 # 🌬️ AWARENESS
 # ============================================================
 def schedule_awareness():
-    BODY = "Before anything else — how does your body feel right now?"
-
     def job():
         now_utc = datetime.now(timezone.utc)
         for doc in db.collection("users").stream():
             transactional_send(
-                user_ref=db.collection("users").document(doc.id),
-                user=doc.to_dict() or {},
-                now_utc=now_utc,
-                target_time=AWARENESS_TIME,
-                grace=GENERIC_GRACE_MINUTES,
-                last_key="last_awareness_notification_date",
-                send_fn=send_awareness_checkin_notification,
-                chat_body=BODY,
+                db.collection("users").document(doc.id),
+                doc.to_dict() or {},
+                now_utc,
+                AWARENESS_TIME,
+                GENERIC_GRACE_MINUTES,
+                "last_awareness_notification_date",
+                send_awareness_checkin_notification,
             )
 
-    scheduler.add_job(
-        job,
-        CronTrigger(minute="*", timezone="UTC"),
-        id="awareness",
-        replace_existing=True,
-    )
+    scheduler.add_job(job, CronTrigger(minute="*", timezone="UTC"), id="awareness", replace_existing=True)
 
 
 # ============================================================
 # 🌙 NIGHT
 # ============================================================
 def schedule_night():
-    BODY = "How did today feel for you — not good or bad, just honestly?"
-
     def job():
         now_utc = datetime.now(timezone.utc)
         for doc in db.collection("users").stream():
             transactional_send(
-                user_ref=db.collection("users").document(doc.id),
-                user=doc.to_dict() or {},
-                now_utc=now_utc,
-                target_time=NIGHT_TIME,
-                grace=NIGHT_GRACE_MINUTES,
-                last_key="last_night_notification_date",
-                send_fn=send_night_reflection_notification,
-                chat_body=BODY,
+                db.collection("users").document(doc.id),
+                doc.to_dict() or {},
+                now_utc,
+                NIGHT_TIME,
+                NIGHT_GRACE_MINUTES,
+                "last_night_notification_date",
+                send_night_reflection_notification,
             )
 
-    scheduler.add_job(
-        job,
-        CronTrigger(minute="*", timezone="UTC"),
-        id="night",
-        replace_existing=True,
-    )
+    scheduler.add_job(job, CronTrigger(minute="*", timezone="UTC"), id="night", replace_existing=True)
 
 
 # ============================================================
-# 🚀 START (SINGLE INSTANCE ONLY)
+# 🚀 START
 # ============================================================
 def start_schedulers():
     global SCHEDULERS_STARTED
@@ -1223,10 +955,9 @@ def start_schedulers():
         return
 
     if SCHEDULERS_STARTED:
-        print("⛔ Scheduler already started")
         return
 
-    schedule_morning()
+    schedule_morning_intention()
     schedule_gratitude()
     schedule_cbt()
     schedule_awareness()
