@@ -858,6 +858,8 @@ from firebase_utils import (
     get_recent_conversation,
 )
 from tts import stream_tts_from_openai
+from tools.tool_runner import run_tool
+
 
 bp = Blueprint("main", __name__)
 
@@ -1507,12 +1509,12 @@ def process_reflection_core(
         except Exception:
             pass
     
-        # 🚨 TOOL MODE OVERRIDE — RUN TOOL INSTEAD OF GPT
+      
+    # 🚨 TOOL MODE OVERRIDE — RUN TOOL INSTEAD OF GPT
     if tool_id:
         tool_response = run_tool(tool_id)
 
         if tool_response:
-            # Optional: still save user message
             if user_id:
                 try:
                     save_conversation_message(user_id, "user", entry)
@@ -1534,7 +1536,6 @@ def process_reflection_core(
                 "pattern": {},
                 "spiral_tracking": {},
             }
-
     # 7️⃣ System prompt
     system_prompt = (
         "You are a warm, grounded companion in the RETVRN app.\n\n"
