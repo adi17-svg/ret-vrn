@@ -1506,6 +1506,34 @@ def process_reflection_core(
             mission = gamified.get("gamified_prompt")
         except Exception:
             pass
+    
+        # 🚨 TOOL MODE OVERRIDE — RUN TOOL INSTEAD OF GPT
+    if tool_id:
+        tool_response = run_tool(tool_id)
+
+        if tool_response:
+            # Optional: still save user message
+            if user_id:
+                try:
+                    save_conversation_message(user_id, "user", entry)
+                    save_conversation_message(
+                        user_id,
+                        "assistant",
+                        tool_response.get("text", ""),
+                    )
+                except Exception:
+                    pass
+
+            return {
+                "message": {
+                    "text": tool_response["text"],
+                    "tone": "listen",
+                },
+                "reflection": {},
+                "action": {},
+                "pattern": {},
+                "spiral_tracking": {},
+            }
 
     # 7️⃣ System prompt
     system_prompt = (
