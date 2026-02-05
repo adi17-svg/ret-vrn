@@ -50,36 +50,130 @@
 #         "step": "exit",
 #         "text": "We can pause here. Take care of yourself."
 #     }
-# backend/tools/low_mood/getting_going.py
+# # backend/tools/low_mood/getting_going.py
 
+# """
+# Low Mood Tool: Getting Going
+
+# Design:
+# - USE GPT (lightly, for framing only)
+# - Tool controls flow via steps
+# - User text is used, but NOT deeply analyzed
+# - Goal: gently move user toward tiny action
+
+# Flow:
+# start → normalize → tiny_ask → pick → act → close
+# """
+
+# from spiral_dynamics import client
+
+
+# SYSTEM_PROMPT = """
+# You are a calm, supportive mental health coach.
+# This is a guided exercise for low energy and procrastination.
+
+# Rules:
+# - Keep responses short
+# - Be gentle, never pushy
+# - Do NOT analyze deeply
+# - Always guide toward a very small action
+# - No advice dumping
+# """
+
+
+# def gpt_reply(user_text: str | None, instruction: str) -> str:
+#     messages = [
+#         {"role": "system", "content": SYSTEM_PROMPT},
+#         {
+#             "role": "user",
+#             "content": f"""
+# User said:
+# {user_text or "(no response)"}
+
+# Instruction:
+# {instruction}
+# """
+#         }
+#     ]
+
+#     resp = client.chat.completions.create(
+#         model="gpt-4.1",
+#         messages=messages,
+#         temperature=0.4,
+#     )
+
+#     return resp.choices[0].message.content.strip()
+
+
+# def handle(step: str | None, user_text: str | None):
+#     # STEP 0 — INTRO / NORMALIZE
+#     if step is None or step == "start":
+#         text = gpt_reply(
+#             user_text,
+#             "Normalize low energy. Make the user feel understood. No questions yet."
+#         )
+#         return {"step": "tiny_ask", "text": text}
+
+#     # STEP 1 — ASK FOR TINY THING
+#     if step == "tiny_ask":
+#         text = gpt_reply(
+#             user_text,
+#             "Ask for one very small thing they’ve been putting off. Keep it non-threatening."
+#         )
+#         return {"step": "pick", "text": text}
+
+#     # STEP 2 — PICK / SHRINK
+#     if step == "pick":
+#         text = gpt_reply(
+#             user_text,
+#             "Acknowledge their response and shrink it into a 30–60 second version."
+#         )
+#         return {"step": "act", "text": text}
+
+#     # STEP 3 — INVITE ACTION
+#     if step == "act":
+#         text = gpt_reply(
+#             user_text,
+#             "Invite them to try the tiny action now. Make it optional and safe."
+#         )
+#         return {"step": "close", "text": text}
+
+#     # STEP 4 — CLOSE
+#     if step == "close":
+#         text = gpt_reply(
+#             user_text,
+#             "Close warmly. Reinforce that effort matters even if they don’t act."
+#         )
+#         return {"step": "exit", "text": text}
+
+#     # FALLBACK
+#     return {
+#         "step": "exit",
+#         "text": "We can pause here. I’m here whenever you want to try again."
+#     }
 """
 Low Mood Tool: Getting Going
 
 Design:
-- USE GPT (lightly, for framing only)
-- Tool controls flow via steps
-- User text is used, but NOT deeply analyzed
-- Goal: gently move user toward tiny action
-
-Flow:
-start → normalize → tiny_ask → pick → act → close
+- USE GPT (light framing only)
+- Tool controls flow strictly
+- User text is acknowledged, not analyzed
+- ALWAYS move forward
 """
 
 from spiral_dynamics import client
-
 
 SYSTEM_PROMPT = """
 You are a calm, supportive mental health coach.
 This is a guided exercise for low energy and procrastination.
 
 Rules:
-- Keep responses short
-- Be gentle, never pushy
-- Do NOT analyze deeply
-- Always guide toward a very small action
-- No advice dumping
+- Keep responses short (2–4 lines)
+- Be warm, but directive
+- Do NOT over-validate
+- ALWAYS guide toward a tiny action
+- Never loop or stall
 """
-
 
 def gpt_reply(user_text: str | None, instruction: str) -> str:
     messages = [
@@ -90,7 +184,7 @@ def gpt_reply(user_text: str | None, instruction: str) -> str:
 User said:
 {user_text or "(no response)"}
 
-Instruction:
+Your task:
 {instruction}
 """
         }
@@ -106,48 +200,62 @@ Instruction:
 
 
 def handle(step: str | None, user_text: str | None):
-    # STEP 0 — INTRO / NORMALIZE
+
+    # STEP 0 — NORMALIZE (NO QUESTION)
     if step is None or step == "start":
         text = gpt_reply(
             user_text,
-            "Normalize low energy. Make the user feel understood. No questions yet."
+            "Normalize low energy. Say this happens to many people. Do NOT ask a question."
         )
         return {"step": "tiny_ask", "text": text}
 
-    # STEP 1 — ASK FOR TINY THING
+    # STEP 1 — ASK FOR BLOCK
     if step == "tiny_ask":
         text = gpt_reply(
             user_text,
-            "Ask for one very small thing they’ve been putting off. Keep it non-threatening."
+            "Ask what feels hardest to start. One simple question."
         )
-        return {"step": "pick", "text": text}
+        return {"step": "shrink", "text": text}
 
-    # STEP 2 — PICK / SHRINK
-    if step == "pick":
+    # STEP 2 — SHRINK (FORCE IT)
+    if step == "shrink":
         text = gpt_reply(
             user_text,
-            "Acknowledge their response and shrink it into a 30–60 second version."
+            """
+Acknowledge briefly.
+Then FORCE a shrink:
+Pick ONE concrete 30-second study action
+(e.g. open book, write title, read 1 line).
+Do NOT ask multiple questions.
+"""
         )
         return {"step": "act", "text": text}
 
-    # STEP 3 — INVITE ACTION
+    # STEP 3 — INVITE ACTION (NOW)
     if step == "act":
         text = gpt_reply(
             user_text,
-            "Invite them to try the tiny action now. Make it optional and safe."
+            """
+Invite them to try the tiny action now.
+Make it optional but present.
+Example: "Want to try it now, just for 30 seconds?"
+"""
         )
         return {"step": "close", "text": text}
 
-    # STEP 4 — CLOSE
+    # STEP 4 — CLOSE (NO LOOP)
     if step == "close":
         text = gpt_reply(
             user_text,
-            "Close warmly. Reinforce that effort matters even if they don’t act."
+            """
+Close warmly.
+Reinforce effort matters even if they don’t act.
+End the exercise.
+"""
         )
         return {"step": "exit", "text": text}
 
-    # FALLBACK
     return {
         "step": "exit",
-        "text": "We can pause here. I’m here whenever you want to try again."
+        "text": "We can pause here. You showed up, and that counts."
     }
