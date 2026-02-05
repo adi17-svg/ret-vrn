@@ -1,0 +1,345 @@
+body_checkin.py:
+"""
+Low Mood Tool: Body Check-In
+"""
+
+def handle(step: str | None):
+    if step in (None, "start"):
+        return {
+            "step": "scan",
+            "text": "Notice your shoulders, jaw, and hands."
+        }
+
+    if step == "scan":
+        return {
+            "step": "release",
+            "text": "Let one of these places soften slightly."
+        }
+
+    if step == "release":
+        return {
+            "step": "exit",
+            "text": "That’s enough for now."
+        }
+
+    return {
+        "step": "exit",
+        "text": "Stopping here is okay."
+    }
+breath_word.py:
+"""
+Low Mood Tool: Breath + Word
+"""
+
+def handle(step: str | None):
+    if step in (None, "start"):
+        return {
+            "step": "breathe",
+            "text": "Inhale: Here. Exhale: Now. Do this three times."
+        }
+
+    if step == "breathe":
+        return {
+            "step": "exit",
+            "text": "Let your breath return naturally."
+        }
+
+    return {
+        "step": "exit",
+        "text": "We can stop."
+    }
+
+gentle_distraction.py:
+"""
+Low Mood Tool: Gentle Distraction
+"""
+
+def handle(step: str | None):
+    if step in (None, "start"):
+        return {
+            "step": "choose",
+            "text": "Name one neutral activity you could do for 2 minutes."
+        }
+
+    if step == "choose":
+        return {
+            "step": "exit",
+            "text": "You can stop after 2 minutes."
+        }
+
+    return {
+        "step": "exit",
+        "text": "Pause here."
+    }
+
+grounding_54321.py:
+"""
+Low Mood Tool: Grounding 5-4-3-2-1
+"""
+
+def handle(step: str | None):
+    if step in (None, "start"):
+        return {"step": "five", "text": "Name 5 things you can see around you."}
+
+    if step == "five":
+        return {"step": "four", "text": "Notice 4 things you can feel with your body."}
+
+    if step == "four":
+        return {"step": "three", "text": "Listen for 3 different sounds."}
+
+    if step == "three":
+        return {"step": "two", "text": "Notice 2 things you can smell."}
+
+    if step == "two":
+        return {"step": "one", "text": "Name 1 thing you can taste or enjoy."}
+
+    return {
+        "step": "exit",
+        "text": "You’re here, in this moment. That’s enough."
+    }
+
+it_makes_sense.py:
+"""
+Low Mood Tool: It Makes Sense
+"""
+
+def handle(step: str | None):
+    if step in (None, "start"):
+        return {
+            "step": "validate",
+            "text": "Given what you’re dealing with, this reaction makes sense."
+        }
+
+    if step == "validate":
+        return {
+            "step": "exit",
+            "text": "You’re not overreacting."
+        }
+
+    return {
+        "step": "exit",
+        "text": "Pause here."
+    }
+
+lower_the_bar.py:
+"""
+Low Mood Tool: Lower the Bar
+"""
+
+def handle(step: str | None):
+    if step in (None, "start"):
+        return {
+            "step": "minimum",
+            "text": "What’s the absolute minimum that would be enough today?"
+        }
+
+    if step == "minimum":
+        return {
+            "step": "exit",
+            "text": "That is enough."
+        }
+
+    return {
+        "step": "exit",
+        "text": "We can stop here."
+    }
+name_the_feeling.py:
+"""
+Low Mood Tool: Name the Feeling
+"""
+
+def handle(step: str | None):
+    if step in (None, "start"):
+        return {
+            "step": "name",
+            "text": "Right now this feels like… (no story, no why)."
+        }
+
+    if step == "name":
+        return {
+            "step": "exit",
+            "text": "Naming it is enough."
+        }
+
+    return {
+        "step": "exit",
+        "text": "We can stop here."
+    }
+no_decision_now.py:
+"""
+Low Mood Tool: No Decision Right Now
+"""
+
+def handle(step: str | None):
+    if step in (None, "start"):
+        return {
+            "step": "name",
+            "text": "Name one thing you don’t need to decide right now."
+        }
+
+    if step == "name":
+        return {
+            "step": "exit",
+            "text": "You can come back to it later."
+        }
+
+    return {
+        "step": "exit",
+        "text": "Stopping here is okay."
+    }
+one_safe_thing.py:
+"""
+Low Mood Tool: One Safe Thing
+"""
+
+def handle(step: str | None):
+    if step in (None, "start"):
+        return {
+            "step": "identify",
+            "text": "Name one thing that feels safe right now."
+        }
+
+    if step == "identify":
+        return {
+            "step": "focus",
+            "text": "Let your attention rest there briefly."
+        }
+
+    if step == "focus":
+        return {
+            "step": "exit",
+            "text": "You’re safe in this moment."
+        }
+
+    return {
+        "step": "exit",
+        "text": "Stopping here is okay."
+    }
+self_compassion.py:
+"""
+Low Mood Tool: Self Compassion
+"""
+
+def handle(step: str | None):
+    if step in (None, "start"):
+        return {
+            "step": "acknowledge",
+            "text": "This is a hard moment. You’re not weak for feeling this way."
+        }
+
+    if step == "acknowledge":
+        return {
+            "step": "normalize",
+            "text": "Many people feel like this sometimes. You’re not alone."
+        }
+
+    if step == "normalize":
+        return {
+            "step": "exit",
+            "text": "You don’t have to fix anything right now."
+        }
+
+    return {
+        "step": "exit",
+        "text": "We can pause here."
+    }
+thought_parking.py:
+"""
+Low Mood Tool: Thought Parking
+"""
+
+def handle(step: str | None):
+    if step in (None, "start"):
+        return {
+            "step": "park",
+            "text": "Name one heavy thought you can set aside for now."
+        }
+
+    if step == "park":
+        return {
+            "step": "exit",
+            "text": "You don’t need to solve it right now."
+        }
+
+    return {
+        "step": "exit",
+        "text": "Pause here."
+    }
+tiny_relief.py:
+"""
+Low Mood Tool: Tiny Relief
+"""
+
+def handle(step: str | None):
+    if step in (None, "start"):
+        return {
+            "step": "find",
+            "text": "Is there anything that feels even 1% okay?"
+        }
+
+    if step == "find":
+        return {
+            "step": "stay",
+            "text": "Stay with that feeling for about 10 seconds."
+        }
+
+    if step == "stay":
+        return {
+            "step": "exit",
+            "text": "That’s enough for now."
+        }
+
+    return {
+        "step": "exit",
+        "text": "We can pause."
+    }
+today_is_heavy.py:
+"""
+Low Mood Tool: Today Is Heavy
+"""
+
+def handle(step: str | None):
+    if step in (None, "start"):
+        return {
+            "step": "acknowledge",
+            "text": "Some days feel heavier than others. Today might be one."
+        }
+
+    if step == "acknowledge":
+        return {
+            "step": "exit",
+            "text": "You’re allowed to go slower today."
+        }
+
+    return {
+        "step": "exit",
+        "text": "That’s enough."
+    }
+venting.py:
+"""
+Low Mood Tool: Vent Without Fixing
+"""
+
+def handle(step: str | None):
+    if step in (None, "start"):
+        return {
+            "step": "vent",
+            "text": "You can let things out here. No fixing. No judging."
+        }
+
+    if step == "vent":
+        return {
+            "step": "contain",
+            "text": "Thank you for letting that out."
+        }
+
+    if step == "contain":
+        return {
+            "step": "exit",
+            "text": "You don’t have to solve it."
+        }
+
+    return {
+        "step": "exit",
+        "text": "We can pause here."
+    }

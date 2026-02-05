@@ -121,7 +121,6 @@
 #     # ====================
 #     return None
 # backend/tools/tool_runner.py
-
 """
 Central dispatcher for all tools.
 
@@ -151,7 +150,7 @@ def run_tool(
 
     tool_id   → which tool
     step      → current step in tool flow
-    user_text → whatever user typed (not analyzed deeply)
+    user_text → whatever user typed (used only for framing)
     """
 
     # ====================

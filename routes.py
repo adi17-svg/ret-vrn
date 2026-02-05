@@ -1664,22 +1664,19 @@ def home():
 #     result["audiourl"] = audio_url
 
 #     return jsonify(result)
-
 @bp.route("/merged", methods=["POST"])
 def merged():
     data = request.json or {}
 
     entry = (data.get("text") or "").strip()
-    if not entry:
-        return jsonify({"error": "Missing text"}), 400
 
     user_id = data.get("user_id")
     last_stage = data.get("last_stage", "")
     reply_to = data.get("reply_to", "")
 
-    # 🔹 TOOL CONTEXT (ONLY FOR TOOLS)
+    # 🔹 TOOL CONTEXT
     tool_id = data.get("tool_id")          # None for main chat
-    tool_step = data.get("tool_step")      # None for first step
+    tool_step = data.get("tool_step")      # None on first step
 
     # =========================
     # 🧠 TOOL MODE
@@ -1688,16 +1685,18 @@ def merged():
         tool_response = run_tool(
             tool_id=tool_id,
             step=tool_step,
-            user_text=entry,
+            user_text=entry or None,   # 👈 allow empty
         )
 
         if not tool_response:
             return jsonify({"error": "Invalid tool"}), 400
 
-        # save conversation (optional but OK)
+        # save conversation (optional, safe)
         if user_id:
             try:
-                save_conversation_message(user_id, "user", entry)
+                if entry:
+                    save_conversation_message(user_id, "user", entry)
+
                 save_conversation_message(
                     user_id,
                     "assistant",
@@ -1724,6 +1723,9 @@ def merged():
     # =========================
     # 💬 MAIN CHAT (UNCHANGED)
     # =========================
+    if not entry:
+        return jsonify({"error": "Missing text"}), 400
+
     result = process_reflection_core(
         entry=entry,
         user_id=user_id,
@@ -1733,13 +1735,12 @@ def merged():
     )
 
     audio_url = (
-        f"{request.url_root.rstrip('/')}"
-        f"/speak-stream?text={quote_plus(result['message']['text'])}"
+        f"{request.url_root.rstrip('/')}speak-stream"
+        f"?text={quote_plus(result['message']['text'])}"
     )
     result["audiourl"] = audio_url
 
     return jsonify(result)
-
 
 # 👂 AUDIO → TEXT ONLY (NO THINKING)
 @bp.route("/reflect_transcription", methods=["POST"])

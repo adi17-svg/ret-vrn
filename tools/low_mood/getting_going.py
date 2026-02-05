@@ -53,137 +53,101 @@
 # backend/tools/low_mood/getting_going.py
 
 """
-Low Mood Tool: Getting Going with Action (Wysa-style)
+Low Mood Tool: Getting Going
+
+Design:
+- USE GPT (lightly, for framing only)
+- Tool controls flow via steps
+- User text is used, but NOT deeply analyzed
+- Goal: gently move user toward tiny action
+
+Flow:
+start → normalize → tiny_ask → pick → act → close
+"""
+
+from spiral_dynamics import client
+
+
+SYSTEM_PROMPT = """
+You are a calm, supportive mental health coach.
+This is a guided exercise for low energy and procrastination.
 
 Rules:
-- NO GPT
-- NO interpretation
-- Simple bucket logic
-- Predictable, safe flow
-- User input is acknowledged, not analyzed
+- Keep responses short
+- Be gentle, never pushy
+- Do NOT analyze deeply
+- Always guide toward a very small action
+- No advice dumping
 """
 
 
-def bucketize(text: str | None) -> str:
-    """
-    Very simple buckets.
-    This is NOT NLP. This is safety routing.
-    """
-    if not text or not text.strip():
-        return "silence"
+def gpt_reply(user_text: str | None, instruction: str) -> str:
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": f"""
+User said:
+{user_text or "(no response)"}
 
-    t = text.lower().strip()
+Instruction:
+{instruction}
+"""
+        }
+    ]
 
-    if len(t.split()) <= 2:
-        return "unclear"
+    resp = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=messages,
+        temperature=0.4,
+    )
 
-    if "everything" in t or "all" in t:
-        return "overwhelmed"
-
-    if t in ["yes", "yeah", "ok", "okay", "sure"]:
-        return "yes"
-
-    if "no" in t or "not now" in t:
-        return "no"
-
-    return "something"
+    return resp.choices[0].message.content.strip()
 
 
-def handle(step: str | None = None, user_text: str | None = None):
-    """
-    step: current step of the tool
-    user_text: whatever the user typed (meaning ignored, bucketed)
-    returns: next step + response text
-    """
-
-    # --------------------------------------------------
-    # STEP 0 — INTRO
-    # --------------------------------------------------
+def handle(step: str | None, user_text: str | None):
+    # STEP 0 — INTRO / NORMALIZE
     if step is None or step == "start":
-        return {
-            "step": "ask_tiny",
-            "text": (
-                "When energy is low, even small things feel heavy. "
-                "What’s one tiny thing you’ve been putting off?"
-            )
-        }
+        text = gpt_reply(
+            user_text,
+            "Normalize low energy. Make the user feel understood. No questions yet."
+        )
+        return {"step": "tiny_ask", "text": text}
 
-    # --------------------------------------------------
-    # STEP 1 — USER RESPONDS (ANYTHING)
-    # --------------------------------------------------
-    if step == "ask_tiny":
-        bucket = bucketize(user_text)
+    # STEP 1 — ASK FOR TINY THING
+    if step == "tiny_ask":
+        text = gpt_reply(
+            user_text,
+            "Ask for one very small thing they’ve been putting off. Keep it non-threatening."
+        )
+        return {"step": "pick", "text": text}
 
-        # User unsure / overwhelmed / silent
-        if bucket in ["silence", "unclear", "overwhelmed"]:
-            return {
-                "step": "normalize",
-                "text": (
-                    "That makes sense. When everything feels heavy, "
-                    "it’s really hard to pick just one thing."
-                )
-            }
+    # STEP 2 — PICK / SHRINK
+    if step == "pick":
+        text = gpt_reply(
+            user_text,
+            "Acknowledge their response and shrink it into a 30–60 second version."
+        )
+        return {"step": "act", "text": text}
 
-        # User said something concrete (or at least something)
-        return {
-            "step": "shrink",
-            "text": (
-                "Okay. Let’s make it even smaller. "
-                "What’s a version of that which takes under 30 seconds?"
-            )
-        }
+    # STEP 3 — INVITE ACTION
+    if step == "act":
+        text = gpt_reply(
+            user_text,
+            "Invite them to try the tiny action now. Make it optional and safe."
+        )
+        return {"step": "close", "text": text}
 
-    # --------------------------------------------------
-    # STEP 2 — NORMALIZE + OFFER EXAMPLES
-    # --------------------------------------------------
-    if step == "normalize":
-        return {
-            "step": "suggest",
-            "text": (
-                "We can choose something very small — like standing up, "
-                "opening one app, or taking one deep breath."
-            )
-        }
+    # STEP 4 — CLOSE
+    if step == "close":
+        text = gpt_reply(
+            user_text,
+            "Close warmly. Reinforce that effort matters even if they don’t act."
+        )
+        return {"step": "exit", "text": text}
 
-    # --------------------------------------------------
-    # STEP 3 — INVITE ACTION (NO PRESSURE)
-    # --------------------------------------------------
-    if step == "suggest" or step == "shrink":
-        return {
-            "step": "invite",
-            "text": (
-                "If it feels okay, try doing just 30 seconds of that. "
-                "No need to do more."
-            )
-        }
-
-    # --------------------------------------------------
-    # STEP 4 — CLOSE (SAFE EXIT)
-    # --------------------------------------------------
-    if step == "invite":
-        bucket = bucketize(user_text)
-
-        if bucket == "no":
-            return {
-                "step": "close",
-                "text": (
-                    "That’s okay. There’s no rush. "
-                    "Even thinking about it counts."
-                )
-            }
-
-        return {
-            "step": "close",
-            "text": (
-                "You can stop anytime. "
-                "I’m here, and you did enough for now."
-            )
-        }
-
-    # --------------------------------------------------
     # FALLBACK
-    # --------------------------------------------------
     return {
-        "step": "close",
-        "text": "We can pause here. Take care of yourself."
+        "step": "exit",
+        "text": "We can pause here. I’m here whenever you want to try again."
     }
