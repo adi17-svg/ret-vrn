@@ -1636,27 +1636,102 @@ def home():
 
 #     return jsonify(result)
 
+# @bp.route("/merged", methods=["POST"])
+# def merged():
+#     data = request.json or {}
+#     entry = (data.get("text") or "").strip()
+
+#     if not entry:
+#         return jsonify({"error": "Missing text"}), 400
+
+#     # 🔹 NEW (SAFE, OPTIONAL)
+#     tool_id = data.get("tool_id")  # main chat मध्ये None असेल
+#     tool = get_tool(tool_id)   # ✅ ADD THIS
+
+#     result = process_reflection_core(
+#         entry=entry,
+#         user_id=data.get("user_id"),
+#         last_stage=data.get("last_stage", ""),
+#         reply_to=data.get("reply_to", ""),
+#         tool_id=tool_id,   # 🔹 NEW
+#     )
+
+#     # Optional voice reply (UNCHANGED)
+#     audio_url = (
+#         f"{request.url_root.rstrip('/')}"
+#         f"/speak-stream?text={quote_plus(result['message']['text'])}"
+#     )
+#     result["audiourl"] = audio_url
+
+#     return jsonify(result)
+
 @bp.route("/merged", methods=["POST"])
 def merged():
     data = request.json or {}
-    entry = (data.get("text") or "").strip()
 
+    entry = (data.get("text") or "").strip()
     if not entry:
         return jsonify({"error": "Missing text"}), 400
 
-    # 🔹 NEW (SAFE, OPTIONAL)
-    tool_id = data.get("tool_id")  # main chat मध्ये None असेल
-    tool = get_tool(tool_id)   # ✅ ADD THIS
+    user_id = data.get("user_id")
+    last_stage = data.get("last_stage", "")
+    reply_to = data.get("reply_to", "")
 
+    # 🔹 TOOL CONTEXT (ONLY FOR TOOLS)
+    tool_id = data.get("tool_id")          # None for main chat
+    tool_step = data.get("tool_step")      # None for first step
+
+    # =========================
+    # 🧠 TOOL MODE
+    # =========================
+    if tool_id:
+        tool_response = run_tool(
+            tool_id=tool_id,
+            step=tool_step,
+            user_text=entry,
+        )
+
+        if not tool_response:
+            return jsonify({"error": "Invalid tool"}), 400
+
+        # save conversation (optional but OK)
+        if user_id:
+            try:
+                save_conversation_message(user_id, "user", entry)
+                save_conversation_message(
+                    user_id,
+                    "assistant",
+                    tool_response.get("text", ""),
+                )
+            except Exception:
+                pass
+
+        return jsonify({
+            "message": {
+                "text": tool_response["text"],
+                "tone": "listen",
+            },
+            "tool": {
+                "id": tool_id,
+                "step": tool_response.get("step"),
+            },
+            "reflection": {},
+            "action": {},
+            "pattern": {},
+            "spiral_tracking": {},
+        })
+
+    # =========================
+    # 💬 MAIN CHAT (UNCHANGED)
+    # =========================
     result = process_reflection_core(
         entry=entry,
-        user_id=data.get("user_id"),
-        last_stage=data.get("last_stage", ""),
-        reply_to=data.get("reply_to", ""),
-        tool_id=tool_id,   # 🔹 NEW
+        user_id=user_id,
+        last_stage=last_stage,
+        reply_to=reply_to,
+        tool_id=None,
     )
 
-    # Optional voice reply (UNCHANGED)
     audio_url = (
         f"{request.url_root.rstrip('/')}"
         f"/speak-stream?text={quote_plus(result['message']['text'])}"
@@ -1664,7 +1739,6 @@ def merged():
     result["audiourl"] = audio_url
 
     return jsonify(result)
-
 
 
 # 👂 AUDIO → TEXT ONLY (NO THINKING)
