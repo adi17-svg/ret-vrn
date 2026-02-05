@@ -152,51 +152,33 @@
 #         "text": "We can pause here. I’m here whenever you want to try again."
 #     }
 """
-Low Mood Tool: Getting Going
+Low Mood Tool: Getting Going With Action
 
-Design:
-- USE GPT (light framing only)
-- Tool controls flow strictly
-- User text is acknowledged, not analyzed
-- ALWAYS move forward
+Design principles:
+- GPT used only for tone + continuity
+- Tool controls the flow strictly
+- No step ever repeats the same question
+- Always acknowledge → reframe → advance
 """
 
 from spiral_dynamics import client
 
 SYSTEM_PROMPT = """
 You are a calm, supportive mental health coach.
-This is a guided exercise for low energy and procrastination.
 
 Rules:
 - Keep responses short (2–4 lines)
-- Be warm, but directive
-- Do NOT over-validate
-- ALWAYS guide toward a tiny action
-- Never loop or stall
+- Sound natural and human
+- Do NOT repeat the same question
+- Do NOT analyze deeply
+- ALWAYS move the exercise forward
 """
 
 def gpt_reply(user_text: str | None, instruction: str) -> str:
-    """
-    GPT gets:
-    - system rules
-    - real user message (for continuity)
-    - instruction that controls the step
-    """
-
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-
-        # Real user input (may be empty on first step)
-        {
-            "role": "user",
-            "content": user_text or ""
-        },
-
-        # Tool instruction (NOT framed as user text)
-        {
-            "role": "assistant",
-            "content": instruction
-        }
+        {"role": "user", "content": user_text or ""},
+        {"role": "assistant", "content": instruction}
     ]
 
     resp = client.chat.completions.create(
@@ -209,50 +191,51 @@ def gpt_reply(user_text: str | None, instruction: str) -> str:
 
 
 def handle(step: str | None, user_text: str | None):
-    """
-    step: current tool step
-    user_text: latest user message (for continuity only)
-    returns: next step + text
-    """
 
-    # STEP 0 — NORMALIZE (NO QUESTION)
+    # STEP 0 — INTRO / NORMALIZE (NO USER DEPENDENCE)
     if step is None or step == "start":
         text = gpt_reply(
             user_text,
-            "Normalize low energy. Say this happens to many people. Do NOT ask a question."
+            """
+Normalize low energy.
+Explain we start small.
+End by asking what feels hardest to begin.
+"""
         )
-        return {"step": "tiny_ask", "text": text}
+        return {"step": "ack", "text": text}
 
-    # STEP 1 — ASK FOR BLOCK
-    if step == "tiny_ask":
+    # STEP 1 — ACKNOWLEDGE USER RESPONSE (NO REPEAT)
+    if step == "ack":
         text = gpt_reply(
             user_text,
-            "Ask what feels hardest to start. One simple question."
+            """
+Acknowledge what the user said in one line.
+Do NOT repeat the same question.
+Gently reflect difficulty.
+"""
         )
         return {"step": "shrink", "text": text}
 
-    # STEP 2 — SHRINK (FORCE IT)
+    # STEP 2 — SHRINK THE TASK
     if step == "shrink":
         text = gpt_reply(
             user_text,
             """
 Acknowledge briefly.
-Then FORCE a shrink:
-Pick ONE concrete 30-second study action
-(e.g. open book, write title, read 1 line).
-Do NOT ask multiple questions.
+Then propose ONE extremely small action
+that takes about 30 seconds.
+No questions.
 """
         )
         return {"step": "act", "text": text}
 
-    # STEP 3 — INVITE ACTION (NOW)
+    # STEP 3 — INVITE ACTION (OPTIONAL, NOW)
     if step == "act":
         text = gpt_reply(
             user_text,
             """
 Invite them to try the tiny action now.
-Make it optional but present.
-Example: "Want to try it now, just for 30 seconds?"
+Make it optional and low pressure.
 """
         )
         return {"step": "close", "text": text}
@@ -263,7 +246,7 @@ Example: "Want to try it now, just for 30 seconds?"
             user_text,
             """
 Close warmly.
-Reinforce effort matters even if they don’t act.
+Reinforce that effort or showing up matters.
 End the exercise.
 """
         )
@@ -272,5 +255,5 @@ End the exercise.
     # SAFETY FALLBACK
     return {
         "step": "exit",
-        "text": "We can pause here. You showed up, and that counts."
+        "text": "We can pause here. Showing up is enough for now."
     }
