@@ -1,27 +1,28 @@
-"""
-Low Mood Tool: Vent Without Fixing
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "vent",
-            "text": "You can let things out here. No fixing. No judging."
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite sharing freely here. No fixing. No judging."
+            )
         }
 
     if step == "vent":
         return {
             "step": "contain",
-            "text": "Thank you for letting that out."
-        }
-
-    if step == "contain":
-        return {
-            "step": "exit",
-            "text": "You don’t have to solve it."
+            "text": tool_gpt_reply(
+                user_text,
+                "Thank them for letting it out."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "We can pause here."
+        "text": tool_gpt_reply(
+            user_text,
+            "You don’t have to solve anything right now."
+        )
     }

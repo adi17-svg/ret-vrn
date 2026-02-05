@@ -1,24 +1,40 @@
-"""
-Low Mood Tool: Grounding 5-4-3-2-1
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
-        return {"step": "five", "text": "Name 5 things you can see around you."}
+        return {
+            "step": "five",
+            "text": tool_gpt_reply(user_text, "Invite naming five things you can see.")
+        }
 
     if step == "five":
-        return {"step": "four", "text": "Notice 4 things you can feel with your body."}
+        return {
+            "step": "four",
+            "text": tool_gpt_reply(user_text, "Invite noticing four physical sensations.")
+        }
 
     if step == "four":
-        return {"step": "three", "text": "Listen for 3 different sounds."}
+        return {
+            "step": "three",
+            "text": tool_gpt_reply(user_text, "Invite listening for three different sounds.")
+        }
 
     if step == "three":
-        return {"step": "two", "text": "Notice 2 things you can smell."}
+        return {
+            "step": "two",
+            "text": tool_gpt_reply(user_text, "Invite noticing two smells.")
+        }
 
     if step == "two":
-        return {"step": "one", "text": "Name 1 thing you can taste or enjoy."}
+        return {
+            "step": "one",
+            "text": tool_gpt_reply(user_text, "Invite noticing one taste or pleasant sensation.")
+        }
 
     return {
         "step": "exit",
-        "text": "You’re here, in this moment. That’s enough."
+        "text": tool_gpt_reply(
+            user_text,
+            "You’re here, in this moment. That’s enough."
+        )
     }

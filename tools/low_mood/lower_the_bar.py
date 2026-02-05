@@ -1,21 +1,25 @@
-"""
-Low Mood Tool: Lower the Bar
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "minimum",
-            "text": "What’s the absolute minimum that would be enough today?"
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite them to consider the absolute minimum that would be enough for today."
+            )
         }
 
     if step == "minimum":
         return {
             "step": "exit",
-            "text": "That is enough."
+            "text": tool_gpt_reply(
+                user_text,
+                "Affirm that this minimum is enough for now."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "We can stop here."
+        "text": tool_gpt_reply(user_text, "We can stop here.")
     }

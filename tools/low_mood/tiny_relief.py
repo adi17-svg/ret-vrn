@@ -1,27 +1,28 @@
-"""
-Low Mood Tool: Tiny Relief
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "find",
-            "text": "Is there anything that feels even 1% okay?"
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite noticing anything that feels even 1% okay right now."
+            )
         }
 
     if step == "find":
         return {
             "step": "stay",
-            "text": "Stay with that feeling for about 10 seconds."
-        }
-
-    if step == "stay":
-        return {
-            "step": "exit",
-            "text": "That’s enough for now."
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite staying with that feeling for about ten seconds."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "We can pause."
+        "text": tool_gpt_reply(
+            user_text,
+            "That’s enough for now."
+        )
     }

@@ -1,27 +1,28 @@
-"""
-Low Mood Tool: Body Check-In
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "scan",
-            "text": "Notice your shoulders, jaw, and hands."
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite noticing shoulders, jaw, and hands without changing anything."
+            )
         }
 
     if step == "scan":
         return {
             "step": "release",
-            "text": "Let one of these places soften slightly."
-        }
-
-    if step == "release":
-        return {
-            "step": "exit",
-            "text": "That’s enough for now."
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite softening just one area slightly, if it feels okay."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "Stopping here is okay."
+        "text": tool_gpt_reply(
+            user_text,
+            "That’s enough for now. You don’t need to do more."
+        )
     }

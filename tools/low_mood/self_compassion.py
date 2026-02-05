@@ -1,27 +1,28 @@
-"""
-Low Mood Tool: Self Compassion
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "acknowledge",
-            "text": "This is a hard moment. You’re not weak for feeling this way."
+            "text": tool_gpt_reply(
+                user_text,
+                "Acknowledge that this is a hard moment."
+            )
         }
 
     if step == "acknowledge":
         return {
             "step": "normalize",
-            "text": "Many people feel like this sometimes. You’re not alone."
-        }
-
-    if step == "normalize":
-        return {
-            "step": "exit",
-            "text": "You don’t have to fix anything right now."
+            "text": tool_gpt_reply(
+                user_text,
+                "Normalize that many people feel this way sometimes."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "We can pause here."
+        "text": tool_gpt_reply(
+            user_text,
+            "You don’t need to fix anything right now."
+        )
     }

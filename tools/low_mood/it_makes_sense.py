@@ -1,21 +1,19 @@
-"""
-Low Mood Tool: It Makes Sense
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "validate",
-            "text": "Given what you’re dealing with, this reaction makes sense."
-        }
-
-    if step == "validate":
-        return {
-            "step": "exit",
-            "text": "You’re not overreacting."
+            "text": tool_gpt_reply(
+                user_text,
+                "Validate that their reaction makes sense given what they’re dealing with."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "Pause here."
+        "text": tool_gpt_reply(
+            user_text,
+            "They’re not overreacting."
+        )
     }

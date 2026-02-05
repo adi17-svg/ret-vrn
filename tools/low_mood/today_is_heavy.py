@@ -1,21 +1,19 @@
-"""
-Low Mood Tool: Today Is Heavy
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "acknowledge",
-            "text": "Some days feel heavier than others. Today might be one."
-        }
-
-    if step == "acknowledge":
-        return {
-            "step": "exit",
-            "text": "You’re allowed to go slower today."
+            "text": tool_gpt_reply(
+                user_text,
+                "Acknowledge that some days feel heavier than others."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "That’s enough."
+        "text": tool_gpt_reply(
+            user_text,
+            "You’re allowed to go slower today."
+        )
     }
