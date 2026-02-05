@@ -1,10 +1,14 @@
-def handle(step=None):
+from tool_gpt_anxiety import anxiety_gpt_reply
+
+def handle(step=None, user_text=None):
     return {
-        "text": (
-            "If it feels okay, gently name the fear.\n\n"
-            "Just a few words.\n"
-            "No explaining. No fixing.\n\n"
-            "Naming alone can soften its grip."
-        ),
-        "next_step": None,
+        "step": "exit",
+        "text": anxiety_gpt_reply(
+            user_text,
+            """
+Invite gently naming the fear in a few simple words.
+No explanation or fixing.
+Explain that naming alone can soften its intensity.
+"""
+        )
     }

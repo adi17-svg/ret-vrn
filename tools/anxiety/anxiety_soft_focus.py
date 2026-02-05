@@ -1,10 +1,14 @@
-def handle(step=None):
+from tool_gpt_anxiety import anxiety_gpt_reply
+
+def handle(step=None, user_text=None):
     return {
-        "text": (
-            "Let your eyes rest on one gentle thing.\n\n"
-            "A color. A shape. Something neutral.\n"
-            "No scanning. Just resting.\n\n"
-            "Stay here for a few breaths."
-        ),
-        "next_step": None,
+        "step": "exit",
+        "text": anxiety_gpt_reply(
+            user_text,
+            """
+Guide the eyes to rest on one neutral or gentle object.
+Avoid scanning the room.
+Encourage soft, relaxed focus for a few breaths.
+"""
+        )
     }

@@ -1,10 +1,14 @@
-def handle(step=None):
+from tool_gpt_anxiety import anxiety_gpt_reply
+
+def handle(step=None, user_text=None):
     return {
-        "text": (
-            "You don’t need to think about everything right now.\n\n"
-            "If worries show up, you can say:\n"
-            "“Not now. I’ll come back later.”\n\n"
-            "For now, just be here."
-        ),
-        "next_step": None,
+        "step": "exit",
+        "text": anxiety_gpt_reply(
+            user_text,
+            """
+Explain that not every worry needs attention right now.
+Offer the phrase “not now, I’ll come back later.”
+Encourage returning attention to the present moment.
+"""
+        )
     }

@@ -1,10 +1,14 @@
-def handle(step=None):
+from tool_gpt_anxiety import anxiety_gpt_reply
+
+def handle(step=None, user_text=None):
     return {
-        "text": (
-            "You are allowed to slow down.\n\n"
-            "There is no need to rush this moment.\n"
-            "Let your body move at a gentler pace.\n\n"
-            "That is enough for now."
-        ),
-        "next_step": None,
+        "step": "exit",
+        "text": anxiety_gpt_reply(
+            user_text,
+            """
+Reassure that slowing down is allowed.
+Say there is no need to rush this moment.
+Invite the body to move at a gentler pace.
+"""
+        )
     }

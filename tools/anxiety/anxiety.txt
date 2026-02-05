@@ -1,0 +1,112 @@
+anxiety_body_not_danger.py:
+def handle(step=None):
+    return {
+        "text": (
+            "Anxiety can create strong body sensations.\n\n"
+            "Fast heartbeat, tight chest, shaky breath —\n"
+            "these are uncomfortable, but not dangerous.\n\n"
+            "Your body is trying to protect you."
+        ),
+        "next_step": None,
+    }
+anxiety_breath_478.py:
+def handle(step=None):
+    return {
+        "text": (
+            "Let’s slow the breath.\n\n"
+            "Inhale through your nose for 4.\n"
+            "Hold gently for 7.\n"
+            "Exhale slowly through your mouth for 8.\n\n"
+            "We can repeat this a few times."
+        ),
+        "next_step": None,
+    }
+
+anxiety_exhale_focus.py:
+def handle(step=None):
+    return {
+        "text": (
+            "You don’t need to change much.\n\n"
+            "Just let the exhale be a little longer than the inhale.\n"
+            "Slowly… gently…\n\n"
+            "Nothing else to do."
+        ),
+        "next_step": None,
+    }
+anxiety_grounding_touch.py:
+def handle(step=None):
+    return {
+        "text": (
+            "Bring attention to something you can touch.\n\n"
+            "Feel the chair supporting you.\n"
+            "Feel your feet on the ground.\n\n"
+            "Let your body notice that support."
+        ),
+        "next_step": None,
+    }
+anxiety_name_fear.py:
+def handle(step=None):
+    return {
+        "text": (
+            "If it feels okay, gently name the fear.\n\n"
+            "Just a few words.\n"
+            "No explaining. No fixing.\n\n"
+            "Naming alone can soften its grip."
+        ),
+        "next_step": None,
+    }
+anxiety_not_now.py:
+def handle(step=None):
+    return {
+        "text": (
+            "You don’t need to think about everything right now.\n\n"
+            "If worries show up, you can say:\n"
+            "“Not now. I’ll come back later.”\n\n"
+            "For now, just be here."
+        ),
+        "next_step": None,
+    }
+anxiety_slow_down.py:
+def handle(step=None):
+    return {
+        "text": (
+            "You are allowed to slow down.\n\n"
+            "There is no need to rush this moment.\n"
+            "Let your body move at a gentler pace.\n\n"
+            "That is enough for now."
+        ),
+        "next_step": None,
+    }
+anxiety_soft_focus.py:
+def handle(step=None):
+    return {
+        "text": (
+            "Let your eyes rest on one gentle thing.\n\n"
+            "A color. A shape. Something neutral.\n"
+            "No scanning. Just resting.\n\n"
+            "Stay here for a few breaths."
+        ),
+        "next_step": None,
+    }
+anxiety_this_will_pass.py:
+def handle(step=None):
+    return {
+        "text": (
+            "This feeling can be intense.\n\n"
+            "And it is a state — not a permanent condition.\n"
+            "It will change, even if slowly.\n\n"
+            "You don’t have to rush it."
+        ),
+        "next_step": None,
+    }
+anxiety_you_are_safe.py:
+def handle(step=None):
+    return {
+        "text": (
+            "Pause for a moment.\n\n"
+            "Right now, in this moment, you are safe.\n"
+            "Nothing needs to be solved immediately.\n\n"
+            "Let that land."
+        ),
+        "next_step": None,
+    }

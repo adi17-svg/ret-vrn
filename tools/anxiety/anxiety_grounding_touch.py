@@ -1,10 +1,14 @@
-def handle(step=None):
+from tool_gpt_anxiety import anxiety_gpt_reply
+
+def handle(step=None, user_text=None):
     return {
-        "text": (
-            "Bring attention to something you can touch.\n\n"
-            "Feel the chair supporting you.\n"
-            "Feel your feet on the ground.\n\n"
-            "Let your body notice that support."
-        ),
-        "next_step": None,
+        "step": "exit",
+        "text": anxiety_gpt_reply(
+            user_text,
+            """
+Guide attention to physical contact.
+Mention feeling the chair, the floor, or the ground.
+Let the body notice support and stability.
+"""
+        )
     }

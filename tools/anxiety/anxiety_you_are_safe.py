@@ -1,10 +1,14 @@
-def handle(step=None):
+from tool_gpt_anxiety import anxiety_gpt_reply
+
+def handle(step=None, user_text=None):
     return {
-        "text": (
-            "Pause for a moment.\n\n"
-            "Right now, in this moment, you are safe.\n"
-            "Nothing needs to be solved immediately.\n\n"
-            "Let that land."
-        ),
-        "next_step": None,
+        "step": "exit",
+        "text": anxiety_gpt_reply(
+            user_text,
+            """
+Invite a brief pause.
+Reassure that in this moment, they are safe.
+Say nothing needs to be solved immediately.
+"""
+        )
     }

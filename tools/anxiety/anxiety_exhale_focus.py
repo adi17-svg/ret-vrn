@@ -1,10 +1,14 @@
-def handle(step=None):
+from tool_gpt_anxiety import anxiety_gpt_reply
+
+def handle(step=None, user_text=None):
     return {
-        "text": (
-            "You don’t need to change much.\n\n"
-            "Just let the exhale be a little longer than the inhale.\n"
-            "Slowly… gently…\n\n"
-            "Nothing else to do."
-        ),
-        "next_step": None,
+        "step": "exit",
+        "text": anxiety_gpt_reply(
+            user_text,
+            """
+Encourage letting the exhale be slightly longer than the inhale.
+No need to control the breath.
+Use slow, gentle language that reduces effort.
+"""
+        )
     }

@@ -1,10 +1,15 @@
-def handle(step=None):
+from tool_gpt_anxiety import anxiety_gpt_reply
+
+def handle(step=None, user_text=None):
     return {
-        "text": (
-            "Anxiety can create strong body sensations.\n\n"
-            "Fast heartbeat, tight chest, shaky breath —\n"
-            "these are uncomfortable, but not dangerous.\n\n"
-            "Your body is trying to protect you."
-        ),
-        "next_step": None,
+        "step": "exit",
+        "text": anxiety_gpt_reply(
+            user_text,
+            """
+Explain that anxiety can create strong body sensations like fast heartbeat
+or tight chest.
+Reassure that these sensations are uncomfortable but not dangerous.
+Say the body is trying to protect them.
+"""
+        )
     }
