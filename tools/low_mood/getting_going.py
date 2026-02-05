@@ -176,17 +176,26 @@ Rules:
 """
 
 def gpt_reply(user_text: str | None, instruction: str) -> str:
+    """
+    GPT gets:
+    - system rules
+    - real user message (for continuity)
+    - instruction that controls the step
+    """
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
+
+        # Real user input (may be empty on first step)
         {
             "role": "user",
-            "content": f"""
-User said:
-{user_text or "(no response)"}
+            "content": user_text or ""
+        },
 
-Your task:
-{instruction}
-"""
+        # Tool instruction (NOT framed as user text)
+        {
+            "role": "assistant",
+            "content": instruction
         }
     ]
 
@@ -200,6 +209,11 @@ Your task:
 
 
 def handle(step: str | None, user_text: str | None):
+    """
+    step: current tool step
+    user_text: latest user message (for continuity only)
+    returns: next step + text
+    """
 
     # STEP 0 — NORMALIZE (NO QUESTION)
     if step is None or step == "start":
@@ -255,6 +269,7 @@ End the exercise.
         )
         return {"step": "exit", "text": text}
 
+    # SAFETY FALLBACK
     return {
         "step": "exit",
         "text": "We can pause here. You showed up, and that counts."
