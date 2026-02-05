@@ -152,13 +152,14 @@
 #         "text": "We can pause here. I’m here whenever you want to try again."
 #     }
 """
-Low Mood Tool: Getting Going With Action
+Low Mood Tool: Getting Going With Action (Permission-Based)
 
 Design principles:
 - GPT used only for tone + continuity
 - Tool controls the flow strictly
-- No step ever repeats the same question
-- Always acknowledge → reframe → advance
+- No step repeats the same question
+- Always: acknowledge → offer → ask permission → advance
+- User autonomy is preserved
 """
 
 from spiral_dynamics import client
@@ -169,6 +170,8 @@ You are a calm, supportive mental health coach.
 Rules:
 - Keep responses short (2–4 lines)
 - Sound natural and human
+- Never command or instruct directly
+- Always offer options with permission
 - Do NOT repeat the same question
 - Do NOT analyze deeply
 - ALWAYS move the exercise forward
@@ -192,50 +195,52 @@ def gpt_reply(user_text: str | None, instruction: str) -> str:
 
 def handle(step: str | None, user_text: str | None):
 
-    # STEP 0 — INTRO / NORMALIZE (NO USER DEPENDENCE)
+    # STEP 0 — INTRO / NORMALIZE
     if step is None or step == "start":
         text = gpt_reply(
             user_text,
             """
-Normalize low energy.
-Explain we start small.
-End by asking what feels hardest to begin.
+Normalize low energy without fixing.
+Explain that we’ll go gently, one small step at a time.
+End by asking what feels hardest to begin right now.
 """
         )
         return {"step": "ack", "text": text}
 
-    # STEP 1 — ACKNOWLEDGE USER RESPONSE (NO REPEAT)
+    # STEP 1 — ACKNOWLEDGE (NO REPEAT)
     if step == "ack":
         text = gpt_reply(
             user_text,
             """
-Acknowledge what the user said in one line.
-Do NOT repeat the same question.
-Gently reflect difficulty.
+Acknowledge what the user shared in one line.
+Reflect the difficulty gently.
+Do NOT repeat the earlier question.
 """
         )
-        return {"step": "shrink", "text": text}
+        return {"step": "offer", "text": text}
 
-    # STEP 2 — SHRINK THE TASK
-    if step == "shrink":
+    # STEP 2 — OFFER MICRO OPTIONS (WITH PERMISSION)
+    if step == "offer":
         text = gpt_reply(
             user_text,
             """
-Acknowledge briefly.
-Then propose ONE extremely small action
-that takes about 30 seconds.
-No questions.
+Acknowledge if they tried and it didn’t work.
+Offer one or two very small options (30 seconds max).
+Ask permission using gentle language
+(e.g. "Would you be open to trying one of these?").
+Do NOT command or instruct.
 """
         )
-        return {"step": "act", "text": text}
+        return {"step": "invite", "text": text}
 
-    # STEP 3 — INVITE ACTION (OPTIONAL, NOW)
-    if step == "act":
+    # STEP 3 — INVITE (NO PRESSURE)
+    if step == "invite":
         text = gpt_reply(
             user_text,
             """
-Invite them to try the tiny action now.
-Make it optional and low pressure.
+If they seem open, gently invite them to try now.
+If they seem unsure, normalize that hesitation.
+Keep everything optional and low pressure.
 """
         )
         return {"step": "close", "text": text}
@@ -246,7 +251,7 @@ Make it optional and low pressure.
             user_text,
             """
 Close warmly.
-Reinforce that effort or showing up matters.
+Reinforce that effort, willingness, or even pausing is enough.
 End the exercise.
 """
         )
@@ -255,5 +260,5 @@ End the exercise.
     # SAFETY FALLBACK
     return {
         "step": "exit",
-        "text": "We can pause here. Showing up is enough for now."
+        "text": "We can pause here. Even considering a small step matters."
     }
