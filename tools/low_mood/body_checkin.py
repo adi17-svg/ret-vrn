@@ -1,4 +1,4 @@
-from tool_gpt import tool_gpt_reply
+from .tool_gpt import tool_gpt_reply
 
 def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):

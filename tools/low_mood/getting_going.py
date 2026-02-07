@@ -8,6 +8,7 @@ Design principles:
 - YES = action starts (no more questions)
 - No looping, no decision fatigue
 """
+from .tool_gpt import tool_gpt_reply
 
 from spiral_dynamics import client
 
