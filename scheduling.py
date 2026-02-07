@@ -981,14 +981,16 @@ from notifications import (
 )
 
 # ============================================================
-# 🔐 HARD SINGLE-SCHEDULER CONTROL
+# 🔐 SINGLE SCHEDULER CONTROL
 # ============================================================
+
 IS_SCHEDULER_PROCESS = os.getenv("RUN_SCHEDULER", "false") == "true"
 SCHEDULERS_STARTED = False
 
 # ============================================================
-# ⏰ TIME CONFIG (Static for now)
+# ⏰ TIME CONFIG (24h format)
 # ============================================================
+
 MORNING_TIME = os.getenv("MORNING_TIME", "09:00")
 GRATITUDE_TIME = os.getenv("GRATITUDE_TIME", "13:00")
 CBT_TIME = os.getenv("CBT_TIME", "17:00")
@@ -1000,10 +1002,6 @@ scheduler = BackgroundScheduler(daemon=True)
 # ============================================================
 # 🧠 HELPERS
 # ============================================================
-
-def minutes_since_midnight(dt):
-    return dt.hour * 60 + dt.minute
-
 
 def get_user_now(now_utc, offset_minutes):
     return now_utc + timedelta(minutes=offset_minutes)
@@ -1017,30 +1015,59 @@ def transactional_send(
     last_key,
     send_fn,
 ):
-    token = user.get("fcm_token")
-    offset = user.get("timezone_offset_minutes")
+    try:
+        token = user.get("fcm_token")
+        offset = user.get("timezone_offset_minutes")
 
-    if not token or offset is None:
-        return
+        print("--------------------------------------------------")
+        print("👤 Checking user:", user_ref.id)
+        print("🕒 UTC NOW:", now_utc)
 
-    user_now = get_user_now(now_utc, offset)
-    today = user_now.date().isoformat()
+        if not token:
+            print("❌ No FCM token")
+            return
 
-    # Already sent today? Stop.
-    if user.get(last_key) == today:
-        return
+        if offset is None:
+            print("❌ No timezone offset")
+            return
 
-    h, m = map(int, target_time.split(":"))
-    now_min = minutes_since_midnight(user_now)
-    target = h * 60 + m
+        user_now = get_user_now(now_utc, offset)
+        today = user_now.date().isoformat()
 
-    # ✅ EXACT MATCH ONLY (NO GRACE WINDOW)
-    if now_min == target:
-        send_fn(token)
-        user_ref.update({
-            last_key: today,
-            f"{last_key}_at": now_utc,
-        })
+        print("🕒 User local time:", user_now)
+        print("📅 Today (user):", today)
+        print("🎯 Target time:", target_time)
+
+        # Already sent today?
+        if user.get(last_key) == today:
+            print("⛔ Already sent today")
+            return
+
+        h, m = map(int, target_time.split(":"))
+
+        print("🧮 Comparing →",
+              "User hour:", user_now.hour,
+              "User minute:", user_now.minute)
+
+        # EXACT MATCH (no grace)
+        if user_now.hour == h and user_now.minute == m:
+            print("🚀 TIME MATCH — Sending notification")
+
+            result = send_fn(token)
+            print("📨 Firebase response:", result)
+
+            user_ref.update({
+                last_key: today,
+                f"{last_key}_at": now_utc,
+            })
+
+            print("✅ Firestore updated")
+
+        else:
+            print("⌛ Not matching minute")
+
+    except Exception as e:
+        print("🔥 ERROR in transactional_send:", e)
 
 
 # ============================================================
@@ -1182,6 +1209,8 @@ def start_schedulers():
     if SCHEDULERS_STARTED:
         return
 
+    print("🚀 Starting schedulers...")
+
     schedule_morning_intention()
     schedule_gratitude()
     schedule_cbt()
@@ -1190,4 +1219,5 @@ def start_schedulers():
 
     scheduler.start()
     SCHEDULERS_STARTED = True
+
     print("✅ Scheduler started (SINGLE INSTANCE)")
