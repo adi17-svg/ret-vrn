@@ -531,7 +531,7 @@
 #         return messaging.send(message)
 #     except Exception as e:
 #         print(f"❌ Welcome notification error: {e}")
-# #         return None
+# # #         return None
 # from flask import Blueprint, request, jsonify
 # from datetime import datetime, timezone
 # import traceback
@@ -782,23 +782,22 @@ from firebase_utils import db
 
 bp = Blueprint("notifications", __name__)
 
+# ============================================================
+# 🔔 COMMON LOGGER
+# ============================================================
+
+def log(notification_type: str, message: str):
+    print(f"[{datetime.now(timezone.utc)}] [{notification_type}] {message}")
+
 
 # ============================================================
-# 🔔 COMMON LOG FORMATTER
-# ============================================================
-
-def log(prefix, message):
-    print(f"[{datetime.now(timezone.utc)}] {prefix} {message}")
-
-
-# ============================================================
-# 🌅 MORNING
+# 🌅 MORNING INTENTION NOTIFICATION
 # ============================================================
 
 def send_morning_intention_notification(fcm_token: str):
     try:
-        log("🌅 MORNING", "Triggered")
-        log("📱 TOKEN", fcm_token)
+        log("MORNING", "Triggered")
+        log("MORNING", f"Token → {fcm_token}")
 
         today = datetime.now(timezone.utc).date().isoformat()
 
@@ -816,22 +815,80 @@ def send_morning_intention_notification(fcm_token: str):
         )
 
         response = messaging.send(message)
-        log("✅ MORNING", f"Sent successfully → {response}")
+        log("MORNING", f"Sent successfully → {response}")
         return response
 
     except Exception as e:
-        log("❌ MORNING ERROR", str(e))
+        log("MORNING ERROR", str(e))
+        traceback.print_exc()
         return None
 
 
 # ============================================================
-# 🌱 GRATITUDE
+# 🌙 NIGHT REFLECTION NOTIFICATION (ROTATING)
+# ============================================================
+
+NIGHT_PROMPTS = [
+    {
+        "title": "🌙 Before you rest",
+        "body": "How did today feel for you — not good or bad, just honestly?"
+    },
+    {
+        "title": "🌙 A quiet moment",
+        "body": "Was there one small moment today that stayed with you?"
+    },
+    {
+        "title": "🌙 End of the day",
+        "body": "Is there anything you’d like to leave behind before sleeping?"
+    },
+    {
+        "title": "🌙 Just check in",
+        "body": "What’s sitting with you right now?"
+    }
+]
+
+
+def send_night_reflection_notification(fcm_token: str):
+    try:
+        log("NIGHT", "Triggered")
+        log("NIGHT", f"Token → {fcm_token}")
+
+        today = datetime.now(timezone.utc).date()
+        index = today.toordinal() % len(NIGHT_PROMPTS)
+        prompt = NIGHT_PROMPTS[index]
+
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title=prompt["title"],
+                body=prompt["body"]
+            ),
+            data={
+                "type": "night_reflection",
+                "screen": "chat",
+                "body": prompt["body"],
+                "date": today.isoformat()
+            },
+            token=fcm_token,
+        )
+
+        response = messaging.send(message)
+        log("NIGHT", f"Sent successfully → {response}")
+        return response
+
+    except Exception as e:
+        log("NIGHT ERROR", str(e))
+        traceback.print_exc()
+        return None
+
+
+# ============================================================
+# 🌱 GRATITUDE JOURNAL NOTIFICATION
 # ============================================================
 
 def send_gratitude_notification(fcm_token: str):
     try:
-        log("🌱 GRATITUDE", "Triggered")
-        log("📱 TOKEN", fcm_token)
+        log("GRATITUDE", "Triggered")
+        log("GRATITUDE", f"Token → {fcm_token}")
 
         today = datetime.now(timezone.utc).date().isoformat()
         body = "Is there one thing today that felt quietly supportive or meaningful?"
@@ -851,22 +908,23 @@ def send_gratitude_notification(fcm_token: str):
         )
 
         response = messaging.send(message)
-        log("✅ GRATITUDE", f"Sent successfully → {response}")
+        log("GRATITUDE", f"Sent successfully → {response}")
         return response
 
     except Exception as e:
-        log("❌ GRATITUDE ERROR", str(e))
+        log("GRATITUDE ERROR", str(e))
+        traceback.print_exc()
         return None
 
 
 # ============================================================
-# 🧩 CBT
+# 🧩 CBT REFLECTION NOTIFICATION
 # ============================================================
 
 def send_cbt_reflection_notification(fcm_token: str):
     try:
-        log("🧩 CBT", "Triggered")
-        log("📱 TOKEN", fcm_token)
+        log("CBT", "Triggered")
+        log("CBT", f"Token → {fcm_token}")
 
         today = datetime.now(timezone.utc).date().isoformat()
         body = (
@@ -889,22 +947,23 @@ def send_cbt_reflection_notification(fcm_token: str):
         )
 
         response = messaging.send(message)
-        log("✅ CBT", f"Sent successfully → {response}")
+        log("CBT", f"Sent successfully → {response}")
         return response
 
     except Exception as e:
-        log("❌ CBT ERROR", str(e))
+        log("CBT ERROR", str(e))
+        traceback.print_exc()
         return None
 
 
 # ============================================================
-# 🌬️ AWARENESS
+# 🌬️ AWARENESS CHECK-IN NOTIFICATION
 # ============================================================
 
 def send_awareness_checkin_notification(fcm_token: str):
     try:
-        log("🌬️ AWARENESS", "Triggered")
-        log("📱 TOKEN", fcm_token)
+        log("AWARENESS", "Triggered")
+        log("AWARENESS", f"Token → {fcm_token}")
 
         today = datetime.now(timezone.utc).date().isoformat()
         body = "Before anything else — how does your body feel right now?"
@@ -924,9 +983,71 @@ def send_awareness_checkin_notification(fcm_token: str):
         )
 
         response = messaging.send(message)
-        log("✅ AWARENESS", f"Sent successfully → {response}")
+        log("AWARENESS", f"Sent successfully → {response}")
         return response
 
     except Exception as e:
-        log("❌ AWARENESS ERROR", str(e))
+        log("AWARENESS ERROR", str(e))
+        traceback.print_exc()
         return None
+
+
+# ============================================================
+# 👋 WELCOME NOTIFICATION
+# ============================================================
+
+def send_welcome_notification(token):
+    try:
+        log("WELCOME", "Triggered")
+        log("WELCOME", f"Token → {token}")
+
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title="Welcome to RETVRN",
+                body="What’s on your mind right now? Write or speak freely."
+            ),
+            token=token,
+        )
+
+        response = messaging.send(message)
+        log("WELCOME", f"Sent successfully → {response}")
+        return response
+
+    except Exception as e:
+        log("WELCOME ERROR", str(e))
+        traceback.print_exc()
+        return None
+
+
+# ============================================================
+# 🎯 STORE USER SELECTED INTENTION
+# ============================================================
+
+@bp.route("/set_intention", methods=["POST"])
+def set_intention():
+    try:
+        data = request.get_json()
+        user_id = data.get("user_id")
+        intention = data.get("intention")
+
+        if not user_id or not intention:
+            return jsonify({"error": "Missing user_id or intention"}), 400
+
+        today = datetime.now(timezone.utc).date().isoformat()
+
+        db.collection("users").document(user_id).set(
+            {
+                "today_intention": intention,
+                "intention_date": today,
+                "intention_set_at": datetime.now(timezone.utc),
+            },
+            merge=True
+        )
+
+        log("INTENTION", f"Stored intention for user {user_id}")
+
+        return jsonify({"status": "success"})
+
+    except Exception:
+        traceback.print_exc()
+        return jsonify({"error": "Failed to store intention"}), 500
