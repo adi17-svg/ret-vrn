@@ -1049,7 +1049,6 @@ def transactional_send(
               "User hour:", user_now.hour,
               "User minute:", user_now.minute)
 
-        # EXACT MATCH (no grace)
         if user_now.hour == h and user_now.minute == m:
             print("🚀 TIME MATCH — Sending notification")
 
@@ -1062,12 +1061,42 @@ def transactional_send(
             })
 
             print("✅ Firestore updated")
-
         else:
             print("⌛ Not matching minute")
 
     except Exception as e:
         print("🔥 ERROR in transactional_send:", e)
+
+
+# ============================================================
+# 🔁 COMMON LOOP WITH DUPLICATE TOKEN PROTECTION
+# ============================================================
+
+def process_users(now_utc, target_time, last_key, send_fn):
+    processed_tokens = set()
+
+    for doc in db.collection("users").stream():
+        user = doc.to_dict() or {}
+        token = user.get("fcm_token")
+
+        if not token:
+            print("❌ No FCM token — skipped")
+            continue
+
+        if token in processed_tokens:
+            print("⛔ Duplicate token skipped:", token)
+            continue
+
+        processed_tokens.add(token)
+
+        transactional_send(
+            db.collection("users").document(doc.id),
+            user,
+            now_utc,
+            target_time,
+            last_key,
+            send_fn,
+        )
 
 
 # ============================================================
@@ -1077,15 +1106,12 @@ def transactional_send(
 def schedule_morning_intention():
     def job():
         now_utc = datetime.now(timezone.utc)
-        for doc in db.collection("users").stream():
-            transactional_send(
-                db.collection("users").document(doc.id),
-                doc.to_dict() or {},
-                now_utc,
-                MORNING_TIME,
-                "last_morning_notification_date",
-                send_morning_intention_notification,
-            )
+        process_users(
+            now_utc,
+            MORNING_TIME,
+            "last_morning_notification_date",
+            send_morning_intention_notification,
+        )
 
     scheduler.add_job(
         job,
@@ -1102,15 +1128,12 @@ def schedule_morning_intention():
 def schedule_gratitude():
     def job():
         now_utc = datetime.now(timezone.utc)
-        for doc in db.collection("users").stream():
-            transactional_send(
-                db.collection("users").document(doc.id),
-                doc.to_dict() or {},
-                now_utc,
-                GRATITUDE_TIME,
-                "last_gratitude_notification_date",
-                send_gratitude_notification,
-            )
+        process_users(
+            now_utc,
+            GRATITUDE_TIME,
+            "last_gratitude_notification_date",
+            send_gratitude_notification,
+        )
 
     scheduler.add_job(
         job,
@@ -1127,15 +1150,12 @@ def schedule_gratitude():
 def schedule_cbt():
     def job():
         now_utc = datetime.now(timezone.utc)
-        for doc in db.collection("users").stream():
-            transactional_send(
-                db.collection("users").document(doc.id),
-                doc.to_dict() or {},
-                now_utc,
-                CBT_TIME,
-                "last_cbt_notification_date",
-                send_cbt_reflection_notification,
-            )
+        process_users(
+            now_utc,
+            CBT_TIME,
+            "last_cbt_notification_date",
+            send_cbt_reflection_notification,
+        )
 
     scheduler.add_job(
         job,
@@ -1152,15 +1172,12 @@ def schedule_cbt():
 def schedule_awareness():
     def job():
         now_utc = datetime.now(timezone.utc)
-        for doc in db.collection("users").stream():
-            transactional_send(
-                db.collection("users").document(doc.id),
-                doc.to_dict() or {},
-                now_utc,
-                AWARENESS_TIME,
-                "last_awareness_notification_date",
-                send_awareness_checkin_notification,
-            )
+        process_users(
+            now_utc,
+            AWARENESS_TIME,
+            "last_awareness_notification_date",
+            send_awareness_checkin_notification,
+        )
 
     scheduler.add_job(
         job,
@@ -1177,15 +1194,12 @@ def schedule_awareness():
 def schedule_night():
     def job():
         now_utc = datetime.now(timezone.utc)
-        for doc in db.collection("users").stream():
-            transactional_send(
-                db.collection("users").document(doc.id),
-                doc.to_dict() or {},
-                now_utc,
-                NIGHT_TIME,
-                "last_night_notification_date",
-                send_night_reflection_notification,
-            )
+        process_users(
+            now_utc,
+            NIGHT_TIME,
+            "last_night_notification_date",
+            send_night_reflection_notification,
+        )
 
     scheduler.add_job(
         job,
