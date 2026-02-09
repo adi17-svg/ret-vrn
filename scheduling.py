@@ -974,6 +974,7 @@ import os
 from firebase_utils import db
 from notifications import (
     send_morning_intention_notification,
+    send_morning_chat_notification,
     send_night_reflection_notification,
     send_gratitude_notification,
     send_cbt_reflection_notification,
@@ -992,6 +993,7 @@ SCHEDULERS_STARTED = False
 # ============================================================
 
 MORNING_TIME = os.getenv("MORNING_TIME", "09:00")
+MORNING_CHAT_TIME = os.getenv("MORNING_CHAT_TIME", "09:05")
 GRATITUDE_TIME = os.getenv("GRATITUDE_TIME", "13:00")
 CBT_TIME = os.getenv("CBT_TIME", "17:00")
 AWARENESS_TIME = os.getenv("AWARENESS_TIME", "20:00")
@@ -1103,14 +1105,33 @@ def process_users(now_utc, target_time, last_key, send_fn):
 # 🌅 MORNING
 # ============================================================
 
+# def schedule_morning_intention():
+#     def job():
+#         now_utc = datetime.now(timezone.utc)
+#         process_users(
+#             now_utc,
+#             MORNING_TIME,
+#             "last_morning_notification_date",
+#             send_morning_intention_notification,
+#         )
 def schedule_morning_intention():
     def job():
         now_utc = datetime.now(timezone.utc)
+
+        # 🌅 Popup (intention)
         process_users(
             now_utc,
             MORNING_TIME,
             "last_morning_notification_date",
             send_morning_intention_notification,
+        )
+
+        # 🌞 Chat message (separate time)
+        process_users(
+            now_utc,
+            MORNING_CHAT_TIME,
+            "last_morning_chat_notification_date",
+            send_morning_chat_notification,
         )
 
     scheduler.add_job(

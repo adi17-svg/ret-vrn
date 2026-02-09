@@ -793,6 +793,40 @@ def log(notification_type: str, message: str):
 # ============================================================
 # 🌅 MORNING INTENTION NOTIFICATION
 # ============================================================
+# ============================================================
+# 🌞 MORNING CHAT MESSAGE (Separate from popup)
+# ============================================================
+
+def send_morning_chat_notification(fcm_token: str):
+    try:
+        log("MORNING_CHAT", "Triggered")
+        log("MORNING_CHAT", f"Token → {fcm_token}")
+
+        today = datetime.now(timezone.utc).date().isoformat()
+        body = "🌞 How’s the emotional weather inside this morning?"
+
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title="🌞 Morning Check-In",
+                body=body
+            ),
+            data={
+                "type": "morning_chat",
+                "screen": "chat",
+                "body": body,
+                "date": today
+            },
+            token=fcm_token,
+        )
+
+        response = messaging.send(message)
+        log("MORNING_CHAT", f"Sent successfully → {response}")
+        return response
+
+    except Exception as e:
+        log("MORNING_CHAT ERROR", str(e))
+        traceback.print_exc()
+        return None
 
 def send_morning_intention_notification(fcm_token: str):
     try:
