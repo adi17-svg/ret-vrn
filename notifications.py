@@ -918,37 +918,56 @@ def send_night_reflection_notification(fcm_token: str):
 # ============================================================
 # 🌱 GRATITUDE JOURNAL NOTIFICATION
 # ============================================================
-
 def send_gratitude_notification(fcm_token: str):
     try:
-        log("GRATITUDE", "Triggered")
-        log("GRATITUDE", f"Token → {fcm_token}")
-
         today = datetime.now(timezone.utc).date().isoformat()
         body = "Is there one thing today that felt quietly supportive or meaningful?"
 
         message = messaging.Message(
-            notification=messaging.Notification(
-                title="🌱 A small pause",
-                body=body
-            ),
             data={
                 "type": "gratitude_journal",
-                "screen": "chat",
                 "body": body,
                 "date": today
             },
             token=fcm_token,
         )
 
-        response = messaging.send(message)
-        log("GRATITUDE", f"Sent successfully → {response}")
-        return response
+        return messaging.send(message)
 
     except Exception as e:
-        log("GRATITUDE ERROR", str(e))
         traceback.print_exc()
         return None
+
+# def send_gratitude_notification(fcm_token: str):
+#     try:
+#         log("GRATITUDE", "Triggered")
+#         log("GRATITUDE", f"Token → {fcm_token}")
+
+#         today = datetime.now(timezone.utc).date().isoformat()
+#         body = "Is there one thing today that felt quietly supportive or meaningful?"
+
+#         message = messaging.Message(
+#             notification=messaging.Notification(
+#                 title="🌱 A small pause",
+#                 body=body
+#             ),
+#             data={
+#                 "type": "gratitude_journal",
+#                 "screen": "chat",
+#                 "body": body,
+#                 "date": today
+#             },
+#             token=fcm_token,
+#         )
+
+#         response = messaging.send(message)
+#         log("GRATITUDE", f"Sent successfully → {response}")
+#         return response
+
+#     except Exception as e:
+#         log("GRATITUDE ERROR", str(e))
+#         traceback.print_exc()
+#         return None
 
 
 # ============================================================
@@ -993,37 +1012,56 @@ def send_cbt_reflection_notification(fcm_token: str):
 # ============================================================
 # 🌬️ AWARENESS CHECK-IN NOTIFICATION
 # ============================================================
-
 def send_awareness_checkin_notification(fcm_token: str):
     try:
-        log("AWARENESS", "Triggered")
-        log("AWARENESS", f"Token → {fcm_token}")
-
         today = datetime.now(timezone.utc).date().isoformat()
         body = "Before anything else — how does your body feel right now?"
 
         message = messaging.Message(
-            notification=messaging.Notification(
-                title="🌬️ A moment to arrive",
-                body=body
-            ),
             data={
                 "type": "awareness_checkin",
-                "screen": "chat",
                 "body": body,
                 "date": today
             },
             token=fcm_token,
         )
 
-        response = messaging.send(message)
-        log("AWARENESS", f"Sent successfully → {response}")
-        return response
+        return messaging.send(message)
 
     except Exception as e:
-        log("AWARENESS ERROR", str(e))
         traceback.print_exc()
         return None
+
+# def send_awareness_checkin_notification(fcm_token: str):
+#     try:
+#         log("AWARENESS", "Triggered")
+#         log("AWARENESS", f"Token → {fcm_token}")
+
+#         today = datetime.now(timezone.utc).date().isoformat()
+#         body = "Before anything else — how does your body feel right now?"
+
+#         message = messaging.Message(
+#             notification=messaging.Notification(
+#                 title="🌬️ A moment to arrive",
+#                 body=body
+#             ),
+#             data={
+#                 "type": "awareness_checkin",
+#                 "screen": "chat",
+#                 "body": body,
+#                 "date": today
+#             },
+#             token=fcm_token,
+#         )
+
+#         response = messaging.send(message)
+#         log("AWARENESS", f"Sent successfully → {response}")
+#         return response
+
+#     except Exception as e:
+#         log("AWARENESS ERROR", str(e))
+#         traceback.print_exc()
+#         return None
 
 
 # ============================================================
