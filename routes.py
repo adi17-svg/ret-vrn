@@ -1395,18 +1395,225 @@ def decide_response_type(mood: str | None, intent: str) -> str:
 #         },
 #     }
 
+# def process_reflection_core(
+#     entry: str,
+#     user_id: str | None,
+#     last_stage: str = "",
+#     reply_to: str = "",
+#     tool_id: str | None = None,   # ✅ NEW (OPTIONAL)
+# ):
+#     """
+#     THE ONLY PLACE WHERE THINKING HAPPENS
+#     """
+
+#     # 1️⃣ User support focus (soft bias only)
+#     support_focus = []
+#     if user_id:
+#         try:
+#             doc = db.collection("users").document(user_id).get()
+#             if doc.exists:
+#                 support_focus = doc.to_dict().get("support_focus", [])
+#         except Exception:
+#             pass
+
+#     # 2️⃣ Intent + Spiral classification (INTERNAL)
+#     intent = detect_intent(entry)
+
+#     mood = None
+#     stage = None
+#     confidence = 0.0
+
+#     try:
+#         result = classify_stage(entry)
+#         mood = result.get("mood")
+#         stage = result.get("stage")
+#         confidence = result.get("confidence", 0.0)
+#     except Exception:
+#         pass
+
+#     # 3️⃣ Decide response tone (Wysa rule)
+#     response_type = decide_response_type(mood, intent)
+
+#     if reply_to == "gratitude_prompt":
+#         response_type = "listen"
+
+#     # 4️⃣ Spiral guardrail
+#     spiral_active = bool(stage) and mood not in DYSREGULATED_MOODS
+#     if len(entry.split()) < 4:
+#         spiral_active = False
+
+#     # 🚫 TOOL MODE → spiral / growth OFF
+#     if tool_id:
+#         spiral_active = False
+#         response_type = "listen"   # ✅ ADD THIS LINE
+
+#     # 🔄 Spiral tracking (ONLY for main chat)
+#     direction = "unknown"
+#     previous_stage = None
+
+#     if user_id and stage and not tool_id:
+#         user_ref = db.collection("users").document(user_id)
+#         snap = user_ref.get()
+
+#         if snap.exists:
+#             previous_stage = snap.to_dict().get("last_spiral_stage")
+
+#         direction = compare_spiral_levels(previous_stage, stage)
+
+#         user_ref.set(
+#             {
+#                 "last_spiral_stage": stage,
+#                 "last_confidence": confidence,
+#                 "updated_at": firestore.SERVER_TIMESTAMP,
+#             },
+#             merge=True,
+#         )
+
+#         if spiral_active:
+#             user_ref.collection("mergedMessages").add(
+#                 {
+#                     "type": "spiral",
+#                     "stage": stage,
+#                     "confidence": confidence,
+#                     "timestamp": firestore.SERVER_TIMESTAMP,
+#                 }
+#             )
+
+#     # 5️⃣ Context memory
+#     context_messages = []
+#     if user_id:
+#         try:
+#             recent = get_recent_conversation(user_id, limit=HISTORY_LIMIT)
+#             for m in recent:
+#                 if m.get("role") in ("user", "assistant"):
+#                     context_messages.append(
+#                         {"role": m["role"], "content": m["content"]}
+#                     )
+#         except Exception:
+#             pass
+
+#     # 6️⃣ Mind mirror vs mission
+#     question = None
+#     mission = None
+
+#     if response_type in {"validate", "reflect"}:
+#         try:
+#             question = generate_reflective_question(entry, reply_to)
+#         except Exception:
+#             pass
+
+#     if response_type == "act" and spiral_active:
+#         try:
+#             gamified = generate_gamified_prompt(stage, entry)
+#             mission = gamified.get("gamified_prompt")
+#         except Exception:
+#             pass
+    
+      
+#     # 🚨 TOOL MODE OVERRIDE — RUN TOOL INSTEAD OF GPT
+#     if tool_id:
+#         tool_response = run_tool(tool_id)
+
+#         if tool_response:
+#             if user_id:
+#                 try:
+#                     save_conversation_message(user_id, "user", entry)
+#                     save_conversation_message(
+#                         user_id,
+#                         "assistant",
+#                         tool_response.get("text", ""),
+#                     )
+#                 except Exception:
+#                     pass
+
+#             return {
+#                 "message": {
+#                     "text": tool_response["text"],
+#                     "tone": "listen",
+#                 },
+#                 "reflection": {},
+#                 "action": {},
+#                 "pattern": {},
+#                 "spiral_tracking": {},
+#             }
+#     # 7️⃣ System prompt
+#     system_prompt = (
+#         "You are a warm, grounded companion in the RETVRN app.\n\n"
+#         f"Response tone: {response_type}\n\n"
+#         "Rules:\n"
+#         "- Validate emotions first\n"
+#         "- Slow the pace\n"
+#         "- Keep sentences short\n"
+#         "- Never force action\n"
+#         "- Offer choice gently\n\n"
+#         f"User support focus (DO NOT mention): {', '.join(support_focus) or 'none'}\n"
+#     )
+
+#     if question:
+#         system_prompt += f"\nAsk gently (Mind Mirror): {question}\n"
+
+#     if mission:
+#         system_prompt += f"\nOffer this only if the user agrees:\n{mission}\n"
+
+#     # 8️⃣ GPT CALL
+#     messages = [
+#         {"role": "system", "content": system_prompt},
+#         *context_messages,
+#         {"role": "user", "content": entry},
+#     ]
+
+#     resp = client.chat.completions.create(
+#         model="gpt-4.1",
+#         messages=messages,
+#         temperature=0.7,
+#     )
+
+#     ai_text = resp.choices[0].message.content.strip()
+
+#     # 9️⃣ Save memory (chat history only, safe for tools too)
+#     if user_id:
+#         try:
+#             save_conversation_message(user_id, "user", entry)
+#             save_conversation_message(user_id, "assistant", ai_text)
+#         except Exception:
+#             pass
+
+#     # ✅ FINAL unified response
+#     return {
+#         "message": {
+#             "text": ai_text,
+#             "tone": response_type,
+#         },
+#         "reflection": {
+#             "mind_mirror": question,
+#         },
+#         "action": {
+#             "mission": mission,
+#             "requires_permission": True if mission else False,
+#         },
+#         "pattern": {
+#             "stage": stage if spiral_active else None,
+#         },
+#         "spiral_tracking": {
+#             "current_stage": stage if not tool_id else None,
+#             "previous_stage": previous_stage,
+#             "direction": direction,
+#             "confidence": confidence,
+#         },
+#     }
+
 def process_reflection_core(
     entry: str,
     user_id: str | None,
     last_stage: str = "",
     reply_to: str = "",
-    tool_id: str | None = None,   # ✅ NEW (OPTIONAL)
+    tool_id: str | None = None,
 ):
     """
     THE ONLY PLACE WHERE THINKING HAPPENS
     """
 
-    # 1️⃣ User support focus (soft bias only)
+    # 1️⃣ User support focus
     support_focus = []
     if user_id:
         try:
@@ -1416,7 +1623,7 @@ def process_reflection_core(
         except Exception:
             pass
 
-    # 2️⃣ Intent + Spiral classification (INTERNAL)
+    # 2️⃣ Intent + Spiral classification
     intent = detect_intent(entry)
 
     mood = None
@@ -1431,7 +1638,7 @@ def process_reflection_core(
     except Exception:
         pass
 
-    # 3️⃣ Decide response tone (Wysa rule)
+    # 3️⃣ Decide tone
     response_type = decide_response_type(mood, intent)
 
     if reply_to == "gratitude_prompt":
@@ -1442,12 +1649,12 @@ def process_reflection_core(
     if len(entry.split()) < 4:
         spiral_active = False
 
-    # 🚫 TOOL MODE → spiral / growth OFF
+    # 🚫 TOOL MODE → disable spiral
     if tool_id:
         spiral_active = False
-        response_type = "listen"   # ✅ ADD THIS LINE
+        response_type = "listen"
 
-    # 🔄 Spiral tracking (ONLY for main chat)
+    # 🔄 Spiral tracking (main chat only)
     direction = "unknown"
     previous_stage = None
 
@@ -1492,7 +1699,7 @@ def process_reflection_core(
         except Exception:
             pass
 
-    # 6️⃣ Mind mirror vs mission
+    # 6️⃣ Reflection logic
     question = None
     mission = None
 
@@ -1508,9 +1715,8 @@ def process_reflection_core(
             mission = gamified.get("gamified_prompt")
         except Exception:
             pass
-    
-      
-    # 🚨 TOOL MODE OVERRIDE — RUN TOOL INSTEAD OF GPT
+
+    # 🚨 TOOL MODE OVERRIDE
     if tool_id:
         tool_response = run_tool(tool_id)
 
@@ -1536,6 +1742,7 @@ def process_reflection_core(
                 "pattern": {},
                 "spiral_tracking": {},
             }
+
     # 7️⃣ System prompt
     system_prompt = (
         "You are a warm, grounded companion in the RETVRN app.\n\n"
@@ -1570,7 +1777,12 @@ def process_reflection_core(
 
     ai_text = resp.choices[0].message.content.strip()
 
-    # 9️⃣ Save memory (chat history only, safe for tools too)
+    # 🌊 SOFT END BLEND (main chat only)
+    if stage and spiral_active and not tool_id:
+        stage_line = f"\n\n— 🌊 {stage} energy is present in this reflection."
+        ai_text = ai_text + stage_line
+
+    # 9️⃣ Save memory (after blend)
     if user_id:
         try:
             save_conversation_message(user_id, "user", entry)
@@ -1578,7 +1790,7 @@ def process_reflection_core(
         except Exception:
             pass
 
-    # ✅ FINAL unified response
+    # 🔟 Final response
     return {
         "message": {
             "text": ai_text,
@@ -1601,7 +1813,6 @@ def process_reflection_core(
             "confidence": confidence,
         },
     }
-
 
 # ======================================================
 # ROUTES
