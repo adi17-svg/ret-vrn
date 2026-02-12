@@ -1,345 +1,517 @@
 body_checkin.py:
-"""
-Low Mood Tool: Body Check-In
-"""
+from .tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "scan",
-            "text": "Notice your shoulders, jaw, and hands."
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite noticing shoulders, jaw, and hands without changing anything."
+            )
         }
 
     if step == "scan":
         return {
             "step": "release",
-            "text": "Let one of these places soften slightly."
-        }
-
-    if step == "release":
-        return {
-            "step": "exit",
-            "text": "That’s enough for now."
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite softening just one area slightly, if it feels okay."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "Stopping here is okay."
+        "text": tool_gpt_reply(
+            user_text,
+            "That’s enough for now. You don’t need to do more."
+        )
     }
 breath_word.py:
-"""
-Low Mood Tool: Breath + Word
-"""
+from .tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "breathe",
-            "text": "Inhale: Here. Exhale: Now. Do this three times."
-        }
-
-    if step == "breathe":
-        return {
-            "step": "exit",
-            "text": "Let your breath return naturally."
+            "text": tool_gpt_reply(
+                user_text,
+                "Guide a slow inhale with the word 'here' and exhale with 'now'."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "We can stop."
+        "text": tool_gpt_reply(
+            user_text,
+            "Let the breath return to its own rhythm."
+        )
     }
-
 gentle_distraction.py:
-"""
-Low Mood Tool: Gentle Distraction
-"""
+from .tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "choose",
-            "text": "Name one neutral activity you could do for 2 minutes."
+            "text": tool_gpt_reply(
+                user_text,
+                "Gently suggest a neutral, low-effort activity they could do for a couple of minutes."
+            )
         }
 
     if step == "choose":
         return {
             "step": "exit",
-            "text": "You can stop after 2 minutes."
+            "text": tool_gpt_reply(
+                user_text,
+                "Reassure them they can stop anytime and don’t need to do more."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "Pause here."
+        "text": tool_gpt_reply(user_text, "Pausing here is okay.")
     }
+getting_going.py:
+"""
+Low Mood Tool: Getting Going With Action (FINAL FINAL)
 
+Design principles:
+- GPT used only for tone + continuity
+- Tool controls flow strictly
+- Permission-based progression
+- YES = action starts (no more questions)
+- No looping, no decision fatigue
+"""
+from .tool_gpt import tool_gpt_reply
+
+from spiral_dynamics import client
+
+SYSTEM_PROMPT = """
+You are a calm, supportive mental health coach.
+
+Rules:
+- Keep responses short (2–4 lines)
+- Sound natural and human
+- Never command harshly
+- Use permission before action
+- Once user agrees, STOP asking questions
+- Guide action clearly and simply
+- Respect resistance
+"""
+
+def gpt_reply(user_text: str | None, instruction: str) -> str:
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_text or ""},
+        {"role": "assistant", "content": instruction}
+    ]
+
+    resp = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=messages,
+        temperature=0.3,
+    )
+
+    return resp.choices[0].message.content.strip()
+
+
+def handle(step: str | None, user_text: str | None):
+
+    # STEP 0 — INTRO
+    if step is None or step == "start":
+        text = gpt_reply(
+            user_text,
+            """
+Normalize low energy.
+Explain we’ll take one small step.
+Ask what feels hardest to start right now.
+"""
+        )
+        return {"step": "ack", "text": text}
+
+    # STEP 1 — ACKNOWLEDGE
+    if step == "ack":
+        text = gpt_reply(
+            user_text,
+            """
+Acknowledge what they shared.
+Reflect the difficulty briefly.
+Do NOT ask another question.
+"""
+        )
+        return {"step": "offer", "text": text}
+
+    # STEP 2 — OFFER MICRO ACTION (WITH PERMISSION)
+    if step == "offer":
+        text = gpt_reply(
+            user_text,
+            """
+Offer ONE very small action (30 seconds max).
+Ask permission gently
+(e.g. "Would you be open to trying this together?").
+"""
+        )
+        return {"step": "consent", "text": text}
+
+    # STEP 3 — CONSENT GATE (CRITICAL)
+    if step == "consent":
+        text = gpt_reply(
+            user_text,
+            """
+If the user agrees (yes / okay / sure):
+- Acknowledge
+- Say we’ll start now
+- Do NOT offer choices
+- Transition into doing
+
+If the user hesitates or says no:
+- Normalize stopping
+- Offer pausing
+"""
+        )
+        # Always move forward: either action or close
+        if user_text and user_text.lower().strip() in [
+            "yes", "yeah", "yep", "ok", "okay", "sure", "let's try", "i would like to try it"
+        ]:
+            return {"step": "do", "text": text}
+        else:
+            return {"step": "close", "text": text}
+
+    # STEP 4 — DO (ACTUAL ACTION HAPPENS HERE)
+    if step == "do":
+        text = gpt_reply(
+            user_text,
+            """
+Guide a simple grounding or breathing action.
+No questions.
+No choices.
+Use gentle, direct guidance.
+
+Example:
+"Let’s try this together.
+Inhale slowly through your nose for 4…
+Exhale gently through your mouth for 6.
+Let’s do this once."
+"""
+        )
+        return {"step": "close", "text": text}
+
+    # STEP 5 — CLOSE
+    if step == "close":
+        text = gpt_reply(
+            user_text,
+            """
+Close warmly.
+Reinforce that trying or pausing both count.
+End the exercise.
+"""
+        )
+        return {"step": "exit", "text": text}
+
+    # SAFETY FALLBACK
+    return {
+        "step": "exit",
+        "text": "We can pause here. You’re in control."
+    }
 grounding_54321.py:
-"""
-Low Mood Tool: Grounding 5-4-3-2-1
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
-        return {"step": "five", "text": "Name 5 things you can see around you."}
+        return {
+            "step": "five",
+            "text": tool_gpt_reply(user_text, "Invite naming five things you can see.")
+        }
 
     if step == "five":
-        return {"step": "four", "text": "Notice 4 things you can feel with your body."}
+        return {
+            "step": "four",
+            "text": tool_gpt_reply(user_text, "Invite noticing four physical sensations.")
+        }
 
     if step == "four":
-        return {"step": "three", "text": "Listen for 3 different sounds."}
+        return {
+            "step": "three",
+            "text": tool_gpt_reply(user_text, "Invite listening for three different sounds.")
+        }
 
     if step == "three":
-        return {"step": "two", "text": "Notice 2 things you can smell."}
+        return {
+            "step": "two",
+            "text": tool_gpt_reply(user_text, "Invite noticing two smells.")
+        }
 
     if step == "two":
-        return {"step": "one", "text": "Name 1 thing you can taste or enjoy."}
+        return {
+            "step": "one",
+            "text": tool_gpt_reply(user_text, "Invite noticing one taste or pleasant sensation.")
+        }
 
     return {
         "step": "exit",
-        "text": "You’re here, in this moment. That’s enough."
+        "text": tool_gpt_reply(
+            user_text,
+            "You’re here, in this moment. That’s enough."
+        )
     }
-
 it_makes_sense.py:
-"""
-Low Mood Tool: It Makes Sense
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "validate",
-            "text": "Given what you’re dealing with, this reaction makes sense."
-        }
-
-    if step == "validate":
-        return {
-            "step": "exit",
-            "text": "You’re not overreacting."
+            "text": tool_gpt_reply(
+                user_text,
+                "Validate that their reaction makes sense given what they’re dealing with."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "Pause here."
+        "text": tool_gpt_reply(
+            user_text,
+            "They’re not overreacting."
+        )
     }
-
 lower_the_bar.py:
-"""
-Low Mood Tool: Lower the Bar
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "minimum",
-            "text": "What’s the absolute minimum that would be enough today?"
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite them to consider the absolute minimum that would be enough for today."
+            )
         }
 
     if step == "minimum":
         return {
             "step": "exit",
-            "text": "That is enough."
+            "text": tool_gpt_reply(
+                user_text,
+                "Affirm that this minimum is enough for now."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "We can stop here."
+        "text": tool_gpt_reply(user_text, "We can stop here.")
     }
 name_the_feeling.py:
-"""
-Low Mood Tool: Name the Feeling
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "name",
-            "text": "Right now this feels like… (no story, no why)."
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite them to name what this feeling is like, without explaining or analyzing it."
+            )
         }
 
     if step == "name":
         return {
             "step": "exit",
-            "text": "Naming it is enough."
+            "text": tool_gpt_reply(
+                user_text,
+                "Reassure them that naming it is enough for now."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "We can stop here."
+        "text": tool_gpt_reply(user_text, "We can pause here.")
     }
 no_decision_now.py:
-"""
-Low Mood Tool: No Decision Right Now
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "name",
-            "text": "Name one thing you don’t need to decide right now."
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite them to name one thing they don’t need to decide right now."
+            )
         }
 
     if step == "name":
         return {
             "step": "exit",
-            "text": "You can come back to it later."
+            "text": tool_gpt_reply(
+                user_text,
+                "Remind them they can come back to that decision later."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "Stopping here is okay."
+        "text": tool_gpt_reply(user_text, "Stopping here is okay.")
     }
 one_safe_thing.py:
-"""
-Low Mood Tool: One Safe Thing
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "identify",
-            "text": "Name one thing that feels safe right now."
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite naming one thing that feels safe right now."
+            )
         }
 
     if step == "identify":
         return {
             "step": "focus",
-            "text": "Let your attention rest there briefly."
-        }
-
-    if step == "focus":
-        return {
-            "step": "exit",
-            "text": "You’re safe in this moment."
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite resting attention there briefly."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "Stopping here is okay."
+        "text": tool_gpt_reply(
+            user_text,
+            "You’re safe in this moment."
+        )
     }
 self_compassion.py:
-"""
-Low Mood Tool: Self Compassion
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "acknowledge",
-            "text": "This is a hard moment. You’re not weak for feeling this way."
+            "text": tool_gpt_reply(
+                user_text,
+                "Acknowledge that this is a hard moment."
+            )
         }
 
     if step == "acknowledge":
         return {
             "step": "normalize",
-            "text": "Many people feel like this sometimes. You’re not alone."
-        }
-
-    if step == "normalize":
-        return {
-            "step": "exit",
-            "text": "You don’t have to fix anything right now."
+            "text": tool_gpt_reply(
+                user_text,
+                "Normalize that many people feel this way sometimes."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "We can pause here."
+        "text": tool_gpt_reply(
+            user_text,
+            "You don’t need to fix anything right now."
+        )
     }
 thought_parking.py:
-"""
-Low Mood Tool: Thought Parking
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "park",
-            "text": "Name one heavy thought you can set aside for now."
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite them to name one heavy thought they can set aside for now."
+            )
         }
 
     if step == "park":
         return {
             "step": "exit",
-            "text": "You don’t need to solve it right now."
+            "text": tool_gpt_reply(
+                user_text,
+                "Reassure them they don’t need to solve that thought right now."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "Pause here."
-    }
-tiny_relief.py:
-"""
-Low Mood Tool: Tiny Relief
-"""
-
-def handle(step: str | None):
-    if step in (None, "start"):
-        return {
-            "step": "find",
-            "text": "Is there anything that feels even 1% okay?"
-        }
-
-    if step == "find":
-        return {
-            "step": "stay",
-            "text": "Stay with that feeling for about 10 seconds."
-        }
-
-    if step == "stay":
-        return {
-            "step": "exit",
-            "text": "That’s enough for now."
-        }
-
-    return {
-        "step": "exit",
-        "text": "We can pause."
+        "text": tool_gpt_reply(user_text, "Pausing here is fine.")
     }
 today_is_heavy.py:
-"""
-Low Mood Tool: Today Is Heavy
-"""
+from tool_gpt import tool_gpt_reply
 
-def handle(step: str | None):
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "acknowledge",
-            "text": "Some days feel heavier than others. Today might be one."
-        }
-
-    if step == "acknowledge":
-        return {
-            "step": "exit",
-            "text": "You’re allowed to go slower today."
+            "text": tool_gpt_reply(
+                user_text,
+                "Acknowledge that some days feel heavier than others."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "That’s enough."
+        "text": tool_gpt_reply(
+            user_text,
+            "You’re allowed to go slower today."
+        )
     }
-venting.py:
-"""
-Low Mood Tool: Vent Without Fixing
+tool_gpt.py:
+from spiral_dynamics import client
+
+SYSTEM_PROMPT = """
+You are a calm, supportive mental health coach.
+
+Rules:
+- Keep responses short (1–3 lines)
+- Sound natural and human
+- Do NOT give advice unless asked
+- Do NOT push action
+- Hold space and close gently
 """
 
-def handle(step: str | None):
+def tool_gpt_reply(user_text: str | None, instruction: str) -> str:
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_text or ""},
+        {"role": "assistant", "content": instruction}
+    ]
+
+    resp = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=messages,
+        temperature=0.4,
+    )
+
+    return resp.choices[0].message.content.strip()
+venting.py:
+from tool_gpt import tool_gpt_reply
+
+def handle(step: str | None, user_text: str | None):
     if step in (None, "start"):
         return {
             "step": "vent",
-            "text": "You can let things out here. No fixing. No judging."
+            "text": tool_gpt_reply(
+                user_text,
+                "Invite sharing freely here. No fixing. No judging."
+            )
         }
 
     if step == "vent":
         return {
             "step": "contain",
-            "text": "Thank you for letting that out."
-        }
-
-    if step == "contain":
-        return {
-            "step": "exit",
-            "text": "You don’t have to solve it."
+            "text": tool_gpt_reply(
+                user_text,
+                "Thank them for letting it out."
+            )
         }
 
     return {
         "step": "exit",
-        "text": "We can pause here."
+        "text": tool_gpt_reply(
+            user_text,
+            "You don’t have to solve anything right now."
+        )
     }
