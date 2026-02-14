@@ -1,0 +1,2542 @@
+app/src/main/java/com/example/memoraid/MainActivity.java:
+package com.example.memoraid;
+
+import android.content.Intent;
+import android.os.Bundle;
+import android.os.Handler;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.example.memoraid.auth.LoginActivity;
+import com.example.memoraid.caregiver.CaregiverDashboardActivity;
+import com.example.memoraid.patient.PatientDashboardActivity;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+public class MainActivity extends AppCompatActivity {
+
+    private static final int SPLASH_TIME_OUT = 2000; // 2 seconds
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main); // use your splash layout
+
+        // Apply animation to logo & text
+        ImageView logo = findViewById(R.id.logoImage);
+        TextView title = findViewById(R.id.appTitle);
+        TextView tagline = findViewById(R.id.tagline);
+
+        Animation fadeIn = AnimationUtils.loadAnimation(this, R.anim.fade_in);
+        logo.startAnimation(fadeIn);
+        title.startAnimation(fadeIn);
+        tagline.startAnimation(fadeIn);
+
+        // Move to next screen after delay
+        new Handler().postDelayed(this::checkUserSession, SPLASH_TIME_OUT);
+    }
+
+    private void checkUserSession() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            startActivity(new Intent(MainActivity.this, LoginActivity.class));
+            finish();
+        } else {
+            String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+            FirebaseFirestore.getInstance().collection("users").document(uid)
+                    .get()
+                    .addOnSuccessListener(doc -> {
+                        if (doc.exists()) {
+                            String role = doc.getString("role");
+                            if ("patient".equalsIgnoreCase(role)) {
+                                startActivity(new Intent(this, PatientDashboardActivity.class));
+                            } else if ("caregiver".equalsIgnoreCase(role)) {
+                                startActivity(new Intent(this, CaregiverDashboardActivity.class));
+                            } else {
+                                startActivity(new Intent(this, LoginActivity.class));
+                            }
+                        } else {
+                            Toast.makeText(this, "Profile missing. Please log in again.", Toast.LENGTH_SHORT).show();
+                            FirebaseAuth.getInstance().signOut();
+                            startActivity(new Intent(this, LoginActivity.class));
+                        }
+                        finish();
+                    })
+                    .addOnFailureListener(e -> {
+                        Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        startActivity(new Intent(this, LoginActivity.class));
+                        finish();
+                    });
+        }
+    }
+}
+app/src/main/java/com/example/memoraid/MyFirebaseMessagingService.java:
+package com.example.memoraid;
+
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Intent;
+import android.media.RingtoneManager;
+import android.net.Uri;
+import android.os.Build;
+import android.util.Log;
+
+import androidx.annotation.NonNull;
+import androidx.core.app.NotificationCompat;
+
+import com.example.memoraid.auth.LoginActivity;
+import com.example.memoraid.caregiver.TimelineActivity;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.messaging.FirebaseMessagingService;
+import com.google.firebase.messaging.RemoteMessage;
+
+import java.util.Map;
+
+public class MyFirebaseMessagingService extends FirebaseMessagingService {
+
+    private static final String TAG = "FCM_Service";
+    private static final String CHANNEL_ID = "memoraid_channel";
+
+    @Override
+    public void onNewToken(@NonNull String token) {
+        super.onNewToken(token);
+
+        // Save token if user is logged in
+        if (FirebaseAuth.getInstance().getCurrentUser() != null) {
+            String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+
+            // Use arrayUnion so multiple devices are supported
+            FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .document(uid)
+                    .update("fcmTokens", FieldValue.arrayUnion(token))
+                    .addOnSuccessListener(aVoid -> Log.d(TAG, "FCM token updated for user: " + uid))
+                    .addOnFailureListener(e -> Log.e(TAG, "Failed to update token: " + e.getMessage()));
+        }
+    }
+
+    @Override
+    public void onMessageReceived(@NonNull RemoteMessage remoteMessage) {
+        String title = null, body = null;
+        Intent targetIntent;
+
+        // Default: open login if no special case
+        targetIntent = new Intent(this, LoginActivity.class);
+
+        // Notification payload (optional)
+        if (remoteMessage.getNotification() != null) {
+            title = remoteMessage.getNotification().getTitle();
+            body = remoteMessage.getNotification().getBody();
+        }
+
+        // Data payload (preferred for custom logic)
+        if (!remoteMessage.getData().isEmpty()) {
+            Map<String, String> data = remoteMessage.getData();
+            if (title == null) title = data.get("title");
+            if (body == null) body = data.get("body");
+
+            String type = data.get("type");
+
+            if ("SOS".equalsIgnoreCase(type)) {
+                title = "🚨 SOS Alert";
+                body = data.get("patientName") + " triggered SOS!";
+
+                targetIntent = new Intent(this, TimelineActivity.class);
+                targetIntent.putExtra("patientId", data.get("patientId"));
+                targetIntent.putExtra("patientName", data.get("patientName"));
+            }
+        }
+
+        showNotification(title, body, targetIntent);
+    }
+
+    private void showNotification(String title, String messageBody, Intent intent) {
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+                this,
+                0,
+                intent,
+                PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.mipmap.ic_launcher) // replace with custom icon if available
+                .setContentTitle(title != null ? title : "Memoraid Alert")
+                .setContentText(messageBody != null ? messageBody : "")
+                .setAutoCancel(true)
+                .setSound(soundUri)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(pendingIntent);
+
+        NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+
+        // Create channel for Android O+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID,
+                    "Memoraid Notifications",
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            manager.createNotificationChannel(channel);
+        }
+
+        manager.notify((int) System.currentTimeMillis(), builder.build());
+    }
+}
+app/src/main/java/com/example/memoraid/NotificationHelper.java:
+package com.example.memoraid;
+
+import android.util.Log;
+
+import com.google.firebase.auth.FirebaseAuth;
+
+import org.json.JSONObject;
+
+import java.io.IOException;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+public class NotificationHelper {
+
+    private static final String TAG = "NotificationHelper";
+    private static final String BACKEND_URL = "https://memoraid-notify-backend.vercel.app/api/notifyCaregiverByPatient";
+    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+
+    private static final OkHttpClient client = new OkHttpClient();
+
+    public static void notifyCaregiverByPatient(String idToken, String patientId, String title, String body) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("patientId", patientId);
+            json.put("title", title);
+            json.put("body", body);
+
+            RequestBody requestBody = RequestBody.create(json.toString(), JSON);
+
+            Request request = new Request.Builder()
+                    .url(BACKEND_URL)
+                    .addHeader("Authorization", "Bearer " + idToken)
+                    .post(requestBody)
+                    .build();
+
+            client.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    Log.e(TAG, "Network error: " + e.getMessage());
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    String resBody = response.body() != null ? response.body().string() : "";
+                    if (!response.isSuccessful()) {
+                        Log.e(TAG, "Backend error: " + resBody);
+                    } else {
+                        Log.d(TAG, "Notification sent: " + resBody);
+                    }
+                }
+            });
+
+        } catch (Exception e) {
+            Log.e(TAG, "JSON build error: " + e.getMessage());
+        }
+    }
+}
+
+app/src/main/java/com/example/memoraid/ProfileActivity.java:
+package com.example.memoraid;
+
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class ProfileActivity extends AppCompatActivity {
+
+    private EditText nameField, emailField, phoneField, emergencyField;
+    private View emergencyContainer;
+    private Button saveBtn;
+
+    private FirebaseAuth mAuth;
+    private FirebaseFirestore db;
+    private String currentRole;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_profile);
+
+        nameField = findViewById(R.id.nameField);
+        emailField = findViewById(R.id.emailField);
+        phoneField = findViewById(R.id.phoneField);
+        emergencyField = findViewById(R.id.emergencyField);
+        emergencyContainer = findViewById(R.id.emergencyContainer);
+        saveBtn = findViewById(R.id.saveBtn);
+
+        mAuth = FirebaseAuth.getInstance();
+        db = FirebaseFirestore.getInstance();
+
+        loadProfile();
+        saveBtn.setOnClickListener(v -> saveProfile());
+    }
+
+    private void loadProfile() {
+        String uid = mAuth.getCurrentUser().getUid();
+
+        db.collection("users").document(uid).get()
+                .addOnSuccessListener(doc -> {
+                    if (!doc.exists()) return;
+
+                    nameField.setText(doc.getString("name"));
+                    emailField.setText(doc.getString("email"));
+                    phoneField.setText(doc.getString("phone"));
+                    currentRole = doc.getString("role");
+
+                    if ("patient".equals(currentRole)) {
+                        emergencyContainer.setVisibility(View.VISIBLE);
+                        emergencyField.setText(doc.getString("emergencyContact"));
+                    } else {
+                        emergencyContainer.setVisibility(View.GONE);
+                    }
+                })
+                .addOnFailureListener(e ->
+                        Toast.makeText(this,
+                                "Error loading profile: " + e.getMessage(),
+                                Toast.LENGTH_SHORT).show());
+    }
+
+    private boolean validateInput() {
+
+        if (nameField.getText().toString().trim().isEmpty()) {
+            nameField.setError("Name is required");
+            nameField.requestFocus();
+            return false;
+        }
+
+        if (phoneField.getText().toString().trim().isEmpty()) {
+            phoneField.setError("Phone number is required");
+            phoneField.requestFocus();
+            return false;
+        }
+
+        if ("patient".equals(currentRole)) {
+            if (emergencyField.getText().toString().trim().isEmpty()) {
+                emergencyField.setError("Emergency contact is required");
+                emergencyField.requestFocus();
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void saveProfile() {
+        if (!validateInput()) return;
+
+        saveBtn.setEnabled(false);
+        saveBtn.setText("Saving...");
+
+        String uid = mAuth.getCurrentUser().getUid();
+
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("name", nameField.getText().toString().trim());
+        updates.put("phone", phoneField.getText().toString().trim());
+
+        if ("patient".equals(currentRole)) {
+            updates.put("emergencyContact",
+                    emergencyField.getText().toString().trim());
+        }
+
+        db.collection("users").document(uid).update(updates)
+                .addOnSuccessListener(unused -> {
+                    saveBtn.setEnabled(true);
+                    saveBtn.setText("Save Changes");
+                    Toast.makeText(this,
+                            "Profile updated successfully",
+                            Toast.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e -> {
+                    saveBtn.setEnabled(true);
+                    saveBtn.setText("Save Changes");
+                    Toast.makeText(this,
+                            "Update failed: " + e.getMessage(),
+                            Toast.LENGTH_SHORT).show();
+                });
+    }
+}   
+
+app/src/main/java/com/example/memoraid/caregiver/CaregiverDashboardActivity.java:
+package com.example.memoraid.caregiver;
+
+import android.content.Intent;
+import android.os.Bundle;
+import android.widget.Button;
+import android.widget.ListView;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.example.memoraid.R;
+import com.example.memoraid.ProfileActivity;
+import com.example.memoraid.auth.LoginActivity;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
+
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.Locale;
+
+public class CaregiverDashboardActivity extends AppCompatActivity {
+
+    private ListView lvPatients;
+    private Button btnSignOut, btnProfile, btnFaceManager;
+
+    private FirebaseAuth mAuth;
+    private FirebaseFirestore db;
+
+    private final ArrayList<PatientItem> patients = new ArrayList<>();
+    private PatientListAdapter adapter;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_caregiver_dashboard);
+
+        lvPatients = findViewById(R.id.lvPatients);
+        btnSignOut = findViewById(R.id.btnSignOut);
+        btnProfile = findViewById(R.id.btnProfile);
+        btnFaceManager = findViewById(R.id.btnFaceManager);
+
+        adapter = new PatientListAdapter(this, patients);
+        lvPatients.setAdapter(adapter);
+
+        mAuth = FirebaseAuth.getInstance();
+        db = FirebaseFirestore.getInstance();
+
+        loadLinkedPatients();
+
+        lvPatients.setOnItemClickListener((parent, view, position, id) -> {
+            PatientItem item = patients.get(position);
+
+            Intent intent = new Intent(this, PatientDetailActivity.class);
+            intent.putExtra("patientId", item.id);
+            intent.putExtra("patientName", item.name);
+            startActivity(intent);
+        });
+
+        btnProfile.setOnClickListener(v ->
+                startActivity(new Intent(this, ProfileActivity.class)));
+
+        btnFaceManager.setOnClickListener(v ->
+                startActivity(new Intent(this, FaceManagerActivity.class)));
+
+        btnSignOut.setOnClickListener(v -> {
+            mAuth.signOut();
+            Intent intent = new Intent(this, LoginActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+        });
+    }
+
+    private void loadLinkedPatients() {
+        String caregiverUid = mAuth.getCurrentUser().getUid();
+
+        db.collection("users")
+                .whereEqualTo("caregiverId", caregiverUid)
+                .get()
+                .addOnSuccessListener(qs -> {
+                    patients.clear();
+
+                    if (qs.isEmpty()) {
+                        Toast.makeText(this, "No linked patients yet", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    qs.forEach(doc -> {
+                        String id = doc.getId();
+                        String name = doc.getString("name");
+                        String email = doc.getString("email");
+
+                        PatientItem item =
+                                new PatientItem(id,
+                                        name != null ? name : "Unknown",
+                                        email != null ? email : "");
+
+                        patients.add(item);
+                        adapter.notifyDataSetChanged();
+
+                        // Fetch last screening
+                        db.collection("patients")
+                                .document(id)
+                                .collection("screenings")
+                                .orderBy("createdAt", Query.Direction.DESCENDING)
+                                .limit(1)
+                                .get()
+                                .addOnSuccessListener(screeningQs -> {
+                                    if (!screeningQs.isEmpty()) {
+                                        var sDoc = screeningQs.getDocuments().get(0);
+
+                                        Date date = sDoc.getTimestamp("createdAt") != null
+                                                ? sDoc.getTimestamp("createdAt").toDate()
+                                                : null;
+
+                                        Long score = sDoc.getLong("score");
+
+                                        item.screeningDate = date != null
+                                                ? "Last screening: " +
+                                                new SimpleDateFormat("dd MMM yyyy",
+                                                        Locale.getDefault()).format(date)
+                                                : "Last screening: --";
+
+                                        item.score = score != null
+                                                ? "Score: " + score
+                                                : "Score: --";
+
+                                        adapter.notifyDataSetChanged();
+                                    }
+                                });
+                    });
+                })
+                .addOnFailureListener(e ->
+                        Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show());
+    }
+}
+
+app/src/main/java/com/example/memoraid/caregiver/FaceListActivity.java:
+package com.example.memoraid.caregiver;
+
+import android.os.Bundle;
+import android.widget.ListView;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.example.memoraid.R;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.util.ArrayList;
+
+public class FaceListActivity extends AppCompatActivity {
+
+    private ListView lvFaces;
+    private FaceListAdapter adapter;
+    private final ArrayList<String> faceList = new ArrayList<>();
+
+    private FirebaseFirestore db;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_face_list);
+
+        lvFaces = findViewById(R.id.lvFaces);
+        adapter = new FaceListAdapter(this, faceList);
+        lvFaces.setAdapter(adapter);
+
+        db = FirebaseFirestore.getInstance();
+
+        String patientId = getIntent().getStringExtra("patientId");
+        if (patientId == null) {
+            Toast.makeText(this, "No patient ID provided", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+
+        loadFaces(patientId);
+    }
+
+    private void loadFaces(String patientId) {
+        db.collection("patients")
+                .document(patientId)
+                .collection("embeddings")
+                .get()
+                .addOnSuccessListener(qs -> {
+                    faceList.clear();
+
+                    if (qs.isEmpty()) {
+                        faceList.add("No faces stored yet");
+                    } else {
+                        qs.forEach(doc -> {
+                            String label = doc.getString("label");
+                            faceList.add(label != null ? label : "Unnamed face");
+                        });
+                    }
+
+                    adapter.notifyDataSetChanged();
+                })
+                .addOnFailureListener(e ->
+                        Toast.makeText(
+                                this,
+                                "Error loading faces: " + e.getMessage(),
+                                Toast.LENGTH_SHORT
+                        ).show()
+                );
+    }
+}
+app/src/main/java/com/example/memoraid/caregiver/FaceListAdapter.java:
+package com.example.memoraid.caregiver;
+
+import android.content.Context;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.BaseAdapter;
+import android.widget.TextView;
+
+import com.example.memoraid.R;
+
+import java.util.List;
+
+public class FaceListAdapter extends BaseAdapter {
+
+    private final Context context;
+    private final List<String> faces;
+
+    public FaceListAdapter(Context context, List<String> faces) {
+        this.context = context;
+        this.faces = faces;
+    }
+
+    @Override
+    public int getCount() {
+        return faces.size();
+    }
+
+    @Override
+    public Object getItem(int position) {
+        return faces.get(position);
+    }
+
+    @Override
+    public long getItemId(int position) {
+        return position;
+    }
+
+    @Override
+    public View getView(int position, View convertView, ViewGroup parent) {
+
+        if (convertView == null) {
+            convertView = LayoutInflater.from(context)
+                    .inflate(R.layout.item_face, parent, false);
+        }
+
+        String label = faces.get(position);
+
+        TextView tvLabel = convertView.findViewById(R.id.tvFaceLabel);
+        TextView tvSub = convertView.findViewById(R.id.tvSubText);
+
+        tvLabel.setText(label);
+        tvSub.setText("Saved face");
+
+        return convertView;
+    }
+}
+
+app/src/main/java/com/example/memoraid/caregiver/PatientDetailActivity.java:
+package com.example.memoraid.caregiver;
+
+import android.content.Intent;
+import android.os.Bundle;
+import android.widget.Button;
+import android.widget.TextView;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.example.memoraid.R;
+
+public class PatientDetailActivity extends AppCompatActivity {
+
+    private TextView tvPatientInfo;
+    private Button btnScreeningHistory, btnFaceList, btnTimeline;
+
+    private String patientId;
+    private String patientName;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_patient_detail);
+
+        tvPatientInfo = findViewById(R.id.tvHeader);
+        btnScreeningHistory = findViewById(R.id.btnScreeningHistory);
+        btnFaceList = findViewById(R.id.btnFaceList);
+        btnTimeline = findViewById(R.id.btnTimeline);
+
+        // Get data from intent
+        patientId = getIntent().getStringExtra("patientId");
+        patientName = getIntent().getStringExtra("patientName");
+
+        if (patientName != null) {
+            tvPatientInfo.setText("Patient: " + patientName);
+        } else {
+            tvPatientInfo.setText("Patient Details");
+        }
+
+        // Open Screening History
+        btnScreeningHistory.setOnClickListener(v -> {
+            Intent intent = new Intent(PatientDetailActivity.this, ScreeningHistoryActivity.class);
+            intent.putExtra("patientId", patientId);
+            intent.putExtra("patientName", patientName);
+            startActivity(intent);
+        });
+
+        // Open Face List
+        btnFaceList.setOnClickListener(v -> {
+            Intent intent = new Intent(PatientDetailActivity.this, FaceListActivity.class);
+            intent.putExtra("patientId", patientId);
+            intent.putExtra("patientName", patientName);
+            startActivity(intent);
+        });
+
+        // Open Timeline
+        btnTimeline.setOnClickListener(v -> {
+            Intent intent = new Intent(PatientDetailActivity.this, TimelineActivity.class);
+            intent.putExtra("patientId", patientId);
+            intent.putExtra("patientName", patientName);
+            startActivity(intent);
+        });
+    }
+}
+
+app/src/main/java/com/example/memoraid/caregiver/PatientItem.java:
+package com.example.memoraid.caregiver;
+
+public class PatientItem {
+    public String id;
+    public String name;
+    public String email;
+    public String screeningDate;
+    public String score;
+
+    public PatientItem(String id, String name, String email) {
+        this.id = id;
+        this.name = name;
+        this.email = email;
+        this.screeningDate = "Last screening: --";
+        this.score = "Score: --";
+    }
+}
+
+app/src/main/java/com/example/memoraid/caregiver/PatientListAdapter.java:
+package com.example.memoraid.caregiver;
+
+import android.content.Context;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.BaseAdapter;
+import android.widget.TextView;
+
+import com.example.memoraid.R;
+
+import java.util.List;
+
+public class PatientListAdapter extends BaseAdapter {
+
+    private final Context context;
+    private final List<PatientItem> list;
+
+    public PatientListAdapter(Context context, List<PatientItem> list) {
+        this.context = context;
+        this.list = list;
+    }
+
+    @Override
+    public int getCount() {
+        return list.size();
+    }
+
+    @Override
+    public Object getItem(int position) {
+        return list.get(position);
+    }
+
+    @Override
+    public long getItemId(int position) {
+        return position;
+    }
+
+    @Override
+    public View getView(int position, View convertView, ViewGroup parent) {
+
+        if (convertView == null) {
+            convertView = LayoutInflater.from(context)
+                    .inflate(R.layout.item_patient_simple, parent, false);
+        }
+
+        PatientItem item = list.get(position);
+
+        TextView tvName = convertView.findViewById(R.id.tvPatientName);
+        TextView tvEmail = convertView.findViewById(R.id.tvEmail);
+        TextView tvScreening = convertView.findViewById(R.id.tvScreening);
+
+        // SAFETY CHECK (optional but good)
+        if (tvName != null) tvName.setText(item.name);
+        if (tvEmail != null) tvEmail.setText(item.email);
+        if (tvScreening != null) tvScreening.setText(item.screeningDate);
+
+        return convertView;
+    }
+}
+
+app/src/main/java/com/example/memoraid/caregiver/ScreeningAdapter.java:
+package com.example.memoraid.caregiver;
+
+import android.graphics.Color;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.example.memoraid.R;
+
+import java.util.List;
+
+public class ScreeningAdapter extends RecyclerView.Adapter<ScreeningAdapter.ViewHolder> {
+
+    private List<ScreeningModel> list;
+
+    public ScreeningAdapter(List<ScreeningModel> list) {
+        this.list = list;
+    }
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View v = LayoutInflater.from(parent.getContext())
+                .inflate(R.layout.item_screening, parent, false);
+        return new ViewHolder(v);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        ScreeningModel model = list.get(position);
+
+        int score = model.getScore();
+
+        // Score out of 4
+        holder.tvScore.setText("Score: " + score + " / 4");
+        holder.tvDate.setText(model.getDate());
+
+        // Status Logic (FOR 4 QUESTIONS)
+        if (score >= 3) {
+            holder.tvStatus.setText("Stable");
+            holder.tvStatus.setTextColor(Color.parseColor("#43A047")); // Green
+            holder.statusIndicator.setBackgroundColor(Color.parseColor("#43A047"));
+
+        } else if (score == 2) {
+            holder.tvStatus.setText("Mild Risk");
+            holder.tvStatus.setTextColor(Color.parseColor("#FB8C00")); // Orange
+            holder.statusIndicator.setBackgroundColor(Color.parseColor("#FB8C00"));
+
+        } else {
+            holder.tvStatus.setText("High Risk");
+            holder.tvStatus.setTextColor(Color.parseColor("#E53935")); // Red
+            holder.statusIndicator.setBackgroundColor(Color.parseColor("#E53935"));
+        }
+    }
+
+
+    @Override
+    public int getItemCount() {
+        return list.size();
+    }
+
+    static class ViewHolder extends RecyclerView.ViewHolder {
+
+        TextView tvScore, tvStatus, tvDate;
+        View statusIndicator;
+
+        public ViewHolder(@NonNull View itemView) {
+            super(itemView);
+            tvScore = itemView.findViewById(R.id.tvScore);
+            tvStatus = itemView.findViewById(R.id.tvStatus);
+            tvDate = itemView.findViewById(R.id.tvDate);
+            statusIndicator = itemView.findViewById(R.id.statusIndicator);
+        }
+    }
+}
+
+app/src/main/java/com/example/memoraid/caregiver/ScreeningHistoryActivity.java:
+package com.example.memoraid.caregiver;
+
+import android.os.Bundle;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.example.memoraid.R;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
+
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+
+public class ScreeningHistoryActivity extends AppCompatActivity {
+
+    private RecyclerView recyclerView;
+    private ScreeningAdapter adapter;
+    private List<ScreeningModel> screenings = new ArrayList<>();
+    private FirebaseFirestore db;
+    private TextView tvHeader;
+
+    private SimpleDateFormat sdf =
+            new SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault());
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_screening_history);
+
+        tvHeader = findViewById(R.id.tvHeader);
+
+        recyclerView = findViewById(R.id.recyclerScreenings);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+        adapter = new ScreeningAdapter(screenings);
+        recyclerView.setAdapter(adapter);
+
+        db = FirebaseFirestore.getInstance();
+
+        String patientId = getIntent().getStringExtra("patientId");
+        String patientName = getIntent().getStringExtra("patientName");
+
+        if (patientName != null) {
+            tvHeader.setText("Screenings for " + patientName);
+        }
+
+        if (patientId != null) {
+            loadScreenings(patientId);
+        } else {
+            Toast.makeText(this, "No patient ID provided", Toast.LENGTH_SHORT).show();
+            finish();
+        }
+    }
+
+    private void loadScreenings(String patientId) {
+        db.collection("patients")
+                .document(patientId)
+                .collection("screenings")
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .get()
+                .addOnSuccessListener(qs -> {
+                    screenings.clear();
+
+                    qs.forEach(doc -> {
+                        Long scoreLong = doc.getLong("score");
+                        int score = scoreLong != null ? scoreLong.intValue() : 0;
+
+                        Long ts = doc.getLong("timestamp");
+                        String date = (ts != null)
+                                ? sdf.format(new Date(ts))
+                                : "Unknown date";
+
+                        screenings.add(new ScreeningModel(score, date));
+                    });
+
+                    adapter.notifyDataSetChanged();
+                })
+                .addOnFailureListener(e ->
+                        Toast.makeText(this,
+                                "Error: " + e.getMessage(),
+                                Toast.LENGTH_SHORT).show()
+                );
+    }
+}
+
+app/src/main/java/com/example/memoraid/caregiver/ScreeningModel.java:
+package com.example.memoraid.caregiver;
+
+public class ScreeningModel {
+    private int score;
+    private String date;
+
+    public ScreeningModel(int score, String date) {
+        this.score = score;
+        this.date = date;
+    }
+
+    public int getScore() { return score; }
+    public String getDate() { return date; }
+}
+
+app/src/main/java/com/example/memoraid/caregiver/TimelineActivity.java:
+package com.example.memoraid.caregiver;
+
+import android.os.Bundle;
+import android.widget.ListView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.example.memoraid.R;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
+
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.Locale;
+
+public class TimelineActivity extends AppCompatActivity {
+
+    private TextView tvHeader;
+    private ListView lvTimeline;
+
+    private FirebaseFirestore db;
+
+    // ✅ Updated: custom model + adapter
+    private final ArrayList<TimelineItem> events = new ArrayList<>();
+    private TimelineAdapter adapter;
+
+    private String patientId;
+    private String patientName;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_timeline);
+
+        // Bind views
+        tvHeader = findViewById(R.id.tvHeader);
+        lvTimeline = findViewById(R.id.lvTimeline);
+
+        // Set adapter
+        adapter = new TimelineAdapter(this, events);
+        lvTimeline.setAdapter(adapter);
+
+        db = FirebaseFirestore.getInstance();
+
+        // Get intent data
+        patientId = getIntent().getStringExtra("patientId");
+        patientName = getIntent().getStringExtra("patientName");
+
+        if (patientName != null) {
+            tvHeader.setText("Timeline • " + patientName);
+        } else {
+            tvHeader.setText("Daily Timeline");
+        }
+
+        if (patientId != null) {
+            loadTimeline();
+        } else {
+            Toast.makeText(this, "No patient selected", Toast.LENGTH_SHORT).show();
+            finish();
+        }
+    }
+
+    private void loadTimeline() {
+        db.collection("patients")
+                .document(patientId)
+                .collection("timeline")
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .addSnapshotListener((qs, e) -> {
+
+                    if (e != null) {
+                        Toast.makeText(
+                                this,
+                                "Error loading timeline: " + e.getMessage(),
+                                Toast.LENGTH_SHORT
+                        ).show();
+                        return;
+                    }
+
+                    if (qs == null) return;
+
+                    events.clear();
+
+                    SimpleDateFormat sdf =
+                            new SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault());
+
+                    qs.forEach(doc -> {
+                        String type = doc.getString("type");
+                        String desc = doc.getString("desc");
+                        Date createdAt = doc.getDate("createdAt");
+
+                        String timeStr = (createdAt != null)
+                                ? sdf.format(createdAt)
+                                : "Unknown time";
+
+                        events.add(new TimelineItem(
+                                type != null ? type : "Event",
+                                desc != null ? desc : "",
+                                timeStr
+                        ));
+                    });
+
+                    adapter.notifyDataSetChanged();
+
+                    // Scroll to latest event
+                    if (!events.isEmpty()) {
+                        lvTimeline.smoothScrollToPosition(0);
+                    }
+                });
+    }
+}
+
+app/src/main/java/com/example/memoraid/caregiver/TimelineAdapter.java:
+package com.example.memoraid.caregiver;
+
+import android.content.Context;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.BaseAdapter;
+import android.widget.TextView;
+
+import com.example.memoraid.R;
+
+import java.util.List;
+
+public class TimelineAdapter extends BaseAdapter {
+
+    private final Context context;
+    private final List<TimelineItem> list;
+
+    public TimelineAdapter(Context context, List<TimelineItem> list) {
+        this.context = context;
+        this.list = list;
+    }
+
+    @Override
+    public int getCount() {
+        return list.size();
+    }
+
+    @Override
+    public Object getItem(int position) {
+        return list.get(position);
+    }
+
+    @Override
+    public long getItemId(int position) {
+        return position;
+    }
+
+    @Override
+    public View getView(int position, View convertView, ViewGroup parent) {
+
+        if (convertView == null) {
+            convertView = LayoutInflater.from(context)
+                    .inflate(R.layout.item_timeline, parent, false);
+        }
+
+        TimelineItem item = list.get(position);
+
+        ((TextView) convertView.findViewById(R.id.tvType)).setText(item.type);
+        ((TextView) convertView.findViewById(R.id.tvDesc)).setText(item.desc);
+        ((TextView) convertView.findViewById(R.id.tvTime)).setText(item.time);
+
+        return convertView;
+    }
+}
+
+app/src/main/java/com/example/memoraid/caregiver/TimelineItem.java:
+package com.example.memoraid.caregiver;
+
+public class TimelineItem {
+    public String type;
+    public String desc;
+    public String time;
+
+    public TimelineItem(String type, String desc, String time) {
+        this.type = type;
+        this.desc = desc;
+        this.time = time;
+    }
+}
+
+app/src/main/java/com/example/memoraid/face/TFLiteFaceNet.java:
+package com.example.memoraid.face;
+
+import android.content.Context;
+import android.graphics.Bitmap;
+
+import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.support.common.FileUtil;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.MappedByteBuffer;
+
+public class TFLiteFaceNet {
+
+    private static final int INPUT_SIZE = 160;   // FaceNet input size (160x160)
+    private static final int EMBEDDING_SIZE = 512; // Updated to match your model output
+
+    private Interpreter interpreter;
+
+    public TFLiteFaceNet(Context context) throws IOException {
+        // Load the FaceNet model from assets (make sure facenet.tflite is in assets folder)
+        MappedByteBuffer model = FileUtil.loadMappedFile(context, "facenet.tflite");
+        interpreter = new Interpreter(model);
+    }
+
+    public float[] getEmbedding(Bitmap faceBitmap) {
+        // Resize face image to model input
+        Bitmap resized = Bitmap.createScaledBitmap(faceBitmap, INPUT_SIZE, INPUT_SIZE, true);
+
+        // Prepare input buffer
+        ByteBuffer imgData = ByteBuffer.allocateDirect(1 * INPUT_SIZE * INPUT_SIZE * 3 * 4);
+        imgData.order(ByteOrder.nativeOrder());
+        imgData.rewind();
+
+        int[] intValues = new int[INPUT_SIZE * INPUT_SIZE];
+        resized.getPixels(intValues, 0, resized.getWidth(), 0, 0,
+                resized.getWidth(), resized.getHeight());
+
+        // Normalize pixel values to [-1,1]
+        for (int pixel : intValues) {
+            float r = (((pixel >> 16) & 0xFF) - 127.5f) / 128.0f;
+            float g = (((pixel >> 8) & 0xFF) - 127.5f) / 128.0f;
+            float b = (((pixel) & 0xFF) - 127.5f) / 128.0f;
+            imgData.putFloat(r);
+            imgData.putFloat(g);
+            imgData.putFloat(b);
+        }
+        imgData.rewind();
+
+        // Run inference
+        float[][] embedding = new float[1][EMBEDDING_SIZE];
+        interpreter.run(imgData, embedding);
+
+        // L2 normalize embedding
+        float[] out = embedding[0];
+        float sum = 0f;
+        for (float v : out) sum += v * v;
+        float norm = (float) Math.sqrt(sum);
+        if (norm != 0) {
+            for (int i = 0; i < out.length; i++) {
+                out[i] = out[i] / norm;
+            }
+        }
+
+        return out;
+    }
+
+    public void close() {
+        if (interpreter != null) {
+            interpreter.close();
+            interpreter = null;
+        }
+    }
+}
+
+app/src/main/java/com/example/memoraid/patient/MedicationReminderActivity.java:
+package com.example.memoraid.patient;
+
+import android.app.*;
+import android.content.*;
+import android.os.Build;
+import android.os.Bundle;
+import android.provider.Settings;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.text.format.DateFormat;
+import android.widget.*;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.example.memoraid.R;
+import com.google.android.material.textfield.MaterialAutoCompleteTextView;
+
+import java.util.Calendar;
+import java.util.UUID;
+
+public class MedicationReminderActivity extends AppCompatActivity {
+
+    private EditText edtMedicineName, edtDate, edtTime;
+    private MaterialAutoCompleteTextView spinnerRepeat;
+    private Button btnSetReminder;
+
+    private final Calendar reminderCalendar = Calendar.getInstance();
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_medication_reminder);
+
+        // Bind views
+        edtMedicineName = findViewById(R.id.edtMedicineName);
+        edtDate = findViewById(R.id.edtDate);
+        edtTime = findViewById(R.id.edtTime);
+        spinnerRepeat = findViewById(R.id.spinnerRepeat);
+        btnSetReminder = findViewById(R.id.btnSetReminder);
+
+        setupRepeatDropdown();
+        setupDatePicker();
+        setupTimePicker();
+        setupValidation();
+
+        btnSetReminder.setOnClickListener(v -> setReminder());
+    }
+
+    /* --------------------------------
+       Repeat dropdown (UX improved)
+       -------------------------------- */
+    private void setupRepeatDropdown() {
+
+        String[] options = {"One-time", "Daily", "Weekly"};
+
+        ArrayAdapter<String> adapter =
+                new ArrayAdapter<>(
+                        this,
+                        android.R.layout.simple_dropdown_item_1line,
+                        options
+                );
+
+        spinnerRepeat.setAdapter(adapter);
+
+        // Force dropdown only (no typing)
+        spinnerRepeat.setKeyListener(null);
+        spinnerRepeat.setOnClickListener(v -> spinnerRepeat.showDropDown());
+
+        // Default selection (better UX)
+        spinnerRepeat.setText("One-time", false);
+    }
+
+    /* --------------------------------
+       Date picker
+       -------------------------------- */
+    private void setupDatePicker() {
+        edtDate.setOnClickListener(v -> {
+            Calendar now = Calendar.getInstance();
+
+            DatePickerDialog dp = new DatePickerDialog(
+                    this,
+                    (view, year, month, day) -> {
+                        reminderCalendar.set(year, month, day);
+                        edtDate.setText(day + "/" + (month + 1) + "/" + year);
+                        validateForm();
+                    },
+                    now.get(Calendar.YEAR),
+                    now.get(Calendar.MONTH),
+                    now.get(Calendar.DAY_OF_MONTH)
+            );
+
+            // Prevent past date selection
+            dp.getDatePicker().setMinDate(System.currentTimeMillis());
+            dp.show();
+        });
+    }
+
+    /* --------------------------------
+       Time picker
+       -------------------------------- */
+    private void setupTimePicker() {
+        edtTime.setOnClickListener(v -> {
+            Calendar now = Calendar.getInstance();
+
+            new TimePickerDialog(
+                    this,
+                    (view, hour, minute) -> {
+                        reminderCalendar.set(Calendar.HOUR_OF_DAY, hour);
+                        reminderCalendar.set(Calendar.MINUTE, minute);
+                        reminderCalendar.set(Calendar.SECOND, 0);
+                        edtTime.setText(String.format("%02d:%02d", hour, minute));
+                        validateForm();
+                    },
+                    now.get(Calendar.HOUR_OF_DAY),
+                    now.get(Calendar.MINUTE),
+                    DateFormat.is24HourFormat(this)
+            ).show();
+        });
+    }
+
+    /* --------------------------------
+       Form validation
+       -------------------------------- */
+    private void setupValidation() {
+
+        TextWatcher watcher = new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(Editable s) {
+                validateForm();
+            }
+        };
+
+        edtMedicineName.addTextChangedListener(watcher);
+        spinnerRepeat.addTextChangedListener(watcher);
+    }
+
+    private void validateForm() {
+        boolean valid =
+                !edtMedicineName.getText().toString().trim().isEmpty() &&
+                        !edtDate.getText().toString().trim().isEmpty() &&
+                        !edtTime.getText().toString().trim().isEmpty() &&
+                        !spinnerRepeat.getText().toString().trim().isEmpty();
+
+        btnSetReminder.setEnabled(valid);
+    }
+
+    /* --------------------------------
+       Set reminder (safe & modern)
+       -------------------------------- */
+    private void setReminder() {
+
+        if (reminderCalendar.before(Calendar.getInstance())) {
+            Toast.makeText(this,
+                    "Selected time is in the past",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        AlarmManager alarmManager =
+                (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+
+        if (alarmManager == null) {
+            Toast.makeText(this,
+                    "Alarm service unavailable",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Android 12+ exact alarm permission
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (!alarmManager.canScheduleExactAlarms()) {
+                Intent intent =
+                        new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+                startActivity(intent);
+                Toast.makeText(this,
+                        "Please allow exact alarms to set reminders",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+        }
+
+        Intent intent = new Intent(this, ReminderReceiver.class);
+        intent.putExtra(
+                "medicine",
+                edtMedicineName.getText().toString().trim()
+        );
+
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                this,
+                UUID.randomUUID().hashCode(),
+                intent,
+                PendingIntent.FLAG_IMMUTABLE
+        );
+
+        String repeat = spinnerRepeat.getText().toString();
+
+        try {
+            if ("One-time".equals(repeat)) {
+                alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        reminderCalendar.getTimeInMillis(),
+                        pendingIntent
+                );
+            } else if ("Daily".equals(repeat)) {
+                alarmManager.setRepeating(
+                        AlarmManager.RTC_WAKEUP,
+                        reminderCalendar.getTimeInMillis(),
+                        AlarmManager.INTERVAL_DAY,
+                        pendingIntent
+                );
+            } else if ("Weekly".equals(repeat)) {
+                alarmManager.setRepeating(
+                        AlarmManager.RTC_WAKEUP,
+                        reminderCalendar.getTimeInMillis(),
+                        AlarmManager.INTERVAL_DAY * 7,
+                        pendingIntent
+                );
+            }
+        } catch (SecurityException e) {
+            Toast.makeText(this,
+                    "Permission denied for exact alarms",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        Toast.makeText(this,
+                "Reminder set successfully",
+                Toast.LENGTH_LONG).show();
+
+        finish();
+    }
+}
+
+app/src/main/java/com/example/memoraid/patient/PatientDashboardActivity.java:
+package com.example.memoraid.patient;
+
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+
+import com.example.memoraid.NotificationHelper;
+import com.example.memoraid.ProfileActivity;
+import com.example.memoraid.R;
+import com.example.memoraid.auth.LoginActivity;
+import com.google.android.material.button.MaterialButton;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class PatientDashboardActivity extends AppCompatActivity {
+
+    // Grid actions (containers)
+    private LinearLayout btnMedication, btnFaceRecognition, btnScreening;
+
+    // Action buttons
+    private MaterialButton btnSOS, btnProfile, btnLinkCaregiver, btnSignOut;
+
+    private FirebaseAuth mAuth;
+    private FirebaseFirestore db;
+
+    private static final int REQ_CALL = 101;
+    private String lastEmergencyNumber = "";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_patient_dashboard);
+
+        mAuth = FirebaseAuth.getInstance();
+        db = FirebaseFirestore.getInstance();
+
+        bindViews();
+        setupClickListeners();
+    }
+
+    /* =========================
+       VIEW BINDING
+       ========================= */
+
+    private void bindViews() {
+        btnMedication = findViewById(R.id.btnMedication);
+        btnFaceRecognition = findViewById(R.id.btnFaceRecognition);
+        btnScreening = findViewById(R.id.btnScreening);
+
+        btnSOS = findViewById(R.id.btnSOS);
+        btnProfile = findViewById(R.id.btnProfile);
+        btnLinkCaregiver = findViewById(R.id.btnLinkCaregiver);
+        btnSignOut = findViewById(R.id.btnSignOut);
+    }
+
+    /* =========================
+       CLICK LISTENERS
+       ========================= */
+
+    private void setupClickListeners() {
+
+        // 🚨 SOS (with confirmation)
+        btnSOS.setOnClickListener(v -> confirmSOS());
+
+        // 💊 Medication
+        btnMedication.setOnClickListener(v ->
+                startActivity(new Intent(this, MedicationReminderActivity.class))
+        );
+
+        // 👀 Face Recognition
+        btnFaceRecognition.setOnClickListener(v ->
+                startActivity(new Intent(this, PatientFaceRecognitionActivity.class))
+        );
+
+        // 🧠 Screening
+        btnScreening.setOnClickListener(v ->
+                startActivity(new Intent(this, ScreeningActivity.class))
+        );
+
+        // 👤 Profile
+        btnProfile.setOnClickListener(v ->
+                startActivity(new Intent(this, ProfileActivity.class))
+        );
+
+        // 🔗 Link Caregiver
+        btnLinkCaregiver.setOnClickListener(v -> showLinkCaregiverDialog());
+
+        // 🚪 Sign Out
+        btnSignOut.setOnClickListener(v -> confirmSignOut());
+    }
+
+    /* =========================
+       LINK CAREGIVER
+       ========================= */
+
+    private void showLinkCaregiverDialog() {
+        View view = getLayoutInflater().inflate(R.layout.dialog_link_caregiver, null);
+        EditText edtEmail = view.findViewById(R.id.edtCaregiverEmail);
+
+        new AlertDialog.Builder(this)
+                .setView(view)
+                .setPositiveButton("Link", (dialog, which) -> {
+                    String email = edtEmail.getText().toString().trim();
+                    if (email.isEmpty()) {
+                        Toast.makeText(this, "Please enter caregiver email", Toast.LENGTH_SHORT).show();
+                    } else {
+                        linkCaregiverByEmail(email);
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+
+    private void linkCaregiverByEmail(String caregiverEmail) {
+        db.collection("users")
+                .whereEqualTo("email", caregiverEmail)
+                .get()
+                .addOnSuccessListener(snap -> {
+                    if (snap.isEmpty()) {
+                        Toast.makeText(this, "Caregiver not found", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    String caregiverUid = snap.getDocuments().get(0).getId();
+                    String patientUid = mAuth.getCurrentUser().getUid();
+
+                    db.collection("users").document(patientUid)
+                            .update("caregiverId", caregiverUid)
+                            .addOnSuccessListener(a ->
+                                    db.collection("users").document(caregiverUid)
+                                            .update("linkedPatients", FieldValue.arrayUnion(patientUid))
+                                            .addOnSuccessListener(b ->
+                                                    db.collection("patients").document(patientUid)
+                                                            .update("caregiverId", caregiverUid)
+                                                            .addOnSuccessListener(c ->
+                                                                    Toast.makeText(this, "Caregiver linked successfully", Toast.LENGTH_SHORT).show()
+                                                            )
+                                            )
+                            );
+                })
+                .addOnFailureListener(e ->
+                        Toast.makeText(this, "Error linking caregiver: " + e.getMessage(), Toast.LENGTH_SHORT).show()
+                );
+    }
+
+    /* =========================
+       SOS FLOW
+       ========================= */
+
+    private void confirmSOS() {
+        new AlertDialog.Builder(this)
+                .setTitle("Emergency Help")
+                .setMessage("Do you need immediate help?\nYour caregiver will be alerted.")
+                .setPositiveButton("Yes, Help Me", (d, w) -> triggerSOS())
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void triggerSOS() {
+        String patientUid = mAuth.getCurrentUser().getUid();
+
+        mAuth.getCurrentUser().getIdToken(true)
+                .addOnSuccessListener(result -> {
+                    String idToken = result.getToken();
+
+                    db.collection("users").document(patientUid).get()
+                            .addOnSuccessListener(doc -> {
+                                String emergencyContact = doc.getString("emergencyContact");
+
+                                if (emergencyContact == null || emergencyContact.isEmpty()) {
+                                    Toast.makeText(this, "Set emergency contact in profile", Toast.LENGTH_SHORT).show();
+                                    return;
+                                }
+
+                                // Save timeline event
+                                Map<String, Object> event = new HashMap<>();
+                                event.put("type", "sos");
+                                event.put("desc", "SOS triggered by patient");
+                                event.put("createdAt", FieldValue.serverTimestamp());
+
+                                db.collection("patients").document(patientUid)
+                                        .collection("timeline")
+                                        .add(event);
+
+                                // Notify caregiver
+                                NotificationHelper.notifyCaregiverByPatient(
+                                        idToken,
+                                        patientUid,
+                                        "🚨 SOS Alert",
+                                        "Patient triggered SOS!"
+                                );
+
+                                // Call emergency contact
+                                lastEmergencyNumber = emergencyContact;
+                                makePhoneCall(emergencyContact);
+                            });
+                })
+                .addOnFailureListener(e ->
+                        Toast.makeText(this, "SOS failed: " + e.getMessage(), Toast.LENGTH_SHORT).show()
+                );
+    }
+
+    /* =========================
+       PHONE CALL PERMISSION
+       ========================= */
+
+    private void makePhoneCall(String phone) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
+                == PackageManager.PERMISSION_GRANTED) {
+
+            Intent intent = new Intent(Intent.ACTION_CALL);
+            intent.setData(Uri.parse("tel:" + phone));
+            startActivity(intent);
+
+        } else {
+            requestPermissions(new String[]{Manifest.permission.CALL_PHONE}, REQ_CALL);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        if (requestCode == REQ_CALL) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                if (!lastEmergencyNumber.isEmpty()) {
+                    makePhoneCall(lastEmergencyNumber);
+                }
+            } else {
+                Toast.makeText(this, "Call permission required for SOS", Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        }
+    }
+
+    /* =========================
+       SIGN OUT
+       ========================= */
+
+    private void confirmSignOut() {
+        new AlertDialog.Builder(this)
+                .setTitle("Sign Out")
+                .setMessage("Are you sure you want to sign out?")
+                .setPositiveButton("Sign Out", (d, w) -> {
+                    mAuth.signOut();
+                    Intent i = new Intent(this, LoginActivity.class);
+                    i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(i);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+}
+
+app/src/main/java/com/example/memoraid/patient/PatientFaceRecognitionActivity.java:
+package com.example.memoraid.patient;
+
+import android.Manifest;
+import android.graphics.Bitmap;
+import android.graphics.ImageFormat;
+import android.graphics.Matrix;
+import android.graphics.Rect;
+import android.media.Image;
+import android.os.Bundle;
+import android.provider.Settings;
+import android.util.Log;
+import android.util.Pair;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageProxy;
+import androidx.camera.core.Preview;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.view.PreviewView;
+import androidx.core.content.ContextCompat;
+
+import com.example.memoraid.R;
+import com.example.memoraid.face.TFLiteFaceNet;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QuerySnapshot;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.face.Face;
+import com.google.mlkit.vision.face.FaceDetection;
+import com.google.mlkit.vision.face.FaceDetector;
+import com.google.mlkit.vision.face.FaceDetectorOptions;
+
+import java.io.ByteArrayOutputStream;
+import java.lang.Math;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class PatientFaceRecognitionActivity extends AppCompatActivity {
+    private static final String TAG = "PatientFaceRec";
+
+    private PreviewView previewView;
+    private TextView tvLabel;
+    private Button btnToggle;
+
+    private ProcessCameraProvider cameraProvider;
+    private ExecutorService cameraExecutor;
+    private ExecutorService modelExecutor;
+
+    private TFLiteFaceNet faceNet = null;
+    private FirebaseFirestore db;
+    private FirebaseAuth mAuth;
+
+    private final List<EmbeddingEntry> knownEmbeddings = new ArrayList<>();
+    // threshold — tune in your environment. Lower -> stricter.
+    private float MATCH_THRESHOLD = 0.9f;
+
+    private volatile boolean processingFrame = false;
+    private volatile boolean scanning = true;
+
+    private FaceDetector detector;
+
+    // permission launcher
+    private final ActivityResultLauncher<String> cameraPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (granted) startCamera();
+                else {
+                    Toast.makeText(this, "Camera permission required", Toast.LENGTH_LONG).show();
+                    finish();
+                }
+            });
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_patient_face_recognition);
+
+        previewView = findViewById(R.id.previewView);
+        tvLabel = findViewById(R.id.tvLabel);
+        btnToggle = findViewById(R.id.btnToggle);
+
+        cameraExecutor = Executors.newSingleThreadExecutor();
+        modelExecutor = Executors.newSingleThreadExecutor();
+
+        db = FirebaseFirestore.getInstance();
+        mAuth = FirebaseAuth.getInstance();
+
+        // ML Kit face detector (fast)
+        FaceDetectorOptions options = new FaceDetectorOptions.Builder()
+                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+                .setMinFaceSize(0.1f)
+                .build();
+        detector = FaceDetection.getClient(options);
+
+        // load TFLite model on background thread
+        modelExecutor.execute(() -> {
+            try {
+                faceNet = new TFLiteFaceNet(PatientFaceRecognitionActivity.this);
+                runOnUiThread(() -> tvLabel.setText("Model loaded"));
+                Log.i(TAG, "FaceNet loaded");
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to load FaceNet", e);
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Failed to load FaceNet: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    tvLabel.setText("Model failed");
+                });
+            }
+        });
+
+        // listen to embeddings in real time
+        listenForEmbeddingsUpdates();
+
+        btnToggle.setOnClickListener(v -> {
+            scanning = !scanning;
+            btnToggle.setText(scanning ? "Stop" : "Start");
+            tvLabel.setText(scanning ? "Scanning..." : "Paused");
+        });
+
+        // request camera permission and start
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            startCamera();
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
+        }
+    }
+
+    private void listenForEmbeddingsUpdates() {
+        String patientId = getCurrentPatientId();
+        if (patientId == null) {
+            Log.w(TAG, "No patientId (not logged in)");
+            return;
+        }
+        db.collection("patients")
+                .document(patientId)
+                .collection("embeddings")
+                .addSnapshotListener((QuerySnapshot snapshots, com.google.firebase.firestore.FirebaseFirestoreException e) -> {
+                    if (e != null) {
+                        Log.w(TAG, "Embedding listener failed", e);
+                        return;
+                    }
+                    knownEmbeddings.clear();
+                    if (snapshots == null) return;
+                    for (DocumentSnapshot doc : snapshots.getDocuments()) {
+                        String label = doc.getString("label");
+                        List<Double> vecD = (List<Double>) doc.get("vector");
+                        if (label == null || vecD == null) continue;
+                        float[] v = new float[vecD.size()];
+                        for (int i = 0; i < vecD.size(); i++) v[i] = vecD.get(i).floatValue();
+                        knownEmbeddings.add(new EmbeddingEntry(label, v, doc.getId()));
+                    }
+                    Log.i(TAG, "Loaded embeddings: " + knownEmbeddings.size());
+                });
+    }
+
+    private String getCurrentPatientId() {
+        if (mAuth.getCurrentUser() != null) return mAuth.getCurrentUser().getUid();
+        return null;
+    }
+
+    private void startCamera() {
+        ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(this);
+        cameraProviderFuture.addListener(() -> {
+            try {
+                cameraProvider = cameraProviderFuture.get();
+                Preview preview = new Preview.Builder().build();
+                preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+                ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build();
+
+                imageAnalysis.setAnalyzer(cameraExecutor, image -> {
+                    if (!scanning) {
+                        image.close();
+                        return;
+                    }
+                    if (processingFrame) {
+                        image.close();
+                        return;
+                    }
+                    processingFrame = true;
+                    analyzeImageProxy(image);
+                });
+
+                CameraSelector cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA;
+                cameraProvider.unbindAll();
+                cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis);
+
+            } catch (ExecutionException | InterruptedException ex) {
+                Log.e(TAG, "Camera provider failed", ex);
+            }
+        }, ContextCompat.getMainExecutor(this));
+    }
+
+    private void analyzeImageProxy(ImageProxy imageProxy) {
+        Image mediaImage = imageProxy.getImage();
+        if (mediaImage == null) {
+            imageProxy.close();
+            processingFrame = false;
+            return;
+        }
+        int rotation = imageProxy.getImageInfo().getRotationDegrees();
+        InputImage inputImage = InputImage.fromMediaImage(mediaImage, rotation);
+
+        detector.process(inputImage)
+                .addOnSuccessListener(faces -> {
+                    if (faces == null || faces.isEmpty()) {
+                        runOnUiThread(() -> tvLabel.setText("No face"));
+                        imageProxy.close();
+                        processingFrame = false;
+                        return;
+                    }
+
+                    // pick largest face
+                    Face largest = null;
+                    for (Face f : faces) {
+                        if (largest == null) largest = f;
+                        else {
+                            Rect a = f.getBoundingBox();
+                            Rect b = largest.getBoundingBox();
+                            if ((a.width() * a.height()) > (b.width() * b.height())) largest = f;
+                        }
+                    }
+                    if (largest == null) {
+                        imageProxy.close();
+                        processingFrame = false;
+                        return;
+                    }
+
+                    // convert ImageProxy -> Bitmap
+                    Bitmap frameBitmap = imageProxyToBitmap(imageProxy);
+                    if (frameBitmap == null) {
+                        imageProxy.close();
+                        processingFrame = false;
+                        return;
+                    }
+
+                    // crop according to bounding box (adjust for rotation)
+                    Rect bb = largest.getBoundingBox();
+                    // account for rotation by rotating the frame bitmap if necessary
+                    Bitmap rotated = rotateBitmapIfRequired(frameBitmap, rotation);
+                    Rect safeBox = constrainRectToBitmap(bb, rotated);
+                    try {
+                        Bitmap faceCrop = Bitmap.createBitmap(rotated, safeBox.left, safeBox.top, safeBox.width(), safeBox.height());
+                        // resize to FaceNet input (TFLiteFaceNet handles resizing internally)
+                        // run embedding on background thread
+                        modelExecutor.execute(() -> {
+                            if (faceNet == null) {
+                                runOnUiThread(() -> tvLabel.setText("Model not ready"));
+                                imageProxy.close();
+                                processingFrame = false;
+                                return;
+                            }
+                            float[] emb = faceNet.getEmbedding(faceCrop);
+                            Pair<String, Float> match = findBestMatch(emb);
+                            runOnUiThread(() -> {
+                                String label = match.first;
+                                float dist = match.second;
+                                if (!"Unknown".equals(label)) {
+                                    tvLabel.setText(label + String.format(" (%.3f)", dist));
+                                } else {
+                                    tvLabel.setText("Unknown");
+                                }
+                            });
+                            // log event
+                            logRecognitionEvent(match.first, match.second);
+                            imageProxy.close();
+                            processingFrame = false;
+                        });
+                    } catch (Exception ex) {
+                        Log.e(TAG, "Crop failed", ex);
+                        imageProxy.close();
+                        processingFrame = false;
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Face detection failed", e);
+                    imageProxy.close();
+                    processingFrame = false;
+                });
+    }
+
+    // convert YUV ImageProxy to Bitmap
+    private Bitmap imageProxyToBitmap(ImageProxy image) {
+        Image imageInner = image.getImage();
+        if (imageInner == null) return null;
+        try {
+            // YUV_420_888 to NV21
+            ByteBuffer yBuffer = imageInner.getPlanes()[0].getBuffer();
+            ByteBuffer uBuffer = imageInner.getPlanes()[1].getBuffer();
+            ByteBuffer vBuffer = imageInner.getPlanes()[2].getBuffer();
+
+            int ySize = yBuffer.remaining();
+            int uSize = uBuffer.remaining();
+            int vSize = vBuffer.remaining();
+
+            byte[] nv21 = new byte[ySize + uSize + vSize];
+            yBuffer.get(nv21, 0, ySize);
+            vBuffer.get(nv21, ySize, vSize);
+            uBuffer.get(nv21, ySize + vSize, uSize);
+
+            android.graphics.YuvImage yuvImage = new android.graphics.YuvImage(nv21, ImageFormat.NV21, image.getWidth(), image.getHeight(), null);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            yuvImage.compressToJpeg(new Rect(0, 0, image.getWidth(), image.getHeight()), 80, out);
+            byte[] imageBytes = out.toByteArray();
+            return android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+        } catch (Exception e) {
+            Log.e(TAG, "imageProxyToBitmap error", e);
+            return null;
+        }
+    }
+
+    private Bitmap rotateBitmapIfRequired(Bitmap bmp, int rotationDegrees) {
+        if (rotationDegrees == 0) return bmp;
+        Matrix matrix = new Matrix();
+        matrix.postRotate(rotationDegrees);
+        return Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(), bmp.getHeight(), matrix, true);
+    }
+
+    private Rect constrainRectToBitmap(Rect r, Bitmap bmp) {
+        int left = Math.max(0, r.left);
+        int top = Math.max(0, r.top);
+        int right = Math.min(bmp.getWidth(), r.right);
+        int bottom = Math.min(bmp.getHeight(), r.bottom);
+        return new Rect(left, top, right, bottom);
+    }
+
+    private Pair<String, Float> findBestMatch(float[] emb) {
+        if (knownEmbeddings.isEmpty()) return new Pair<>("Unknown", Float.MAX_VALUE);
+        String bestLabel = "Unknown";
+        float bestDist = Float.MAX_VALUE;
+        for (EmbeddingEntry e : knownEmbeddings) {
+            if (e.vector.length != emb.length) continue;
+            float d = l2Distance(emb, e.vector);
+            if (d < bestDist) {
+                bestDist = d;
+                bestLabel = e.label;
+            }
+        }
+        if (bestDist <= MATCH_THRESHOLD) return new Pair<>(bestLabel, bestDist);
+        else return new Pair<>("Unknown", bestDist);
+    }
+
+    private float l2Distance(float[] a, float[] b) {
+        float sum = 0f;
+        for (int i = 0; i < a.length; i++) {
+            float diff = a[i] - b[i];
+            sum += diff * diff;
+        }
+        return (float) Math.sqrt(sum);
+    }
+
+    private void logRecognitionEvent(String label, float distance) {
+        String patientId = getCurrentPatientId();
+        if (patientId == null) return;
+        Map<String, Object> event = new HashMap<>();
+        event.put("type", "recognition");
+        event.put("label", label);
+        event.put("distance", distance);
+        event.put("isKnown", !"Unknown".equals(label));
+        event.put("timestamp", FieldValue.serverTimestamp());
+        event.put("deviceId", Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID));
+        db.collection("patients").document(patientId).collection("timeline").add(event)
+                .addOnSuccessListener(r -> Log.d(TAG, "Logged recognition"))
+                .addOnFailureListener(e -> Log.e(TAG, "Failed to log recognition", e));
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (cameraProvider != null) cameraProvider.unbindAll();
+        if (faceNet != null) faceNet.close();
+        if (cameraExecutor != null) cameraExecutor.shutdown();
+        if (modelExecutor != null) modelExecutor.shutdown();
+        if (detector != null) detector.close();
+    }
+
+    // small helper
+    private static class EmbeddingEntry {
+        String label;
+        float[] vector;
+        String docId;
+        EmbeddingEntry(String label, float[] vector, String docId) {
+            this.label = label;
+            this.vector = vector;
+            this.docId = docId;
+        }
+    }
+}
+
+app/src/main/java/com/example/memoraid/patient/ReminderReceiver.java:
+package com.example.memoraid.patient;
+
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.media.AudioAttributes;
+import android.media.RingtoneManager;
+import android.net.Uri;
+import android.os.Build;
+
+import androidx.core.app.NotificationCompat;
+
+import com.example.memoraid.R;
+
+public class ReminderReceiver extends BroadcastReceiver {
+
+    private static final String CHANNEL_ID = "medication_channel";
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        String medicine = intent.getStringExtra("medicine");
+        if (medicine == null) medicine = "Your medicine";
+
+        NotificationManager notificationManager =
+                (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+
+        // 🔔 Alarm sound
+        Uri alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+
+        // ⚡ Notification Channel (Android 8+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build();
+
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID,
+                    "Medication Reminders",
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setDescription("Channel for strict medication alarms");
+            channel.setSound(alarmSound, audioAttributes);
+            channel.enableVibration(true);
+            notificationManager.createNotificationChannel(channel);
+        }
+
+        // Full-screen intent (optional: wakes screen)
+        Intent fullScreenIntent = new Intent(context, MedicationReminderActivity.class);
+        fullScreenIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        PendingIntent fullScreenPendingIntent = PendingIntent.getActivity(
+                context,
+                0,
+                fullScreenIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        // Build notification
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.logo_memoraid) // make sure this exists
+                .setContentTitle("🚨 Medication Reminder")
+                .setContentText("Time to take: " + medicine)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setAutoCancel(true)
+                .setSound(alarmSound)
+                .setDefaults(Notification.DEFAULT_VIBRATE)
+                .setFullScreenIntent(fullScreenPendingIntent, true);
+
+        // Show notification
+        notificationManager.notify((int) System.currentTimeMillis(), builder.build());
+    }
+}
+
+app/src/main/java/com/example/memoraid/patient/ScreeningActivity.java:
+package com.example.memoraid.patient;
+
+import android.content.Intent;
+import android.os.Bundle;
+import android.os.CountDownTimer;
+import android.speech.RecognizerIntent;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.example.memoraid.R;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+
+public class ScreeningActivity extends AppCompatActivity {
+
+    private TextView tvTimer, tvQuestion;
+    private EditText etRecall;
+    private Button btnNext, btnSubmitSpeech;
+    private RadioGroup rgOptions;
+    private RadioButton option1, option2, option3, option4;
+
+    private int step = 0; // 0 = quiz, 1 = recall, 2 = speech, 3 = summary
+    private int quizIndex = 0;
+    private int score = 0;
+    private CountDownTimer countDownTimer;
+
+    private FirebaseAuth mAuth;
+    private FirebaseFirestore db;
+
+    // Quiz dataset (UNCHANGED)
+    private final String[] quizQuestions = {
+            "What is 5 + 3?",
+            "What is the capital of France?",
+            "What day comes after Monday?",
+            "Spell the word 'WORLD' backwards"
+    };
+
+    private final String[][] quizOptions = {
+            {"6", "7", "8", "9"},
+            {"London", "Berlin", "Paris", "Rome"},
+            {"Sunday", "Tuesday", "Wednesday", "Friday"},
+            {"DLORW", "DLROW", "DWROL", "DLOWR"}
+    };
+
+    private final String[] quizAnswers = {"8", "Paris", "Tuesday", "DLROW"};
+
+    private final ArrayList<String> answers = new ArrayList<>();
+    private ActivityResultLauncher<Intent> speechLauncher;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_screening);
+
+        // UI binding (MATCHES XML)
+        tvTimer = findViewById(R.id.tvTimer);
+        tvQuestion = findViewById(R.id.tvQuestion);
+        etRecall = findViewById(R.id.etRecall);
+        btnNext = findViewById(R.id.btnNext);
+        btnSubmitSpeech = findViewById(R.id.btnSubmitSpeech);
+
+        rgOptions = findViewById(R.id.rgOptions);
+        option1 = findViewById(R.id.option1);
+        option2 = findViewById(R.id.option2);
+        option3 = findViewById(R.id.option3);
+        option4 = findViewById(R.id.option4);
+
+        mAuth = FirebaseAuth.getInstance();
+        db = FirebaseFirestore.getInstance();
+
+        // Speech recognizer (UNCHANGED)
+        speechLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        ArrayList<String> spoken =
+                                result.getData().getStringArrayListExtra(
+                                        RecognizerIntent.EXTRA_RESULTS);
+
+                        if (spoken != null && !spoken.isEmpty()) {
+                            answers.add("Speech: " + spoken.get(0));
+                            Toast.makeText(this,
+                                    "Captured: " + spoken.get(0),
+                                    Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                    goNext();
+                }
+        );
+
+        btnNext.setOnClickListener(v -> goNext());
+        btnSubmitSpeech.setOnClickListener(v -> startSpeechRecognition());
+
+        // Start screening
+        showStep();
+    }
+
+    /* =========================
+       STEP FLOW (UNCHANGED)
+       ========================= */
+
+    private void showStep() {
+        resetUI();
+        startTimer();
+
+        if (step == 0) showQuiz();
+        else if (step == 1) showRecall();
+        else if (step == 2) showSpeech();
+        else showSummary();
+    }
+
+    private void resetUI() {
+        tvQuestion.setText("");
+        etRecall.setVisibility(EditText.GONE);
+        btnSubmitSpeech.setVisibility(Button.GONE);
+        rgOptions.setVisibility(RadioGroup.GONE);
+    }
+
+    private void showQuiz() {
+        if (quizIndex < quizQuestions.length) {
+            tvQuestion.setText(quizQuestions[quizIndex]);
+            rgOptions.setVisibility(RadioGroup.VISIBLE);
+
+            option1.setText(quizOptions[quizIndex][0]);
+            option2.setText(quizOptions[quizIndex][1]);
+            option3.setText(quizOptions[quizIndex][2]);
+            option4.setText(quizOptions[quizIndex][3]);
+
+            rgOptions.clearCheck();
+        } else {
+            goNext();
+        }
+    }
+
+    private void showRecall() {
+        tvQuestion.setText("Please recall and type 3 words: Apple, Table, Car");
+        etRecall.setVisibility(EditText.VISIBLE);
+    }
+
+    private void showSpeech() {
+        tvQuestion.setText("Please repeat after me: 'Today is a good day'");
+        btnSubmitSpeech.setVisibility(Button.VISIBLE);
+        Toast.makeText(this,
+                "Press the button and start speaking...",
+                Toast.LENGTH_SHORT).show();
+    }
+
+    private void showSummary() {
+        stopTimer();
+
+        String recallAnswer = etRecall.getText().toString().trim();
+        if (!recallAnswer.isEmpty()) {
+            answers.add("Recall: " + recallAnswer);
+        }
+
+        String uid = mAuth.getCurrentUser().getUid();
+        Map<String, Object> data = new HashMap<>();
+        data.put("answers", answers);
+        data.put("score", score);
+        data.put("timestamp", System.currentTimeMillis());
+
+        db.collection("patients")
+                .document(uid)
+                .collection("screenings")
+                .add(data)
+                .addOnSuccessListener(d ->
+                        Toast.makeText(this,
+                                "Screening saved!",
+                                Toast.LENGTH_SHORT).show()
+                )
+                .addOnFailureListener(e ->
+                        Toast.makeText(this,
+                                "Error: " + e.getMessage(),
+                                Toast.LENGTH_SHORT).show()
+                );
+
+        finish();
+    }
+
+    /* =========================
+       SPEECH
+       ========================= */
+
+    private void startSpeechRecognition() {
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+        intent.putExtra(RecognizerIntent.EXTRA_PROMPT,
+                "Please speak now...");
+
+        try {
+            speechLauncher.launch(intent);
+        } catch (Exception e) {
+            Toast.makeText(this,
+                    "Speech recognition not supported",
+                    Toast.LENGTH_SHORT).show();
+            goNext();
+        }
+    }
+
+    /* =========================
+       NAVIGATION + TIMER
+       ========================= */
+
+    private void goNext() {
+        stopTimer();
+
+        if (step == 0) {
+            int checkedId = rgOptions.getCheckedRadioButtonId();
+            if (checkedId != -1) {
+                RadioButton selected = findViewById(checkedId);
+                String ans = selected.getText().toString();
+                answers.add("Quiz: " + quizQuestions[quizIndex] + " → " + ans);
+
+                if (ans.equalsIgnoreCase(quizAnswers[quizIndex])) {
+                    score++;
+                }
+            } else {
+                answers.add("Quiz: " + quizQuestions[quizIndex] + " → No Answer");
+            }
+
+            quizIndex++;
+            if (quizIndex < quizQuestions.length) {
+                showStep();
+                return;
+            }
+        } else if (step == 1) {
+            String recallAnswer = etRecall.getText().toString().trim();
+            if (!recallAnswer.isEmpty()) {
+                answers.add("Recall: " + recallAnswer);
+            }
+        }
+
+        step++;
+        showStep();
+    }
+
+    private void startTimer() {
+        stopTimer();
+        countDownTimer = new CountDownTimer(20000, 1000) {
+            public void onTick(long millisUntilFinished) {
+                tvTimer.setText("⏱ " + millisUntilFinished / 1000 + "s left");
+            }
+
+            public void onFinish() {
+                Toast.makeText(ScreeningActivity.this,
+                        "Time’s up!",
+                        Toast.LENGTH_SHORT).show();
+                goNext();
+            }
+        }.start();
+    }
+
+    private void stopTimer() {
+        if (countDownTimer != null) {
+            countDownTimer.cancel();
+        }
+    }
+}
+
+app/src/test/java/com/example/memoraid/ExampleUnitTest.java:
+package com.example.memoraid;
+
+import org.junit.Test;
+
+import static org.junit.Assert.*;
+
+/**
+ * Example local unit test, which will execute on the development machine (host).
+ *
+ * @see <a href="http://d.android.com/tools/testing">Testing documentation</a>
+ */
+public class ExampleUnitTest {
+    @Test
+    public void addition_isCorrect() {
+        assertEquals(4, 2 + 2);
+    }
+}
