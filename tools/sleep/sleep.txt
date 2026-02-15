@@ -1,0 +1,152 @@
+body_shutdown_cue.py:
+from tool_gpt_sleep import sleep_gpt_reply
+
+def handle(step=None, user_text=None):
+    return {
+        "step": "exit",
+        "text": sleep_gpt_reply(
+            user_text,
+            "Gently suggest allowing the body to soften and power down, without trying to force sleep."
+        )
+    }
+
+cant_sleep_accpetance_tool.py:
+from tool_gpt_sleep import sleep_gpt_reply
+
+def handle(step=None, user_text=None):
+    return {
+        "step": "exit",
+        "text": sleep_gpt_reply(
+            user_text,
+            "Normalize not sleeping right now. Emphasize that resting without sleep still helps the body."
+        )
+    }
+
+emotional_day_wind_down.py:
+from tool_gpt_sleep import sleep_gpt_reply
+
+def handle(step=None, user_text=None):
+    return {
+        "step": "exit",
+        "text": sleep_gpt_reply(
+            user_text,
+            "Invite letting the emotional weight of the day settle, without replaying or processing it now."
+        )
+    }
+
+irregular_sleep_reset.py:
+from tool_gpt_sleep import sleep_gpt_reply
+
+def handle(step=None, user_text=None):
+    return {
+        "step": "exit",
+        "text": sleep_gpt_reply(
+            user_text,
+            "Normalize irregular sleep patterns. Emphasize that rhythm can reset gradually, without pressure."
+        )
+    }
+
+late_night_overthinking_softener.py:
+from tool_gpt_sleep import sleep_gpt_reply
+
+def handle(step=None, user_text=None):
+    return {
+        "step": "exit",
+        "text": sleep_gpt_reply(
+            user_text,
+            "Acknowledge that late-night thoughts often feel louder. Gently remind that thinking doesn’t need answers tonight."
+        )
+    }
+
+mind_unload_before_sleep.py:
+from tool_gpt_sleep import sleep_gpt_reply
+
+def handle(step=None, user_text=None):
+    if step in (None, "start"):
+        return {
+            "step": "unload",
+            "text": sleep_gpt_reply(
+                user_text,
+                "Invite gently placing any remaining thoughts or to-dos outside the mind, as if setting them down for the night."
+            )
+        }
+
+    return {
+        "step": "exit",
+        "text": sleep_gpt_reply(
+            user_text,
+            "Reassure that nothing needs to be solved right now."
+        )
+    }
+
+morning_damage_control.py:
+from tool_gpt_sleep import sleep_gpt_reply
+
+def handle(step=None, user_text=None):
+    return {
+        "step": "exit",
+        "text": sleep_gpt_reply(
+            user_text,
+            "Reframe a rough night as not ruining the day. Encourage a gentler pace without self-judgment."
+        )
+    }
+
+nighttime_safety_anchor.py:
+from tool_gpt_sleep import sleep_gpt_reply
+
+def handle(step=None, user_text=None):
+    return {
+        "step": "exit",
+        "text": sleep_gpt_reply(
+            user_text,
+            "Reassure that this moment is safe. Nothing needs attention or action right now."
+        )
+    }
+
+phone_detachment_bridge.py:
+from tool_gpt_sleep import sleep_gpt_reply
+
+def handle(step=None, user_text=None):
+    return {
+        "step": "exit",
+        "text": sleep_gpt_reply(
+            user_text,
+            "Support easing attention away from the phone, without pressure to shut it off immediately."
+        )
+    }
+
+sleep_after_conflict.py:
+from tool_gpt_sleep import sleep_gpt_reply
+
+def handle(step=None, user_text=None):
+    return {
+        "step": "exit",
+        "text": sleep_gpt_reply(
+            user_text,
+            "Acknowledge lingering tension after conflict. Encourage letting it pause until tomorrow."
+        )
+    }
+
+sleep_guilt_release.py:
+from tool_gpt_sleep import sleep_gpt_reply
+
+def handle(step=None, user_text=None):
+    return {
+        "step": "exit",
+        "text": sleep_gpt_reply(
+            user_text,
+            "Release any guilt about sleeping late or irregularly. Reassure that rest is still allowed."
+        )
+    }
+
+sleep_identity_repair.py:
+from tool_gpt_sleep import sleep_gpt_reply
+
+def handle(step=None, user_text=None):
+    return {
+        "step": "exit",
+        "text": sleep_gpt_reply(
+            user_text,
+            "Soften the belief that you are ‘bad at sleeping’. Reassure that sleep ability isn’t an identity."
+        )
+    }
