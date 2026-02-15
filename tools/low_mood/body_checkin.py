@@ -3,28 +3,32 @@ Low Mood Tool: Body Check-In
 
 Purpose:
 - Increase somatic awareness
-- Gently release physical tension
+- Gently reconnect with the body
+- Light release of tension
 - No pushing, no fixing
 """
 
 from spiral_dynamics import client
+
 
 SYSTEM_PROMPT = """
 You are a calm, grounding mental health guide.
 
 Rules:
 - Keep responses short (1–3 lines)
-- Speak gently
+- Speak gently and naturally
 - No advice
 - No analysis
+- No fixing
 - Just guide awareness
 """
+
 
 def gpt_reply(user_text: str | None, instruction: str) -> str:
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_text or ""},
-        {"role": "assistant", "content": instruction}
+        {"role": "assistant", "content": instruction},
     ]
 
     resp = client.chat.completions.create(
@@ -38,39 +42,51 @@ def gpt_reply(user_text: str | None, instruction: str) -> str:
 
 def handle(step: str | None, user_text: str | None):
 
-    # STEP 1 — SCAN
+    # ==========================================
+    # STEP 1 — OPENING BODY QUESTION
+    # ==========================================
     if step is None or step == "start":
         text = gpt_reply(
             user_text,
             """
-Invite them to notice their shoulders, jaw, and hands.
-No changing. Just noticing.
+Ask gently:
+"When you feel low like this, does your body feel heavy, tight, or tired anywhere?"
+Keep it warm and simple.
 """
         )
         return {"step": "scan", "text": text}
 
-    # STEP 2 — RELEASE
+    # ==========================================
+    # STEP 2 — NOTICE (NO CHANGE YET)
+    # ==========================================
     if step == "scan":
         text = gpt_reply(
             user_text,
             """
-Invite softening just one area slightly, if it feels okay.
-No pressure.
+Briefly acknowledge what they shared.
+Invite them to simply notice that area for a few seconds.
+No changing. Just observing.
 """
         )
         return {"step": "release", "text": text}
 
-    # STEP 3 — CLOSE
+    # ==========================================
+    # STEP 3 — GENTLE SOFTENING
+    # ==========================================
     if step == "release":
         text = gpt_reply(
             user_text,
             """
+Invite softening that area just 5%, if it feels okay.
+No pressure.
 Close gently.
-Remind them they don’t need to do more.
 """
         )
         return {"step": "exit", "text": text}
 
+    # ==========================================
+    # SAFETY FALLBACK
+    # ==========================================
     return {
         "step": "exit",
         "text": "We can pause here."
