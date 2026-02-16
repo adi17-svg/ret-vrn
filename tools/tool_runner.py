@@ -260,6 +260,115 @@ def run_tool(
         return handle(step, user_text)
 
     # ====================
+    # SLEEP TOOLS
+    # ====================
+    if tool_id == "body_shutdown_cue":
+        from tools.sleep.body_shutdown_cue import handle
+        return handle(step, user_text)
+
+    if tool_id == "cant_sleep_acceptance":
+        from tools.sleep.cant_sleep_acceptance_tool import handle
+        return handle(step, user_text)
+
+    if tool_id == "late_night_overthinking":
+        from tools.sleep.late_night_overthinking_softener import handle
+        return handle(step, user_text)
+
+    if tool_id == "mind_unload":
+        from tools.sleep.mind_unload_before_sleep import handle
+        return handle(step, user_text)
+
+    if tool_id == "nighttime_safety_anchor":
+        from tools.sleep.nighttime_safety_anchor import handle
+        return handle(step, user_text)
+
+    if tool_id == "emotional_day_wind_down":
+        from tools.sleep.emotional_day_wind_down import handle
+        return handle(step, user_text)
+
+    if tool_id == "irregular_sleep_reset":
+        from tools.sleep.irregular_sleep_reset import handle
+        return handle(step, user_text)
+
+    if tool_id == "morning_damage_control":
+        from tools.sleep.morning_damage_control import handle
+        return handle(step, user_text)
+
+    if tool_id == "phone_detachment_bridge":
+        from tools.sleep.phone_detachment_bridge import handle
+        return handle(step, user_text)
+
+    if tool_id == "sleep_after_conflict":
+        from tools.sleep.sleep_after_conflict import handle
+        return handle(step, user_text)
+
+    if tool_id == "sleep_guilt_release":
+        from tools.sleep.sleep_guilt_release import handle
+        return handle(step, user_text)
+
+    if tool_id == "sleep_identity_repair":
+        from tools.sleep.sleep_identity_repair import handle
+        return handle(step, user_text)
+    # ====================
+    # RELATIONSHIP TOOLS
+    # ====================
+    if tool_id == "attachment_activation_check":
+        from tools.relationship.attachment_activation_check import handle
+        return handle(step, user_text)
+
+    if tool_id == "conflict_hangover_release":
+        from tools.relationship.conflict_hangover_release import handle
+        return handle(step, user_text)
+
+    if tool_id == "people_pleasing_interrupt":
+        from tools.relationship.people_pleasing_interrupt import handle
+        return handle(step, user_text)
+
+    if tool_id == "silent_expectations_detector":
+        from tools.relationship.silent_expectations_detector import handle
+        return handle(step, user_text)
+
+    if tool_id == "emotional_distance_repair":
+        from tools.relationship.emotional_distance_repair import handle
+        return handle(step, user_text)
+
+    if tool_id == "trust_vs_fear_clarifier":
+        from tools.relationship.trust_vs_fear_clarifier import handle
+        return handle(step, user_text)
+
+    if tool_id == "over_giving_recovery":
+        from tools.relationship.over_giving_recovery import handle
+        return handle(step, user_text)
+
+    if tool_id == "resentment_drain":
+        from tools.relationship.resentment_drain import handle
+        return handle(step, user_text)
+
+    if tool_id == "communication_freeze_breaker":
+        from tools.relationship.communication_freeze_breaker import handle
+        return handle(step, user_text)
+
+    if tool_id == "post_argument_regulation":
+        from tools.relationship.post_argument_regulation import handle
+        return handle(step, user_text)
+
+    if tool_id == "emotional_dependency_soften":
+        from tools.relationship.emotional_dependency_soften import handle
+        return handle(step, user_text)
+
+    if tool_id == "relationship_reality_check":
+        from tools.relationship.relationship_reality_check import handle
+        return handle(step, user_text)
+
+    if tool_id == "boundaries_in_love_tool":
+        from tools.relationship.boundaries_in_love_tool import handle
+        return handle(step, user_text)
+
+    if tool_id == "let_go_without_cutting_off":
+        from tools.relationship.let_go_without_cutting_off import handle
+        return handle(step, user_text)
+
+    # ====================
     # FALLBACK
     # ====================
     return {

@@ -280,6 +280,63 @@ for tool in ANXIETY_TOOLS:
 # ======================================================
 # OTHER NON–LOW MOOD / NON–ANXIETY TOOLS
 # ======================================================
+# ======================================================
+# SLEEP TOOLS
+# ======================================================
+
+SLEEP_TOOLS = [
+    {"id": "body_shutdown_cue", "description": "Body wind-down before sleep"},
+    {"id": "cant_sleep_acceptance", "description": "Normalize being awake at night"},
+    {"id": "late_night_overthinking", "description": "Soften late-night thinking"},
+    {"id": "mind_unload", "description": "Unload thoughts before sleep"},
+    {"id": "nighttime_safety_anchor", "description": "Reassure safety at night"},
+    {"id": "emotional_day_wind_down", "description": "Close emotional day gently"},
+    {"id": "irregular_sleep_reset", "description": "Rebalance sleep rhythm"},
+    {"id": "morning_damage_control", "description": "Reduce morning anxiety after poor sleep"},
+    {"id": "phone_detachment_bridge", "description": "Gently detach from phone before sleep"},
+    {"id": "sleep_after_conflict", "description": "Calm body after argument before sleep"},
+    {"id": "sleep_guilt_release", "description": "Release guilt around sleep struggles"},
+    {"id": "sleep_identity_repair", "description": "Rebuild confidence around sleep"},
+]
+
+for tool in SLEEP_TOOLS:
+    register_tool({
+        "id": tool["id"],
+        "response_type": "listen",
+        "allow_questions": False,
+        "allow_actions": False,
+        "description": tool["description"],
+    })
+
+# ======================================================
+# RELATIONSHIP TOOLS
+# ======================================================
+
+RELATIONSHIP_TOOLS = [
+    {"id": "attachment_activation_check", "description": "Detect attachment panic or clinginess"},
+    {"id": "conflict_hangover_release", "description": "Release emotional residue after conflict"},
+    {"id": "people_pleasing_interrupt", "description": "Interrupt automatic yes pattern"},
+    {"id": "silent_expectations_detector", "description": "Detect unspoken expectations"},
+    {"id": "emotional_distance_repair", "description": "Soften emotional detachment"},
+    {"id": "trust_vs_fear_clarifier", "description": "Differentiate trust from fear"},
+    {"id": "over_giving_recovery", "description": "Recover after over-giving"},
+    {"id": "resentment_drain", "description": "Release stored resentment"},
+    {"id": "communication_freeze_breaker", "description": "Unblock stuck communication"},
+    {"id": "post_argument_regulation", "description": "Settle nervous system after argument"},
+    {"id": "emotional_dependency_soften", "description": "Balance emotional dependency"},
+    {"id": "relationship_reality_check", "description": "Reality vs fantasy differentiation"},
+    {"id": "boundaries_in_love_tool", "description": "Maintain identity in love"},
+    {"id": "let_go_without_cutting_off", "description": "Detach calmly without drama"},
+]
+
+for tool in RELATIONSHIP_TOOLS:
+    register_tool({
+        "id": tool["id"],
+        "response_type": "reflect",
+        "allow_questions": True,
+        "allow_actions": False,
+        "description": tool["description"],
+    })
 
 # Gratitude Tool
 register_tool({
