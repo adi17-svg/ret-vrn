@@ -2199,34 +2199,169 @@ def home():
 #     result["audiourl"] = audio_url
 
 #     return jsonify(result)
+# @bp.route("/merged", methods=["POST"])
+# def merged():
+#     data = request.json or {}
+
+#     entry = (data.get("text") or "").strip()
+
+#     user_id = data.get("user_id")
+#     last_stage = data.get("last_stage", "")
+#     reply_to = data.get("reply_to", "")
+
+#     # 🔹 TOOL CONTEXT
+#     tool_id = data.get("tool_id")          # None for main chat
+#     tool_step = data.get("tool_step")      # None on first step
+
+#     # =========================
+#     # 🧠 TOOL MODE
+#     # =========================
+#     if tool_id:
+#         tool_response = run_tool(
+#             tool_id=tool_id,
+#             step=tool_step,
+#             user_text=entry or None,   # 👈 allow empty
+#         )
+
+#         if not tool_response:
+#             return jsonify({"error": "Invalid tool"}), 400
+
+#         # save conversation (optional, safe)
+#         if user_id:
+#             try:
+#                 if entry:
+#                     save_conversation_message(user_id, "user", entry)
+
+#                 save_conversation_message(
+#                     user_id,
+#                     "assistant",
+#                     tool_response.get("text", ""),
+#                 )
+#             except Exception:
+#                 pass
+
+#         return jsonify({
+#             "message": {
+#                 "text": tool_response["text"],
+#                 "tone": "listen",
+#             },
+#             "tool": {
+#                 "id": tool_id,
+#                 "step": tool_response.get("step"),
+#             },
+#             "reflection": {},
+#             "action": {},
+#             "pattern": {},
+#             "spiral_tracking": {},
+#         })
+
+#     # =========================
+#     # 💬 MAIN CHAT (UNCHANGED)
+#     # =========================
+#    # =========================
+# # 💬 MAIN CHAT (STREAMING)
+# # =========================
+#     if not entry:
+#         return jsonify({"error": "Missing text"}), 400
+
+
+#     def generate_stream():
+
+#     # 👉 Rebuild minimal logic here (we cannot use old JSON function directly)
+
+#         support_focus = []
+#         if user_id:
+#             try:
+#                 doc = db.collection("users").document(user_id).get()
+#                 if doc.exists:
+#                     support_focus = doc.to_dict().get("support_focus", [])
+#             except Exception:
+#                 pass
+
+#     intent = detect_intent(entry)
+
+#     mood = None
+#     stage = None
+
+#     try:
+#         result = classify_stage(entry)
+#         mood = result.get("mood")
+#         stage = result.get("stage")
+#     except Exception:
+#         pass
+
+#     response_type = decide_response_type(mood, intent)
+
+#     system_prompt = (
+#         "You are a warm, grounded companion in the RETVRN app.\n\n"
+#         f"Response tone: {response_type}\n\n"
+#         "Rules:\n"
+#         "- Validate emotions first\n"
+#         "- Slow the pace\n"
+#         "- Keep sentences short\n"
+#         "- Never force action\n"
+#         "- Offer choice gently\n"
+#     )
+
+#     messages = [
+#         {"role": "system", "content": system_prompt},
+#         {"role": "user", "content": entry},
+#     ]
+
+#     # 🔥 STREAM ENABLED
+#     resp = client.chat.completions.create(
+#         model="gpt-4.1",
+#         messages=messages,
+#         temperature=0.7,
+#         stream=True,
+#     )
+
+#     full_text = ""
+
+#     for chunk in resp:
+#         if chunk.choices[0].delta.content:
+#             token = chunk.choices[0].delta.content
+#             full_text += token
+#             yield token
+
+#     # ✅ After streaming complete → save conversation
+#     if user_id:
+#         try:
+#             save_conversation_message(user_id, "user", entry)
+#             save_conversation_message(user_id, "assistant", full_text)
+#         except Exception:
+#             pass
+
+
+#     return Response(generate_stream(), mimetype="text/plain")
 @bp.route("/merged", methods=["POST"])
 def merged():
-    data = request.json or {}
+
+    # ✅ Always read request FIRST (safe for streaming)
+    data = request.get_json(silent=True) or {}
 
     entry = (data.get("text") or "").strip()
-
     user_id = data.get("user_id")
     last_stage = data.get("last_stage", "")
     reply_to = data.get("reply_to", "")
 
-    # 🔹 TOOL CONTEXT
-    tool_id = data.get("tool_id")          # None for main chat
-    tool_step = data.get("tool_step")      # None on first step
+    tool_id = data.get("tool_id")
+    tool_step = data.get("tool_step")
 
-    # =========================
-    # 🧠 TOOL MODE
-    # =========================
+    # =====================================================
+    # 🧠 TOOL MODE (NO STREAMING)
+    # =====================================================
     if tool_id:
         tool_response = run_tool(
             tool_id=tool_id,
             step=tool_step,
-            user_text=entry or None,   # 👈 allow empty
+            user_text=entry or None,
         )
 
         if not tool_response:
             return jsonify({"error": "Invalid tool"}), 400
 
-        # save conversation (optional, safe)
+        # Save conversation
         if user_id:
             try:
                 if entry:
@@ -2255,83 +2390,67 @@ def merged():
             "spiral_tracking": {},
         })
 
-    # =========================
-    # 💬 MAIN CHAT (UNCHANGED)
-    # =========================
-   # =========================
-# 💬 MAIN CHAT (STREAMING)
-# =========================
+    # =====================================================
+    # 💬 MAIN CHAT (STREAMING MODE)
+    # =====================================================
     if not entry:
         return jsonify({"error": "Missing text"}), 400
 
-
     def generate_stream():
 
-    # 👉 Rebuild minimal logic here (we cannot use old JSON function directly)
+        # 🔥 IMPORTANT: DO NOT USE request inside this function
 
-        support_focus = []
-        if user_id:
-            try:
-                doc = db.collection("users").document(user_id).get()
-                if doc.exists:
-                    support_focus = doc.to_dict().get("support_focus", [])
-            except Exception:
-                pass
+        intent = detect_intent(entry)
 
-    intent = detect_intent(entry)
+        mood = None
+        stage = None
 
-    mood = None
-    stage = None
-
-    try:
-        result = classify_stage(entry)
-        mood = result.get("mood")
-        stage = result.get("stage")
-    except Exception:
-        pass
-
-    response_type = decide_response_type(mood, intent)
-
-    system_prompt = (
-        "You are a warm, grounded companion in the RETVRN app.\n\n"
-        f"Response tone: {response_type}\n\n"
-        "Rules:\n"
-        "- Validate emotions first\n"
-        "- Slow the pace\n"
-        "- Keep sentences short\n"
-        "- Never force action\n"
-        "- Offer choice gently\n"
-    )
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": entry},
-    ]
-
-    # 🔥 STREAM ENABLED
-    resp = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=messages,
-        temperature=0.7,
-        stream=True,
-    )
-
-    full_text = ""
-
-    for chunk in resp:
-        if chunk.choices[0].delta.content:
-            token = chunk.choices[0].delta.content
-            full_text += token
-            yield token
-
-    # ✅ After streaming complete → save conversation
-    if user_id:
         try:
-            save_conversation_message(user_id, "user", entry)
-            save_conversation_message(user_id, "assistant", full_text)
+            result = classify_stage(entry)
+            mood = result.get("mood")
+            stage = result.get("stage")
         except Exception:
             pass
 
+        response_type = decide_response_type(mood, intent)
+
+        system_prompt = (
+            "You are a warm, grounded companion in the RETVRN app.\n\n"
+            f"Response tone: {response_type}\n\n"
+            "- Validate emotions first\n"
+            "- Slow the pace\n"
+            "- Keep sentences short\n"
+            "- Never force action\n"
+            "- Offer choice gently\n"
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": entry},
+        ]
+
+        resp = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=messages,
+            temperature=0.7,
+            stream=True,
+        )
+
+        full_text = ""
+
+        for chunk in resp:
+            if chunk.choices[0].delta.content:
+                token = chunk.choices[0].delta.content
+                full_text += token
+                yield token
+
+        # ✅ Save after streaming complete
+        if user_id:
+            try:
+                save_conversation_message(user_id, "user", entry)
+                save_conversation_message(user_id, "assistant", full_text)
+            except Exception:
+                pass
 
     return Response(generate_stream(), mimetype="text/plain")
 
