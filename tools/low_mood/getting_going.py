@@ -1,30 +1,28 @@
 """
-Low Mood Tool: Getting Going With Action (FINAL – RETVRN Version)
+Low Mood Tool: Getting Going With Action (RETVRN FINAL)
 
 Flow:
 1. Detect struggle
 2. Spiral detect (background)
-3. Validate
-4. Ask blocker
+3. Validate (banner-aware)
+4. Ask blocker (specific, not repetitive)
 5. Suggest tiny step (spiral-based)
-6. Permission gate
-7. Do
-8. Close
+6. Close
 
-Design principles:
-- GPT used for tone only
-- Tool controls flow strictly
-- Spiral runs silently
+Design:
+- Topic agnostic
+- Banner-consistent tone
+- GPT only for tone
+- Tool controls logic
 - No looping
-- Permission-based action
 """
 
 from spiral_dynamics import client
 
 
-# =========================
+# ======================================
 # SYSTEM PROMPT
-# =========================
+# ======================================
 
 SYSTEM_PROMPT = """
 You are a calm, supportive mental health coach.
@@ -32,17 +30,17 @@ You are a calm, supportive mental health coach.
 Rules:
 - Keep responses short (2–4 lines)
 - Sound natural and human
-- Never command harshly
-- Use permission before action
-- Once user agrees, STOP asking questions
-- Guide action clearly and simply
-- Respect resistance
+- Do not repeat the user's sentence mechanically
+- Do not assume topics beyond what the user said
+- Reinforce small steps
+- Never overanalyze
+- Stay aligned with: "Start small. No pressure."
 """
 
 
-# =========================
+# ======================================
 # GPT HELPER
-# =========================
+# ======================================
 
 def gpt_reply(user_text: str | None, instruction: str) -> str:
     messages = [
@@ -60,9 +58,9 @@ def gpt_reply(user_text: str | None, instruction: str) -> str:
     return resp.choices[0].message.content.strip()
 
 
-# =========================
+# ======================================
 # STRUGGLE DETECTION
-# =========================
+# ======================================
 
 def looks_like_struggle(text: str | None) -> bool:
     if not text:
@@ -70,27 +68,28 @@ def looks_like_struggle(text: str | None) -> bool:
 
     keywords = [
         "hard", "can't", "cannot", "difficult",
-        "lazy", "stuck", "tired", "avoid",
-        "procrastinate", "low", "no energy"
+        "stuck", "lazy", "tired", "avoid",
+        "procrastinate", "low", "no energy",
+        "heavy", "overwhelmed"
     ]
 
     return any(k in text.lower() for k in keywords)
 
 
-# =========================
-# SPIRAL DETECTION (BACKGROUND)
-# =========================
+# ======================================
+# SPIRAL DETECTION (BACKGROUND ONLY)
+# ======================================
 
 def detect_spiral_stage(text: str | None) -> str:
     if not text:
         return "Neutral"
 
     prompt = f"""
-Classify the emotional tone into one:
+Classify emotional tone into one:
 
-Blue – structure, guilt, responsibility
-Red – resistance, impulse, anger
-Orange – achievement pressure, productivity stress
+Blue – guilt, responsibility, structure focus
+Red – resistance, impulse, frustration
+Orange – productivity pressure, achievement stress
 Green – emotional overwhelm, meaning focus
 Neutral – unclear
 
@@ -108,47 +107,69 @@ Return only one word.
     return resp.choices[0].message.content.strip()
 
 
-# =========================
+# ======================================
+# MICRO ACTION GENERATOR (SPIRAL-BASED)
+# ======================================
+
+def get_micro_action(stage: str) -> str:
+
+    if stage == "Blue":
+        return "Set a timer for 2 minutes and just sit with it."
+
+    if stage == "Red":
+        return "Give yourself a 60-second challenge — just begin."
+
+    if stage == "Orange":
+        return "Do one tiny measurable step — just the first piece."
+
+    if stage == "Green":
+        return "Take one slow breath and gently start the smallest part."
+
+    return "Just begin with the smallest possible action — nothing more."
+
+
+# ======================================
 # MAIN HANDLER
-# =========================
+# ======================================
 
 def handle(step: str | None, user_text: str | None, memory: dict | None = None):
 
     memory = memory or {}
 
-    # -------------------------
-    # STEP 0 — INTRO / BANNER SAFE
-    # -------------------------
+    # ----------------------------------
+    # STEP 0 — INTRO (BANNER SAFE)
+    # ----------------------------------
     if step is None or step == "start":
 
         text = gpt_reply(
             user_text,
             """
-Normalize low energy gently.
-Explain we’ll take one small step.
-Ask what feels hardest to start right now.
+Normalize low energy.
+Align with banner: start small, no pressure.
+Ask what feels hardest to begin right now.
 """
         )
 
         return {"step": "ack", "text": text, "memory": memory}
 
-    # -------------------------
+
+    # ----------------------------------
     # STEP 1 — DETECT STRUGGLE
-    # -------------------------
+    # ----------------------------------
     if step == "ack":
 
         if not looks_like_struggle(user_text):
             text = gpt_reply(
                 user_text,
                 """
-Respond supportively.
+Respond warmly.
 Gently invite them to share something that feels hard to start.
-Keep it open.
+Keep it light.
 """
             )
             return {"step": "ack", "text": text, "memory": memory}
 
-        # Spiral detection
+        # Spiral background detection
         stage = detect_spiral_stage(user_text)
         memory["spiral_stage"] = stage
         memory["struggle"] = user_text
@@ -156,110 +177,64 @@ Keep it open.
         text = gpt_reply(
             user_text,
             """
-Briefly validate what they shared.
-Then gently ask:
-"What feels like it's getting in the way?"
-Keep it short.
+Briefly reflect what they shared.
+Reinforce we’ll take just one small step.
+Then ask:
+When you think about starting, 
+is it more low energy, distraction, or pressure?
 """
         )
 
         return {"step": "blocker", "text": text, "memory": memory}
 
-    # -------------------------
-    # STEP 2 — ASK BLOCKER
-    # -------------------------
+
+    # ----------------------------------
+    # STEP 2 — BLOCKER IDENTIFIED
+    # ----------------------------------
     if step == "blocker":
 
         memory["blocker"] = user_text
         stage = memory.get("spiral_stage", "Neutral")
 
-        instruction = f"""
-Based on spiral stage: {stage}
-
-Offer ONE very small action (max 30 seconds).
-
-Blue → structured mini step.
-Red → quick challenge.
-Orange → measurable mini-task.
-Green → gentle emotional step.
-Neutral → simple action.
-
-Ask permission gently (one question only).
-"""
-
-        text = gpt_reply(user_text, instruction)
-
-        return {"step": "consent", "text": text, "memory": memory}
-
-    # -------------------------
-    # STEP 3 — CONSENT GATE
-    # -------------------------
-    if step == "consent":
-
-        if user_text and user_text.lower().strip() in [
-            "yes", "yeah", "yep", "ok", "okay",
-            "sure", "let's try", "i will try"
-        ]:
-            text = gpt_reply(
-                user_text,
-                """
-Acknowledge their willingness.
-Say we’ll start now.
-No questions.
-"""
-            )
-            return {"step": "do", "text": text, "memory": memory}
-
-        else:
-            text = gpt_reply(
-                user_text,
-                """
-Normalize hesitation.
-Reassure that pausing is okay.
-Close gently.
-"""
-            )
-            return {"step": "close", "text": text, "memory": memory}
-
-    # -------------------------
-    # STEP 4 — DO ACTION
-    # -------------------------
-    if step == "do":
+        micro_action = get_micro_action(stage)
 
         text = gpt_reply(
             user_text,
-            """
-Guide one simple action clearly.
-No questions.
-Short instructions.
-Example:
-"Let’s try this together.
-Take one slow breath in…
-And release it gently."
+            f"""
+Based on what they shared,
+offer this tiny step:
+
+{micro_action}
+
+No deep explanation.
+No multiple options.
+Close naturally after offering.
 """
         )
 
         return {"step": "close", "text": text, "memory": memory}
 
-    # -------------------------
-    # STEP 5 — CLOSE
-    # -------------------------
+
+    # ----------------------------------
+    # STEP 3 — CLOSE
+    # ----------------------------------
     if step == "close":
 
         text = gpt_reply(
             user_text,
             """
 Close warmly.
-Reinforce effort.
+Reinforce that even considering a small step counts.
 End clearly.
 """
         )
 
         return {"step": "exit", "text": text, "memory": memory}
 
-    # -------------------------
+
+    # ----------------------------------
     # SAFETY FALLBACK
-    # -------------------------
+    # ----------------------------------
     return {
         "step": "exit",
         "text": "We can pause here. You're in control.",
