@@ -1,7 +1,14 @@
 """
-Low Mood Tool: Body Check-In
-Permission + Adaptive + Spiral-Aware
-Independent GPT Version
+Low Mood Tool: Body Check-In (Fully Stabilized)
+
+Features:
+- Smart start detection
+- Spiral-aware tone (internal only)
+- Safe classifier wrapper
+- Fallback defaults
+- Low-confidence handling
+- No loops
+- Independent GPT usage
 """
 
 from openai import OpenAI
@@ -25,84 +32,79 @@ Rules:
 """
 
 # =====================================================
-# SPIRAL CLASSIFIER (INTERNAL USE ONLY)
+# SAFE CLASSIFIER WRAPPER
+# =====================================================
+
+def safe_classify(system_instruction: str, user_text: str, valid_options: list, default: str):
+
+    if not user_text or len(user_text.strip()) < 2:
+        return default
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": user_text}
+            ],
+            temperature=0
+        )
+
+        result = response.choices[0].message.content.strip().upper()
+
+        if result in valid_options:
+            return result
+
+        return default
+
+    except:
+        return default
+
+
+# =====================================================
+# CLASSIFIERS
 # =====================================================
 
 def classify_spiral(user_text: str) -> str:
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[
-            {
-                "role": "system",
-                "content": """
-Classify the user's mindset tendency into one word only:
-BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.
-
-Respond with one word only.
-"""
-            },
-            {"role": "user", "content": user_text}
-        ],
-        temperature=0
+    return safe_classify(
+        "Classify into one word: BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.",
+        user_text,
+        ["BEIGE", "PURPLE", "RED", "BLUE", "ORANGE", "GREEN", "YELLOW"],
+        "GREEN"
     )
 
-    return response.choices[0].message.content.strip()
-
-
-# =====================================================
-# YES / NO CLASSIFIER
-# =====================================================
 
 def classify_yes_no(user_text: str) -> str:
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[
-            {
-                "role": "system",
-                "content": "Classify into one word only: YES, NO, or UNCLEAR."
-            },
-            {"role": "user", "content": user_text}
-        ],
-        temperature=0
+    return safe_classify(
+        "Classify into one word: YES, NO, or UNCLEAR.",
+        user_text,
+        ["YES", "NO", "UNCLEAR"],
+        "UNCLEAR"
     )
 
-    return response.choices[0].message.content.strip()
-
-
-# =====================================================
-# SHIFT CLASSIFIER
-# =====================================================
 
 def classify_shift(user_text: str) -> str:
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[
-            {
-                "role": "system",
-                "content": "Classify into one word only: SUCCESS, NO_CHANGE, or UNCLEAR."
-            },
-            {"role": "user", "content": user_text}
-        ],
-        temperature=0
+    return safe_classify(
+        "Classify into one word: SUCCESS, NO_CHANGE, or UNCLEAR.",
+        user_text,
+        ["SUCCESS", "NO_CHANGE", "UNCLEAR"],
+        "UNCLEAR"
     )
 
-    return response.choices[0].message.content.strip()
-
 
 # =====================================================
-# GPT REPLY (SPIRAL-AWARE)
+# GPT REPLY
 # =====================================================
 
-def gpt_reply(history: list | None, instruction: str, spiral_stage: str | None) -> str:
+def gpt_reply(history, instruction, spiral_stage=None):
 
     system_prompt = SYSTEM_PROMPT_BASE
 
-    # Inject spiral tone adaptation (hidden from user)
     if spiral_stage:
         system_prompt += f"""
 
 User tendency appears closer to {spiral_stage}.
-Adjust tone subtly to match that mindset.
+Adjust tone subtly.
 Never mention stages.
 """
 
@@ -126,25 +128,36 @@ Never mention stages.
 # MAIN HANDLER
 # =====================================================
 
-def handle(step: str | None, user_text: str | None, history: list | None = None):
+def handle(step=None, user_text=None, history=None):
 
     history = history or []
+    spiral_stage = classify_spiral(user_text) if user_text else "GREEN"
 
-    # Spiral detection only when user speaks
-    spiral_stage = None
-    if user_text:
-        spiral_stage = classify_spiral(user_text)
-
-    # =================================================
-    # STEP 1 — ASK PERMISSION
-    # =================================================
+    # -------------------------------------------------
+    # STEP 0 — SMART START
+    # -------------------------------------------------
     if step is None or step == "start":
+
+        if user_text and any(word in user_text.lower() for word in [
+            "yes", "sure", "okay", "let's", "notice"
+        ]):
+            text = gpt_reply(
+                history,
+                """
+Ask gently:
+"When you feel low like this, does your body feel heavy, tight, or tired anywhere?"
+
+Add: "If you're not sure, that's okay."
+""",
+                spiral_stage
+            )
+            return {"step": "scan", "text": text}
+
         text = gpt_reply(
             history,
             """
 Ask gently:
 "Would it feel okay to take a moment to notice your body together?"
-
 Keep it soft and optional.
 """,
             spiral_stage
@@ -152,14 +165,13 @@ Keep it soft and optional.
 
         return {"step": "permission", "text": text}
 
-    # =================================================
-    # STEP 2 — HANDLE PERMISSION RESPONSE
-    # =================================================
+    # -------------------------------------------------
+    # STEP 1 — PERMISSION
+    # -------------------------------------------------
     if step == "permission":
 
-        decision = classify_yes_no(user_text or "")
+        decision = classify_yes_no(user_text)
 
-        # YES → Continue
         if decision == "YES":
             text = gpt_reply(
                 history,
@@ -173,112 +185,107 @@ Add: "If you're not sure, that's okay."
             )
             return {"step": "scan", "text": text}
 
-        # NO → Exit gracefully
         if decision == "NO":
             text = gpt_reply(
                 history,
                 """
-Acknowledge their choice warmly.
+Acknowledge gently.
 Let them know that's completely okay.
-Offer to stay present in another way.
+Close softly.
 """,
                 spiral_stage
             )
             return {"step": "exit", "text": text}
 
-        # UNCLEAR → Clarify
+        # UNCLEAR fallback
         text = gpt_reply(
             history,
-            """
-Gently ask if they'd prefer to try a body check-in,
-or talk about what's on their mind instead.
-""",
+            "Gently ask if they'd prefer to try noticing their body or just pause.",
             spiral_stage
         )
         return {"step": "permission", "text": text}
 
-    # =================================================
-    # STEP 3 — NOTICE AREA
-    # =================================================
+    # -------------------------------------------------
+    # STEP 2 — NOTICE AREA
+    # -------------------------------------------------
     if step == "scan":
+
         text = gpt_reply(
             history,
             f"""
-The user said: "{user_text}"
+User said: "{user_text}"
 
-Briefly acknowledge what they shared.
-Invite them to simply notice that area for a few seconds.
-No changing. Just observing.
+Briefly acknowledge.
+Invite simple noticing.
+No changing.
 """,
             spiral_stage
         )
+
         return {"step": "release", "text": text}
 
-    # =================================================
-    # STEP 4 — INVITE SOFTENING
-    # =================================================
+    # -------------------------------------------------
+    # STEP 3 — INVITE SOFTENING
+    # -------------------------------------------------
     if step == "release":
+
         text = gpt_reply(
             history,
             f"""
-The user said: "{user_text}"
+User said: "{user_text}"
 
-Invite softening that area just 5%, if it feels okay.
-Then gently ask:
-"Did anything shift, even a little?"
+Invite softening just 5%, if okay.
+Then ask gently:
+"Did anything shift?"
 """,
             spiral_stage
         )
+
         return {"step": "check_shift", "text": text}
 
-    # =================================================
-    # STEP 5 — CHECK SHIFT
-    # =================================================
+    # -------------------------------------------------
+    # STEP 4 — CHECK SHIFT
+    # -------------------------------------------------
     if step == "check_shift":
 
-        classification = classify_shift(user_text or "")
+        classification = classify_shift(user_text)
 
-        # SUCCESS
         if classification == "SUCCESS":
             text = gpt_reply(
                 history,
                 """
 Acknowledge the small shift warmly.
-Invite them to stay with it briefly.
+Invite staying briefly.
 Close gently.
 """,
                 spiral_stage
             )
             return {"step": "exit", "text": text}
 
-        # NO CHANGE
         if classification == "NO_CHANGE":
             text = gpt_reply(
                 history,
                 """
-Reassure them it's completely okay if nothing changed.
-Invite one slow breath with that area.
-No pressure.
+Normalize no change.
+Invite one slow breath.
+Close softly.
 """,
                 spiral_stage
             )
             return {"step": "exit", "text": text}
 
-        # UNCLEAR
+        # UNCLEAR fallback
         text = gpt_reply(
             history,
             """
-Gently ask if it feels the same, slightly softer, or hard to tell.
+Gently ask if it feels the same or slightly different.
 Keep it simple.
 """,
             spiral_stage
         )
         return {"step": "check_shift", "text": text}
 
-    # =================================================
-    # SAFETY FALLBACK
-    # =================================================
-    return {
-        "step": "exit",
-        "text": "We can pause here."
-    }
+    # -------------------------------------------------
+    # FALLBACK
+    # -------------------------------------------------
+    return {"step": "exit", "text": "We can pause here."}

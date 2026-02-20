@@ -1,11 +1,12 @@
 """
-Low Mood Tool: Getting Going With Action (ENHANCED)
+Low Mood Tool: Getting Going With Action (FINAL CLEAN)
 
-Added:
+Features:
 - Spiral-aware activation framing (internal only)
 - Energy-level adaptive micro-actions
 - Action success reinforcement layer
-- Strict flow control (no loops)
+- Smart start detection (no repeated question)
+- Strict flow control
 - Independent GPT usage
 """
 
@@ -31,54 +32,32 @@ Rules:
 """
 
 # =====================================================
-# SPIRAL CLASSIFIER (INTERNAL)
+# CLASSIFIERS
 # =====================================================
 
 def classify_spiral(user_text: str) -> str:
     response = client.chat.completions.create(
         model="gpt-4.1",
         messages=[
-            {
-                "role": "system",
-                "content": """
-Classify the user's mindset tendency into one word only:
-BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.
-
-Respond with one word only.
-"""
-            },
+            {"role": "system", "content": "Classify into one word: BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW."},
             {"role": "user", "content": user_text}
         ],
         temperature=0
     )
     return response.choices[0].message.content.strip()
 
-
-# =====================================================
-# ENERGY LEVEL CLASSIFIER
-# =====================================================
 
 def classify_energy(user_text: str) -> str:
     response = client.chat.completions.create(
         model="gpt-4.1",
         messages=[
-            {
-                "role": "system",
-                "content": """
-Classify user's energy level into one word:
-LOW, MEDIUM, or HIGH.
-"""
-            },
+            {"role": "system", "content": "Classify into one word: LOW, MEDIUM, or HIGH."},
             {"role": "user", "content": user_text}
         ],
         temperature=0
     )
     return response.choices[0].message.content.strip()
 
-
-# =====================================================
-# YES / NO CLASSIFIER
-# =====================================================
 
 def classify_yes_no(user_text: str) -> str:
     response = client.chat.completions.create(
@@ -92,18 +71,11 @@ def classify_yes_no(user_text: str) -> str:
     return response.choices[0].message.content.strip()
 
 
-# =====================================================
-# SHIFT CLASSIFIER (POST ACTION)
-# =====================================================
-
 def classify_shift(user_text: str) -> str:
     response = client.chat.completions.create(
         model="gpt-4.1",
         messages=[
-            {
-                "role": "system",
-                "content": "Classify into one word: BETTER, SAME, or WORSE."
-            },
+            {"role": "system", "content": "Classify into one word: BETTER, SAME, or WORSE."},
             {"role": "user", "content": user_text}
         ],
         temperature=0
@@ -112,7 +84,7 @@ def classify_shift(user_text: str) -> str:
 
 
 # =====================================================
-# GPT REPLY (SPIRAL-AWARE)
+# GPT REPLY
 # =====================================================
 
 def gpt_reply(history, instruction, spiral_stage=None):
@@ -123,7 +95,7 @@ def gpt_reply(history, instruction, spiral_stage=None):
         system_prompt += f"""
 
 User tendency appears closer to {spiral_stage}.
-Adjust activation framing subtly to match mindset.
+Adjust activation framing subtly.
 Never mention stages.
 """
 
@@ -155,10 +127,26 @@ def handle(step=None, user_text=None, history=None):
     energy_level = classify_energy(user_text) if user_text else "LOW"
 
     # -------------------------------------------------
-    # STEP 0 — INTRO
+    # STEP 0 — SMART START (NO REPEAT QUESTION)
     # -------------------------------------------------
     if step is None or step == "start":
 
+        if user_text:
+            # User already shared difficulty → acknowledge directly
+            text = gpt_reply(
+                history,
+                f"""
+User said: "{user_text}"
+
+Normalize low energy.
+Acknowledge the difficulty briefly.
+Do not ask another question.
+""",
+                spiral_stage
+            )
+            return {"step": "offer", "text": text}
+
+        # If no context yet → ask
         text = gpt_reply(
             history,
             """
@@ -168,29 +156,10 @@ Ask what feels hardest to start right now.
 """,
             spiral_stage
         )
-
         return {"step": "ack", "text": text}
 
     # -------------------------------------------------
-    # STEP 1 — ACKNOWLEDGE
-    # -------------------------------------------------
-    if step == "ack":
-
-        text = gpt_reply(
-            history,
-            f"""
-User said: "{user_text}"
-
-Acknowledge difficulty briefly.
-Do not ask another question.
-""",
-            spiral_stage
-        )
-
-        return {"step": "offer", "text": text}
-
-    # -------------------------------------------------
-    # STEP 2 — OFFER MICRO ACTION (ENERGY ADAPTIVE)
+    # STEP 1 — OFFER MICRO ACTION
     # -------------------------------------------------
     if step == "offer":
 
@@ -205,7 +174,6 @@ Do not ask another question.
             history,
             f"""
 {action_prompt}
-
 Ask permission gently.
 Once user agrees, do not ask further questions.
 """,
@@ -215,7 +183,7 @@ Once user agrees, do not ask further questions.
         return {"step": "consent", "text": text}
 
     # -------------------------------------------------
-    # STEP 3 — CONSENT GATE
+    # STEP 2 — CONSENT
     # -------------------------------------------------
     if step == "consent":
 
@@ -227,8 +195,8 @@ Once user agrees, do not ask further questions.
                 """
 Acknowledge agreement.
 Say we’ll start now.
-Do not offer choices.
 Transition directly into doing.
+No questions.
 """,
                 spiral_stage
             )
@@ -238,7 +206,7 @@ Transition directly into doing.
             history,
             """
 Normalize hesitation.
-Reinforce that stopping is okay.
+Reinforce stopping is okay.
 Close gently.
 """,
             spiral_stage
@@ -246,7 +214,7 @@ Close gently.
         return {"step": "exit", "text": text}
 
     # -------------------------------------------------
-    # STEP 4 — DO ACTION
+    # STEP 3 — DO ACTION
     # -------------------------------------------------
     if step == "do":
 
@@ -254,9 +222,9 @@ Close gently.
             history,
             """
 Guide the small action clearly.
-No questions.
 Simple steps.
 Keep it short.
+No questions.
 """,
             spiral_stage
         )
@@ -264,7 +232,7 @@ Keep it short.
         return {"step": "check", "text": text}
 
     # -------------------------------------------------
-    # STEP 5 — CHECK RESULT (REINFORCEMENT LAYER)
+    # STEP 4 — CHECK RESULT
     # -------------------------------------------------
     if step == "check":
 
@@ -281,7 +249,7 @@ Keep it simple.
         return {"step": "reinforce", "text": text}
 
     # -------------------------------------------------
-    # STEP 6 — REINFORCE SUCCESS
+    # STEP 5 — REINFORCE
     # -------------------------------------------------
     if step == "reinforce":
 
@@ -303,7 +271,7 @@ Close warmly.
             text = gpt_reply(
                 history,
                 """
-Normalize that change can be subtle.
+Normalize subtle change.
 Reinforce that taking action still counts.
 Close gently.
 """,
@@ -316,17 +284,11 @@ Close gently.
                 history,
                 """
 Acknowledge gently.
-Suggest stopping and taking a slow breath instead.
+Suggest stopping and taking one slow breath instead.
 Close softly.
 """,
                 spiral_stage
             )
             return {"step": "exit", "text": text}
 
-    # -------------------------------------------------
-    # SAFETY FALLBACK
-    # -------------------------------------------------
-    return {
-        "step": "exit",
-        "text": "We can pause here. You're in control."
-    }
+    return {"step": "exit", "text": "We can pause here. You're in control."}
