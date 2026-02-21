@@ -1,14 +1,13 @@
 """
-Low Mood Tool: Body Check-In (Fully Stabilized)
+Low Mood Tool: Body Check-In (Spiral Aware - Independent)
 
-Features:
-- Smart start detection
-- Spiral-aware tone (internal only)
-- Safe classifier wrapper
-- Fallback defaults
-- Low-confidence handling
+Design:
+- Independent GPT usage (no shared wrapper)
+- Safe classifier functions
+- Spiral-aware tone (never mentioned to user)
+- Linear step flow
 - No loops
-- Independent GPT usage
+- Short, gentle responses only
 """
 
 from openai import OpenAI
@@ -32,7 +31,7 @@ Rules:
 """
 
 # =====================================================
-# SAFE CLASSIFIER WRAPPER
+# SAFE CLASSIFIER
 # =====================================================
 
 def safe_classify(system_instruction: str, user_text: str, valid_options: list, default: str):
@@ -134,31 +133,17 @@ def handle(step=None, user_text=None, history=None):
     spiral_stage = classify_spiral(user_text) if user_text else "GREEN"
 
     # -------------------------------------------------
-    # STEP 0 — SMART START
+    # STEP 0 — START
     # -------------------------------------------------
     if step is None or step == "start":
-
-        if user_text and any(word in user_text.lower() for word in [
-            "yes", "sure", "okay", "let's", "notice"
-        ]):
-            text = gpt_reply(
-                history,
-                """
-Ask gently:
-"When you feel low like this, does your body feel heavy, tight, or tired anywhere?"
-
-Add: "If you're not sure, that's okay."
-""",
-                spiral_stage
-            )
-            return {"step": "scan", "text": text}
 
         text = gpt_reply(
             history,
             """
-Ask gently:
-"Would it feel okay to take a moment to notice your body together?"
-Keep it soft and optional.
+Gently invite:
+"Would it feel okay to take a moment to notice your body?"
+
+Keep it optional and soft.
 """,
             spiral_stage
         )
@@ -173,19 +158,23 @@ Keep it soft and optional.
         decision = classify_yes_no(user_text)
 
         if decision == "YES":
+
             text = gpt_reply(
                 history,
                 """
 Ask gently:
 "When you feel low like this, does your body feel heavy, tight, or tired anywhere?"
 
-Add: "If you're not sure, that's okay."
+Add:
+"If you're not sure, that's okay."
 """,
                 spiral_stage
             )
+
             return {"step": "scan", "text": text}
 
         if decision == "NO":
+
             text = gpt_reply(
                 history,
                 """
@@ -195,18 +184,20 @@ Close softly.
 """,
                 spiral_stage
             )
+
             return {"step": "exit", "text": text}
 
-        # UNCLEAR fallback
+        # UNCLEAR
         text = gpt_reply(
             history,
             "Gently ask if they'd prefer to try noticing their body or just pause.",
             spiral_stage
         )
+
         return {"step": "permission", "text": text}
 
     # -------------------------------------------------
-    # STEP 2 — NOTICE AREA
+    # STEP 2 — SCAN
     # -------------------------------------------------
     if step == "scan":
 
@@ -216,41 +207,42 @@ Close softly.
 User said: "{user_text}"
 
 Briefly acknowledge.
-Invite simple noticing.
+Invite simply noticing that area for a few moments.
 No changing.
 """,
             spiral_stage
         )
 
-        return {"step": "release", "text": text}
+        return {"step": "soften", "text": text}
 
     # -------------------------------------------------
-    # STEP 3 — INVITE SOFTENING
+    # STEP 3 — SOFTEN
     # -------------------------------------------------
-    if step == "release":
+    if step == "soften":
 
         text = gpt_reply(
             history,
             f"""
 User said: "{user_text}"
 
-Invite softening just 5%, if okay.
-Then ask gently:
+Invite softening just 5%, if that feels okay.
+Then gently ask:
 "Did anything shift?"
 """,
             spiral_stage
         )
 
-        return {"step": "check_shift", "text": text}
+        return {"step": "check", "text": text}
 
     # -------------------------------------------------
     # STEP 4 — CHECK SHIFT
     # -------------------------------------------------
-    if step == "check_shift":
+    if step == "check":
 
-        classification = classify_shift(user_text)
+        result = classify_shift(user_text)
 
-        if classification == "SUCCESS":
+        if result == "SUCCESS":
+
             text = gpt_reply(
                 history,
                 """
@@ -260,21 +252,24 @@ Close gently.
 """,
                 spiral_stage
             )
+
             return {"step": "exit", "text": text}
 
-        if classification == "NO_CHANGE":
+        if result == "NO_CHANGE":
+
             text = gpt_reply(
                 history,
                 """
-Normalize no change.
+Normalize that sometimes nothing shifts.
 Invite one slow breath.
 Close softly.
 """,
                 spiral_stage
             )
+
             return {"step": "exit", "text": text}
 
-        # UNCLEAR fallback
+        # UNCLEAR
         text = gpt_reply(
             history,
             """
@@ -283,9 +278,13 @@ Keep it simple.
 """,
             spiral_stage
         )
-        return {"step": "check_shift", "text": text}
+
+        return {"step": "check", "text": text}
 
     # -------------------------------------------------
     # FALLBACK
     # -------------------------------------------------
-    return {"step": "exit", "text": "We can pause here."}
+    return {
+        "step": "exit",
+        "text": "We can pause here."
+    }
