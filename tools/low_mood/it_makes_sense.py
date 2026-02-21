@@ -1,12 +1,14 @@
 """
-Low Mood Tool: It Makes Sense (Enhanced)
+Low Mood Tool: It Makes Sense (Context + Spiral Aware)
 
-Added:
-- Spiral-aware validation (internal only)
-- Self-compassion layering
-- Shame-release micro script
-- Gentle transition system
+Design:
 - Independent GPT usage
+- Spiral-aware tone (internal only)
+- Uses full chat history
+- Shame detection
+- Self-compassion layering
+- Gentle optional transition
+- Clean exit logic
 """
 
 from openai import OpenAI
@@ -22,7 +24,7 @@ You are a calm, validating mental health guide.
 
 Rules:
 - Keep responses short (2–4 lines)
-- Warm, natural tone
+- Warm and natural tone
 - No advice
 - No fixing
 - No analysis
@@ -30,46 +32,80 @@ Rules:
 """
 
 # =====================================================
-# SPIRAL CLASSIFIER (INTERNAL ONLY)
+# SAFE CLASSIFIER
 # =====================================================
 
-def classify_spiral(user_text: str) -> str:
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[
-            {
-                "role": "system",
-                "content": """
-Classify the user's mindset tendency into one word only:
-BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.
-Respond with one word only.
-"""
-            },
-            {"role": "user", "content": user_text}
-        ],
-        temperature=0
+def safe_classify(system_instruction, user_text, valid_options, default):
+
+    if not user_text or len(user_text.strip()) < 2:
+        return default
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": user_text}
+            ],
+            temperature=0
+        )
+
+        result = response.choices[0].message.content.strip().upper()
+
+        if result in valid_options:
+            return result
+
+        return default
+
+    except:
+        return default
+
+
+def classify_spiral(user_text):
+    return safe_classify(
+        "Classify into one word only: BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.",
+        user_text,
+        ["BEIGE", "PURPLE", "RED", "BLUE", "ORANGE", "GREEN", "YELLOW"],
+        "GREEN"
     )
-    return response.choices[0].message.content.strip()
+
+
+def classify_yes_no(user_text):
+    return safe_classify(
+        "Classify into one word: YES, NO, or UNCLEAR.",
+        user_text,
+        ["YES", "NO", "UNCLEAR"],
+        "UNCLEAR"
+    )
 
 
 # =====================================================
-# SELF-SHAME DETECTION
+# SHAME DETECTION
 # =====================================================
 
-def detect_shame(user_text: str) -> bool:
-    keywords = [
-        "i'm stupid", "i'm weak", "i'm overreacting",
-        "i shouldn't feel", "it's my fault",
-        "i'm broken", "i'm too sensitive"
-    ]
+def detect_shame(user_text):
+
     if not user_text:
         return False
+
+    shame_keywords = [
+        "i'm stupid",
+        "i am stupid",
+        "i'm weak",
+        "i am weak",
+        "it's my fault",
+        "i shouldn't feel",
+        "i'm broken",
+        "i am broken",
+        "i'm too sensitive"
+    ]
+
     lower = user_text.lower()
-    return any(k in lower for k in keywords)
+    return any(k in lower for k in shame_keywords)
 
 
 # =====================================================
-# GPT REPLY (SPIRAL-AWARE)
+# GPT REPLY (SPIRAL + CONTEXT AWARE)
 # =====================================================
 
 def gpt_reply(history, instruction, spiral_stage=None):
@@ -108,40 +144,31 @@ def handle(step=None, user_text=None, history=None):
 
     history = history or []
 
-    spiral_stage = classify_spiral(user_text) if user_text else None
+    spiral_stage = classify_spiral(user_text) if user_text else "GREEN"
     shame_detected = detect_shame(user_text)
 
     # =================================================
-    # STEP 1 — VALIDATE CORE
+    # STEP 0 — VALIDATE
     # =================================================
     if step is None or step == "start":
 
         instruction = """
-Validate that their reaction makes sense
-given what they’re dealing with.
-
-Keep it human and natural.
+Reflect their emotional experience briefly.
+Validate that their reaction makes sense given what they're facing.
+Keep it human and grounded.
+Add one gentle self-compassion line.
 """
 
-        # Self-compassion layering
-        instruction += """
-Add one gentle self-compassion line
-(e.g., "Anyone in your place might feel this.").
-"""
-
-        # Shame-release micro script
         if shame_detected:
             instruction += """
-Gently reduce shame.
-Reframe self-judgment softly.
-Do not argue.
+Gently soften self-judgment.
+Reduce shame without arguing or correcting them.
 """
 
-        # Gentle transition
         instruction += """
-Close with a soft transition line like:
+Close with:
 "If you'd like, we can take a small step next."
-No pressure.
+Keep it optional.
 """
 
         text = gpt_reply(history, instruction, spiral_stage)
@@ -149,35 +176,48 @@ No pressure.
         return {"step": "transition", "text": text}
 
     # =================================================
-    # STEP 2 — TRANSITION HANDLER
+    # STEP 1 — TRANSITION HANDLER
     # =================================================
     if step == "transition":
 
-        if not user_text:
-            return {"step": "exit", "text": "We can pause here."}
+        decision = classify_yes_no(user_text or "")
 
-        lower = user_text.lower().strip()
+        if decision == "YES":
 
-        if lower in ["yes", "okay", "ok", "sure", "let's try"]:
             text = gpt_reply(
                 history,
                 """
-Acknowledge their openness.
-Suggest one very gentle next step
-like a slow breath or grounding moment.
-Keep it optional.
+Acknowledge their openness warmly.
+Suggest one very small, optional next step
+(like one slow breath or noticing the room).
+Keep it gentle and brief.
 """,
                 spiral_stage
             )
+
             return {"step": "exit", "text": text}
 
-        # If no / hesitation
+        if decision == "NO":
+
+            text = gpt_reply(
+                history,
+                """
+Acknowledge gently.
+Reinforce that just sharing this already matters.
+Close warmly.
+""",
+                spiral_stage
+            )
+
+            return {"step": "exit", "text": text}
+
+        # UNCLEAR → neutral close
         text = gpt_reply(
             history,
             """
-Acknowledge gently.
-Reinforce that just being here counts.
-Close warmly.
+Let them know it's okay to pause.
+Reassure them they're not alone in this.
+Close softly.
 """,
             spiral_stage
         )

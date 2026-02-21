@@ -1,13 +1,14 @@
 """
-Low Mood Tool: Body Check-In (Spiral Aware - Independent)
+Low Mood Tool: Body Check-In (Spiral + Gentle Resistance Handling)
 
 Design:
-- Independent GPT usage (no shared wrapper)
-- Safe classifier functions
-- Spiral-aware tone (never mentioned to user)
-- Linear step flow
-- No loops
-- Short, gentle responses only
+- Independent GPT usage
+- Spiral-aware tone (internal only)
+- Permission asked once
+- If NO → offer softer alternative
+- Linear progression
+- No looping permission
+- Short, grounding responses
 """
 
 from openai import OpenAI
@@ -23,18 +24,18 @@ You are a calm, grounding mental health guide.
 
 Rules:
 - Keep responses short (1–3 lines)
-- Speak gently and naturally
+- Gentle tone
 - No advice
 - No analysis
 - No fixing
-- Just guide awareness
+- Guide awareness simply
 """
 
 # =====================================================
 # SAFE CLASSIFIER
 # =====================================================
 
-def safe_classify(system_instruction: str, user_text: str, valid_options: list, default: str):
+def safe_classify(system_instruction, user_text, valid_options, default):
 
     if not user_text or len(user_text.strip()) < 2:
         return default
@@ -60,11 +61,7 @@ def safe_classify(system_instruction: str, user_text: str, valid_options: list, 
         return default
 
 
-# =====================================================
-# CLASSIFIERS
-# =====================================================
-
-def classify_spiral(user_text: str) -> str:
+def classify_spiral(user_text):
     return safe_classify(
         "Classify into one word: BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.",
         user_text,
@@ -73,16 +70,16 @@ def classify_spiral(user_text: str) -> str:
     )
 
 
-def classify_yes_no(user_text: str) -> str:
+def classify_yes_no(user_text):
     return safe_classify(
-        "Classify into one word: YES, NO, or UNCLEAR.",
+        "Classify into one word: YES or NO.",
         user_text,
-        ["YES", "NO", "UNCLEAR"],
-        "UNCLEAR"
+        ["YES", "NO"],
+        "NO"
     )
 
 
-def classify_shift(user_text: str) -> str:
+def classify_shift(user_text):
     return safe_classify(
         "Classify into one word: SUCCESS, NO_CHANGE, or UNCLEAR.",
         user_text,
@@ -139,12 +136,7 @@ def handle(step=None, user_text=None, history=None):
 
         text = gpt_reply(
             history,
-            """
-Gently invite:
-"Would it feel okay to take a moment to notice your body?"
-
-Keep it optional and soft.
-""",
+            "Would it feel okay to gently notice how your body feels right now?",
             spiral_stage
         )
 
@@ -161,40 +153,46 @@ Keep it optional and soft.
 
             text = gpt_reply(
                 history,
-                """
-Ask gently:
-"When you feel low like this, does your body feel heavy, tight, or tired anywhere?"
-
-Add:
-"If you're not sure, that's okay."
-""",
+                "When you feel low like this, does your body feel heavy, tight, or tired anywhere?",
                 spiral_stage
             )
 
             return {"step": "scan", "text": text}
 
-        if decision == "NO":
+        # If NO → Offer softer alternative
+        text = gpt_reply(
+            history,
+            """
+That's completely okay.
+Would it feel easier to just take one slow breath together instead?
+Only if you'd like.
+""",
+            spiral_stage
+        )
+
+        return {"step": "alt_option", "text": text}
+
+    # -------------------------------------------------
+    # STEP ALT OPTION (If they said NO)
+    # -------------------------------------------------
+    if step == "alt_option":
+
+        decision = classify_yes_no(user_text)
+
+        if decision == "YES":
 
             text = gpt_reply(
                 history,
-                """
-Acknowledge gently.
-Let them know that's completely okay.
-Close softly.
-""",
+                "Let’s take one slow breath together. Inhale gently… and exhale slowly.",
                 spiral_stage
             )
 
             return {"step": "exit", "text": text}
 
-        # UNCLEAR
-        text = gpt_reply(
-            history,
-            "Gently ask if they'd prefer to try noticing their body or just pause.",
-            spiral_stage
-        )
-
-        return {"step": "permission", "text": text}
+        return {
+            "step": "exit",
+            "text": "That's completely fine. We can pause here."
+        }
 
     # -------------------------------------------------
     # STEP 2 — SCAN
@@ -222,13 +220,7 @@ No changing.
 
         text = gpt_reply(
             history,
-            f"""
-User said: "{user_text}"
-
-Invite softening just 5%, if that feels okay.
-Then gently ask:
-"Did anything shift?"
-""",
+            "If it feels okay, see if that area can soften just 5%.",
             spiral_stage
         )
 
@@ -245,11 +237,7 @@ Then gently ask:
 
             text = gpt_reply(
                 history,
-                """
-Acknowledge the small shift warmly.
-Invite staying briefly.
-Close gently.
-""",
+                "That small shift matters. Let's stay with that for a moment.",
                 spiral_stage
             )
 
@@ -259,32 +247,21 @@ Close gently.
 
             text = gpt_reply(
                 history,
-                """
-Normalize that sometimes nothing shifts.
-Invite one slow breath.
-Close softly.
-""",
+                "Sometimes nothing shifts right away. That's okay.",
                 spiral_stage
             )
 
             return {"step": "exit", "text": text}
 
-        # UNCLEAR
         text = gpt_reply(
             history,
-            """
-Gently ask if it feels the same or slightly different.
-Keep it simple.
-""",
+            "Even just noticing is enough for now.",
             spiral_stage
         )
 
-        return {"step": "check", "text": text}
+        return {"step": "exit", "text": text}
 
     # -------------------------------------------------
     # FALLBACK
     # -------------------------------------------------
-    return {
-        "step": "exit",
-        "text": "We can pause here."
-    }
+    return {"step": "exit", "text": "We can pause here."}

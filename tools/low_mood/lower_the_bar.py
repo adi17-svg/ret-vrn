@@ -1,77 +1,149 @@
-# from tool_gpt import tool_gpt_reply
-
-# def handle(step: str | None, user_text: str | None):
-#     if step in (None, "start"):
-#         return {
-#             "step": "minimum",
-#             "text": tool_gpt_reply(
-#                 user_text,
-#                 "Invite them to consider the absolute minimum that would be enough for today."
-#             )
-#         }
-
-#     if step == "minimum":
-#         return {
-#             "step": "exit",
-#             "text": tool_gpt_reply(
-#                 user_text,
-#                 "Affirm that this minimum is enough for now."
-#             )
-#         }
-
-#     return {
-#         "step": "exit",
-#         "text": tool_gpt_reply(user_text, "We can stop here.")
-#     }
 """
-Low Mood Tool: Lower The Bar
+Low Mood Tool: Lower The Bar (Context + Spiral Aware)
+
+Design:
+- Independent GPT usage
+- Uses full chat history
+- Spiral-aware tone (internal only)
+- Reduces pressure gently
+- Encourages minimum viable effort
+- No advice, no pushing
 """
 
-from spiral_dynamics import client
+from openai import OpenAI
 
-SYSTEM_PROMPT = """
-You reduce pressure gently.
+client = OpenAI()
+
+# =====================================================
+# BASE SYSTEM PROMPT
+# =====================================================
+
+SYSTEM_PROMPT_BASE = """
+You gently reduce pressure.
 
 Rules:
+- Warm, calm tone
 - No pushing
 - No advice
-- Encourage minimum effort
+- No productivity coaching
+- Encourage minimum effort only
+- Keep responses short (2–4 lines)
 """
 
-def gpt_reply(user_text, instruction):
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_text or ""},
-        {"role": "assistant", "content": instruction},
-    ]
+# =====================================================
+# SAFE CLASSIFIER
+# =====================================================
 
-    resp = client.chat.completions.create(
+def safe_classify(system_instruction, user_text, valid_options, default):
+
+    if not user_text or len(user_text.strip()) < 2:
+        return default
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": user_text}
+            ],
+            temperature=0
+        )
+
+        result = response.choices[0].message.content.strip().upper()
+
+        if result in valid_options:
+            return result
+
+        return default
+
+    except:
+        return default
+
+
+def classify_spiral(user_text):
+    return safe_classify(
+        "Classify into one word only: BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.",
+        user_text,
+        ["BEIGE", "PURPLE", "RED", "BLUE", "ORANGE", "GREEN", "YELLOW"],
+        "GREEN"
+    )
+
+
+# =====================================================
+# GPT REPLY (CONTEXT + SPIRAL AWARE)
+# =====================================================
+
+def gpt_reply(history, instruction, spiral_stage=None):
+
+    system_prompt = SYSTEM_PROMPT_BASE
+
+    if spiral_stage:
+        system_prompt += f"""
+
+User tendency appears closer to {spiral_stage}.
+Adjust tone subtly to match mindset.
+Never mention stages.
+"""
+
+    messages = [{"role": "system", "content": system_prompt}]
+
+    # Include full previous conversation context
+    if history:
+        messages.extend(history)
+
+    messages.append({"role": "user", "content": instruction})
+
+    response = client.chat.completions.create(
         model="gpt-4.1",
         messages=messages,
         temperature=0.4,
     )
 
-    return resp.choices[0].message.content.strip()
+    return response.choices[0].message.content.strip()
 
 
-def handle(step, user_text):
+# =====================================================
+# MAIN HANDLER
+# =====================================================
 
+def handle(step=None, user_text=None, history=None):
+
+    history = history or []
+    spiral_stage = classify_spiral(user_text) if user_text else "GREEN"
+
+    # =================================================
+    # STEP 0 — REFLECT PRESSURE
+    # =================================================
     if step is None or step == "start":
-        return {
-            "step": "minimum",
-            "text": gpt_reply(
-                user_text,
-                "Invite them to consider the absolute minimum that would be enough for today."
-            )
-        }
 
+        instruction = """
+Briefly reflect the pressure or heaviness they seem to be carrying.
+Normalize that when energy is low, everything feels bigger.
+Then gently ask:
+"If today didn't have to be perfect, what would be the absolute minimum that would be enough?"
+"""
+
+        text = gpt_reply(history, instruction, spiral_stage)
+
+        return {"step": "minimum", "text": text}
+
+    # =================================================
+    # STEP 1 — AFFIRM MINIMUM
+    # =================================================
     if step == "minimum":
-        return {
-            "step": "exit",
-            "text": gpt_reply(
-                user_text,
-                "Affirm that this minimum is enough for now."
-            )
-        }
 
+        instruction = """
+Affirm that their chosen minimum is enough for today.
+Reinforce that small counts.
+Do not expand goals.
+Close gently.
+"""
+
+        text = gpt_reply(history, instruction, spiral_stage)
+
+        return {"step": "exit", "text": text}
+
+    # =================================================
+    # FALLBACK
+    # =================================================
     return {"step": "exit", "text": "We can stop here."}

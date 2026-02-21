@@ -1,14 +1,15 @@
 """
-Low Mood Tool: Breath Word (Fully Stabilized)
+Low Mood Tool: Breath Word (Smooth Multi-Step Flow)
 
-Features:
-- Smart start detection
-- Spiral-aware tone (internal only)
-- Safe classifier wrapper
-- Fallback defaults
-- Low-confidence handling
-- No loops
+Design:
 - Independent GPT usage
+- Spiral-aware tone (internal only)
+- Smart start detection
+- 3 guided breath cycles (smooth rhythm)
+- Gentle body noticing
+- Soft containment close
+- No loops
+- No over-analysis
 """
 
 from openai import OpenAI
@@ -32,10 +33,10 @@ Rules:
 """
 
 # =====================================================
-# SAFE CLASSIFIER WRAPPER
+# SAFE CLASSIFIER
 # =====================================================
 
-def safe_classify(system_instruction: str, user_text: str, valid_options: list, default: str):
+def safe_classify(system_instruction, user_text, valid_options, default):
 
     if not user_text or len(user_text.strip()) < 2:
         return default
@@ -61,11 +62,7 @@ def safe_classify(system_instruction: str, user_text: str, valid_options: list, 
         return default
 
 
-# =====================================================
-# SPIRAL CLASSIFIER
-# =====================================================
-
-def classify_spiral(user_text: str) -> str:
+def classify_spiral(user_text):
     return safe_classify(
         "Classify into one word: BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.",
         user_text,
@@ -74,15 +71,20 @@ def classify_spiral(user_text: str) -> str:
     )
 
 
-# =====================================================
-# YES / NO
-# =====================================================
-
-def classify_yes_no(user_text: str) -> str:
+def classify_yes_no(user_text):
     return safe_classify(
         "Classify into one word: YES, NO, or UNCLEAR.",
         user_text,
         ["YES", "NO", "UNCLEAR"],
+        "UNCLEAR"
+    )
+
+
+def classify_shift(user_text):
+    return safe_classify(
+        "Classify into one word: SUCCESS, NO_CHANGE, or UNCLEAR.",
+        user_text,
+        ["SUCCESS", "NO_CHANGE", "UNCLEAR"],
         "UNCLEAR"
     )
 
@@ -133,28 +135,19 @@ def handle(step=None, user_text=None, history=None):
     # -------------------------------------------------
     if step is None or step == "start":
 
-        # If user already ready
         if user_text and any(word in user_text.lower() for word in [
             "yes", "sure", "okay", "let's", "breathe"
         ]):
             text = gpt_reply(
                 history,
-                """
-Guide the first slow inhale with the word "here"
-and exhale with "now".
-Keep it calm and steady.
-""",
+                "Let’s begin. Inhale slowly — here. Exhale gently — now.",
                 spiral_stage
             )
             return {"step": "cycle_2", "text": text}
 
         text = gpt_reply(
             history,
-            """
-Ask gently:
-"Would it feel okay to try a short breathing moment together?"
-Keep it optional and soft.
-""",
+            "Would it feel okay to try three slow breaths together?",
             spiral_stage
         )
         return {"step": "permission", "text": text}
@@ -169,31 +162,20 @@ Keep it optional and soft.
         if decision == "YES":
             text = gpt_reply(
                 history,
-                """
-Guide the first slow inhale with the word "here"
-and exhale with "now".
-Keep it calm and steady.
-""",
+                "Inhale slowly — here. Exhale gently — now.",
                 spiral_stage
             )
             return {"step": "cycle_2", "text": text}
 
         if decision == "NO":
-            text = gpt_reply(
-                history,
-                """
-Acknowledge gently.
-Let them know that's completely okay.
-Close softly.
-""",
-                spiral_stage
-            )
-            return {"step": "exit", "text": text}
+            return {
+                "step": "exit",
+                "text": "That's completely okay. We can pause here."
+            }
 
-        # UNCLEAR fallback
         text = gpt_reply(
             history,
-            "Gently ask if they'd prefer to breathe together or just pause.",
+            "Would you like to try just one slow breath together?",
             spiral_stage
         )
         return {"step": "permission", "text": text}
@@ -205,11 +187,7 @@ Close softly.
 
         text = gpt_reply(
             history,
-            """
-Guide another inhale "here"
-and exhale "now".
-Stay with the rhythm.
-""",
+            "Again… Inhale — here. Exhale — now.",
             spiral_stage
         )
         return {"step": "cycle_3", "text": text}
@@ -222,31 +200,54 @@ Stay with the rhythm.
         text = gpt_reply(
             history,
             """
-Guide one final inhale "here"
-and exhale "now".
+One last time…
+Inhale — here.
+Exhale — now.
 
-Then gently ask:
-"How does your body feel now?"
+Let your breath return to its own rhythm.
 """,
+            spiral_stage
+        )
+        return {"step": "notice", "text": text}
+
+    # -------------------------------------------------
+    # GENTLE NOTICE
+    # -------------------------------------------------
+    if step == "notice":
+
+        text = gpt_reply(
+            history,
+            "What do you notice in your body now?",
             spiral_stage
         )
         return {"step": "check_state", "text": text}
 
     # -------------------------------------------------
-    # CHECK STATE (SAFE RESPONSE)
+    # CHECK STATE
     # -------------------------------------------------
     if step == "check_state":
 
+        result = classify_shift(user_text)
+
+        if result == "SUCCESS":
+            text = gpt_reply(
+                history,
+                "Even a small shift matters. Let’s pause here.",
+                spiral_stage
+            )
+            return {"step": "exit", "text": text}
+
+        if result == "NO_CHANGE":
+            text = gpt_reply(
+                history,
+                "Sometimes breath just creates a little space. That’s enough for now.",
+                spiral_stage
+            )
+            return {"step": "exit", "text": text}
+
         text = gpt_reply(
             history,
-            f"""
-User said: "{user_text}"
-
-If calmer, affirm.
-If same, normalize.
-If unsure, gently reassure.
-Close softly.
-""",
+            "Just noticing is enough. We can pause here.",
             spiral_stage
         )
         return {"step": "exit", "text": text}

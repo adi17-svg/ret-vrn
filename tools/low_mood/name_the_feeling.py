@@ -1,77 +1,151 @@
-# from tool_gpt import tool_gpt_reply
-
-# def handle(step: str | None, user_text: str | None):
-#     if step in (None, "start"):
-#         return {
-#             "step": "name",
-#             "text": tool_gpt_reply(
-#                 user_text,
-#                 "Invite them to name what this feeling is like, without explaining or analyzing it."
-#             )
-#         }
-
-#     if step == "name":
-#         return {
-#             "step": "exit",
-#             "text": tool_gpt_reply(
-#                 user_text,
-#                 "Reassure them that naming it is enough for now."
-#             )
-#         }
-
-#     return {
-#         "step": "exit",
-#         "text": tool_gpt_reply(user_text, "We can pause here.")
-#     }
 """
-Low Mood Tool: Name The Feeling
+Low Mood Tool: Name The Feeling (Context + Spiral Aware)
+
+Design:
+- Independent GPT usage
+- Uses full chat history
+- Spiral-aware tone (internal only)
+- Emotional labeling only
+- No analysis, no advice
+- Gentle closure
 """
 
-from spiral_dynamics import client
+from openai import OpenAI
 
-SYSTEM_PROMPT = """
+client = OpenAI()
+
+# =====================================================
+# BASE SYSTEM PROMPT
+# =====================================================
+
+SYSTEM_PROMPT_BASE = """
 You guide emotional labeling gently.
 
 Rules:
 - No analysis
 - No advice
-- Just naming
+- No fixing
+- Invite naming only
+- Keep responses short (2–4 lines)
+- Calm and simple tone
 """
 
-def gpt_reply(user_text, instruction):
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_text or ""},
-        {"role": "assistant", "content": instruction},
-    ]
+# =====================================================
+# SAFE CLASSIFIER
+# =====================================================
 
-    resp = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=messages,
-        temperature=0.5,
+def safe_classify(system_instruction, user_text, valid_options, default):
+
+    if not user_text or len(user_text.strip()) < 2:
+        return default
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": user_text}
+            ],
+            temperature=0
+        )
+
+        result = response.choices[0].message.content.strip().upper()
+
+        if result in valid_options:
+            return result
+
+        return default
+
+    except:
+        return default
+
+
+def classify_spiral(user_text):
+    return safe_classify(
+        "Classify into one word only: BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.",
+        user_text,
+        ["BEIGE", "PURPLE", "RED", "BLUE", "ORANGE", "GREEN", "YELLOW"],
+        "GREEN"
     )
 
-    return resp.choices[0].message.content.strip()
+
+# =====================================================
+# GPT REPLY (CONTEXT + SPIRAL AWARE)
+# =====================================================
+
+def gpt_reply(history, instruction, spiral_stage=None):
+
+    system_prompt = SYSTEM_PROMPT_BASE
+
+    if spiral_stage:
+        system_prompt += f"""
+
+User tendency appears closer to {spiral_stage}.
+Adjust tone subtly to match mindset.
+Never mention stages.
+"""
+
+    messages = [{"role": "system", "content": system_prompt}]
+
+    # Include full previous chat history
+    if history:
+        messages.extend(history)
+
+    messages.append({"role": "user", "content": instruction})
+
+    response = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=messages,
+        temperature=0.4,
+    )
+
+    return response.choices[0].message.content.strip()
 
 
-def handle(step, user_text):
+# =====================================================
+# MAIN HANDLER
+# =====================================================
 
+def handle(step=None, user_text=None, history=None):
+
+    history = history or []
+    spiral_stage = classify_spiral(user_text) if user_text else "GREEN"
+
+    # =================================================
+    # STEP 0 — INVITE NAMING
+    # =================================================
     if step is None or step == "start":
-        return {
-            "step": "name",
-            "text": gpt_reply(
-                user_text,
-                "Invite them to name what this feeling is like, without explaining or analyzing it."
-            )
-        }
 
+        instruction = """
+Invite them to name what this feeling is like right now.
+Ask for one simple word.
+Do not ask why.
+Keep it gentle.
+"""
+
+        text = gpt_reply(history, instruction, spiral_stage)
+
+        return {"step": "name", "text": text}
+
+    # =================================================
+    # STEP 1 — REFLECT + AFFIRM
+    # =================================================
     if step == "name":
-        return {
-            "step": "exit",
-            "text": gpt_reply(
-                user_text,
-                "Reassure them that naming it is enough for now."
-            )
-        }
 
+        instruction = f"""
+User said: "{user_text}"
+
+Repeat the emotion word simply.
+Acknowledge that naming it matters.
+Reassure them that this is enough for now.
+Keep it short.
+"""
+
+        text = gpt_reply(history, instruction, spiral_stage)
+
+        return {"step": "exit", "text": text}
+
+    # =================================================
+    # FALLBACK
+    # =================================================
     return {"step": "exit", "text": "We can pause here."}

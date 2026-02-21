@@ -1,77 +1,149 @@
-# from tool_gpt import tool_gpt_reply
-
-# def handle(step: str | None, user_text: str | None):
-#     if step in (None, "start"):
-#         return {
-#             "step": "name",
-#             "text": tool_gpt_reply(
-#                 user_text,
-#                 "Invite them to name one thing they don’t need to decide right now."
-#             )
-#         }
-
-#     if step == "name":
-#         return {
-#             "step": "exit",
-#             "text": tool_gpt_reply(
-#                 user_text,
-#                 "Remind them they can come back to that decision later."
-#             )
-#         }
-
-#     return {
-#         "step": "exit",
-#         "text": tool_gpt_reply(user_text, "Stopping here is okay.")
-#     }
 """
-Low Mood Tool: No Decision Now
+Low Mood Tool: No Decision Now (Context + Spiral Aware)
+
+Design:
+- Independent GPT usage
+- Uses full chat history
+- Spiral-aware tone (internal only)
+- Reduces decision pressure
+- No advice, no analysis
+- Gentle closure
 """
 
-from spiral_dynamics import client
+from openai import OpenAI
 
-SYSTEM_PROMPT = """
-You reduce decision pressure gently.
+client = OpenAI()
+
+# =====================================================
+# BASE SYSTEM PROMPT
+# =====================================================
+
+SYSTEM_PROMPT_BASE = """
+You gently reduce decision pressure.
 
 Rules:
 - No solving
+- No pros-cons analysis
 - No pushing
-- Light reassurance
+- Light reassurance only
+- Keep responses short (2–4 lines)
 """
 
-def gpt_reply(user_text, instruction):
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_text or ""},
-        {"role": "assistant", "content": instruction},
-    ]
+# =====================================================
+# SAFE CLASSIFIER
+# =====================================================
 
-    resp = client.chat.completions.create(
+def safe_classify(system_instruction, user_text, valid_options, default):
+
+    if not user_text or len(user_text.strip()) < 2:
+        return default
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": user_text}
+            ],
+            temperature=0
+        )
+
+        result = response.choices[0].message.content.strip().upper()
+
+        if result in valid_options:
+            return result
+
+        return default
+
+    except:
+        return default
+
+
+def classify_spiral(user_text):
+    return safe_classify(
+        "Classify into one word only: BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.",
+        user_text,
+        ["BEIGE", "PURPLE", "RED", "BLUE", "ORANGE", "GREEN", "YELLOW"],
+        "GREEN"
+    )
+
+
+# =====================================================
+# GPT REPLY (CONTEXT + SPIRAL AWARE)
+# =====================================================
+
+def gpt_reply(history, instruction, spiral_stage=None):
+
+    system_prompt = SYSTEM_PROMPT_BASE
+
+    if spiral_stage:
+        system_prompt += f"""
+
+User tendency appears closer to {spiral_stage}.
+Adjust tone subtly to match mindset.
+Never mention stages.
+"""
+
+    messages = [{"role": "system", "content": system_prompt}]
+
+    # Include full previous conversation
+    if history:
+        messages.extend(history)
+
+    messages.append({"role": "user", "content": instruction})
+
+    response = client.chat.completions.create(
         model="gpt-4.1",
         messages=messages,
         temperature=0.4,
     )
 
-    return resp.choices[0].message.content.strip()
+    return response.choices[0].message.content.strip()
 
 
-def handle(step, user_text):
+# =====================================================
+# MAIN HANDLER
+# =====================================================
 
+def handle(step=None, user_text=None, history=None):
+
+    history = history or []
+    spiral_stage = classify_spiral(user_text) if user_text else "GREEN"
+
+    # =================================================
+    # STEP 0 — INVITE DECISION NAMING
+    # =================================================
     if step is None or step == "start":
-        return {
-            "step": "name",
-            "text": gpt_reply(
-                user_text,
-                "Invite them to name one thing they don’t need to decide right now."
-            )
-        }
 
+        instruction = """
+Gently reflect that decisions can feel heavy when energy is low.
+Invite them to name one decision they don’t need to make right now.
+Keep it simple.
+"""
+
+        text = gpt_reply(history, instruction, spiral_stage)
+
+        return {"step": "name", "text": text}
+
+    # =================================================
+    # STEP 1 — RELEASE PRESSURE
+    # =================================================
     if step == "name":
-        return {
-            "step": "exit",
-            "text": gpt_reply(
-                user_text,
-                "Remind them they can return to that decision later."
-            )
-        }
 
+        instruction = f"""
+User said: "{user_text}"
+
+Acknowledge the decision briefly.
+Reassure them it does not need to be decided right now.
+Encourage placing it aside gently.
+Close calmly.
+"""
+
+        text = gpt_reply(history, instruction, spiral_stage)
+
+        return {"step": "exit", "text": text}
+
+    # =================================================
+    # FALLBACK
+    # =================================================
     return {"step": "exit", "text": "Stopping here is okay."}
