@@ -1,18 +1,20 @@
 """
 Low Mood Tool: Self Compassion
-Context-Aware + Step Based + Production Safe
+Context-Aware + Last 6 Message Window
 """
 
 from openai import OpenAI
 
 client = OpenAI()
 
+HISTORY_LIMIT = 6  # 👈 IMPORTANT
+
 # =====================================================
 # SYSTEM PROMPT
 # =====================================================
 
 BASE_PROMPT = """
-You are a calm, warm self-compassion guide inside a mental wellness app.
+You are a calm, warm self-compassion guide.
 
 Rules:
 - Warm and human tone
@@ -22,11 +24,10 @@ Rules:
 - Keep responses short (3–5 lines max)
 - Validate first
 - Encourage gentle self-talk
-- Use previous user context naturally if helpful
 """
 
 # =====================================================
-# GPT CALL (History Aware)
+# GPT CALL (Only Last 6 Messages)
 # =====================================================
 
 def gpt_reply(history, instruction):
@@ -35,9 +36,10 @@ def gpt_reply(history, instruction):
         {"role": "system", "content": BASE_PROMPT},
     ]
 
-    # include previous tool conversation
+    # 👇 Only take last 6 messages
     if history:
-        messages.extend(history)
+        recent_history = history[-HISTORY_LIMIT:]
+        messages.extend(recent_history)
 
     messages.append({"role": "user", "content": instruction})
 
@@ -51,7 +53,7 @@ def gpt_reply(history, instruction):
 
 
 # =====================================================
-# MAIN TOOL STATE MACHINE
+# STATE MACHINE
 # =====================================================
 
 def handle(step=None, user_text=None, history=None):
@@ -63,7 +65,7 @@ def handle(step=None, user_text=None, history=None):
         step = "await_activation"
 
     # -------------------------------------------------
-    # 1️⃣ ACTIVATION
+    # ACTIVATION
     # -------------------------------------------------
 
     if step == "await_activation":
@@ -80,17 +82,16 @@ def handle(step=None, user_text=None, history=None):
         }
 
     # -------------------------------------------------
-    # 2️⃣ USER SHARES EMOTION
+    # USER SHARES EMOTION
     # -------------------------------------------------
 
     if step == "await_emotion":
 
         instruction = f"""
-User just shared: "{user_text}"
+User said: "{user_text}"
 
-Reflect their experience warmly.
-Acknowledge the emotional weight.
-Use earlier context if relevant.
+Reflect warmly.
+Use the recent conversation context if relevant.
 """
 
         text = gpt_reply(history, instruction)
@@ -101,16 +102,14 @@ Use earlier context if relevant.
         }
 
     # -------------------------------------------------
-    # 3️⃣ INVITE SELF TALK
+    # INVITE SELF TALK
     # -------------------------------------------------
 
     if step == "invite_self_talk":
 
         instruction = """
-Gently ask:
+Ask gently:
 "If a close friend felt this way, what would you tell them?"
-
-Keep tone soft and natural.
 """
 
         text = gpt_reply(history, instruction)
@@ -121,17 +120,16 @@ Keep tone soft and natural.
         }
 
     # -------------------------------------------------
-    # 4️⃣ REINFORCE USER'S COMPASSION
+    # REINFORCE
     # -------------------------------------------------
 
     if step == "reinforce":
 
         instruction = f"""
-User responded with self-talk: "{user_text}"
+User said: "{user_text}"
 
 Reflect their compassionate words.
-Help them internalize that kindness.
-Then gently ask:
+Then ask gently:
 "Would you like to stay with this softness for a moment?"
 """
 
@@ -143,7 +141,7 @@ Then gently ask:
         }
 
     # -------------------------------------------------
-    # 5️⃣ CONTINUATION
+    # CONTINUATION
     # -------------------------------------------------
 
     if step == "continuation":
@@ -154,8 +152,8 @@ Then gently ask:
 
             instruction = """
 Guide one slow breath.
-Encourage them to let that kind tone settle inside.
-Close gently.
+Encourage that gentle tone to settle.
+Close softly.
 """
 
             text = gpt_reply(history, instruction)
@@ -167,7 +165,7 @@ Close gently.
 
         instruction = """
 Acknowledge gently.
-Reassure them that even trying this matters.
+Appreciate their effort.
 Close warmly.
 """
 
@@ -177,10 +175,6 @@ Close warmly.
             "step": "exit",
             "text": text
         }
-
-    # -------------------------------------------------
-    # 6️⃣ EXIT
-    # -------------------------------------------------
 
     return {
         "step": "exit",
