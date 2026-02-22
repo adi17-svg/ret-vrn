@@ -1,14 +1,6 @@
 """
 Low Mood Tool: Self Compassion
-(Context + Spiral Aware)
-
-Design:
-- Independent GPT usage
-- Uses full chat history
-- Spiral-aware tone (internal only)
-- Acknowledge → Normalize → Release fixing pressure
-- No advice, no analysis
-- Gentle containment close
+Structured + Activation Gated + History Aware
 """
 
 from openai import OpenAI
@@ -20,16 +12,15 @@ client = OpenAI()
 # =====================================================
 
 SYSTEM_PROMPT_BASE = """
-You are a calm, validating mental health guide.
+You are a calm, warm self-compassion guide.
 
 Rules:
-- Warm, grounded tone
+- Warm and natural tone
 - No advice
 - No fixing
 - No problem solving
-- No deep analysis
 - Keep responses short (2–4 lines)
-- Focus on self-compassion and emotional validation
+- Encourage gentle self-talk
 """
 
 # =====================================================
@@ -37,7 +28,6 @@ Rules:
 # =====================================================
 
 def safe_classify(system_instruction, user_text, valid_options, default):
-
     if not user_text or len(user_text.strip()) < 2:
         return default
 
@@ -71,8 +61,17 @@ def classify_spiral(user_text):
     )
 
 
+def classify_yes_no(user_text):
+    return safe_classify(
+        "Classify into one word: YES, NO, or UNCLEAR.",
+        user_text,
+        ["YES", "NO", "UNCLEAR"],
+        "UNCLEAR"
+    )
+
+
 # =====================================================
-# GPT REPLY (CONTEXT + SPIRAL AWARE)
+# GPT REPLY (History Aware)
 # =====================================================
 
 def gpt_reply(history, instruction, spiral_stage=None):
@@ -83,12 +82,13 @@ def gpt_reply(history, instruction, spiral_stage=None):
         system_prompt += f"""
 
 User tendency appears closer to {spiral_stage}.
-Adjust validation tone subtly to match mindset.
+Adjust tone subtly.
 Never mention stages.
 """
 
     messages = [{"role": "system", "content": system_prompt}]
 
+    # Include full previous chat history
     if history:
         messages.extend(history)
 
@@ -97,7 +97,7 @@ Never mention stages.
     response = client.chat.completions.create(
         model="gpt-4.1",
         messages=messages,
-        temperature=0.4,
+        temperature=0.5,
     )
 
     return response.choices[0].message.content.strip()
@@ -110,43 +110,139 @@ Never mention stages.
 def handle(step=None, user_text=None, history=None):
 
     history = history or []
-    spiral_stage = classify_spiral(user_text) if user_text else "GREEN"
+    user_text = user_text or ""
 
-    # STEP 1 — ACKNOWLEDGE
-    if step is None or step == "start":
+    # -------------------------------------------------
+    # STEP 0 — ACTIVATION
+    # -------------------------------------------------
 
-        instruction = """
-Reflect that this feels like a hard or heavy moment.
-Keep it simple and human.
+    if step is None or step == "await_activation":
+
+        if user_text.strip().upper() != "READY":
+            return {
+                "step": "await_activation",
+                "text": "This is a short self-compassion moment.\nType READY when you're ready to begin."
+            }
+
+        return {
+            "step": "await_emotion",
+            "text": "What feels heavy right now?"
+        }
+
+    # -------------------------------------------------
+    # STEP 1 — AWAIT EMOTION
+    # -------------------------------------------------
+
+    if step == "await_emotion":
+
+        spiral_stage = classify_spiral(user_text)
+
+        instruction = f"""
+User said: "{user_text}"
+
+Reflect their emotional experience warmly.
+Acknowledge that this feels hard.
+Keep it natural.
 """
 
         text = gpt_reply(history, instruction, spiral_stage)
 
-        return {"step": "normalize", "text": text}
+        return {
+            "step": "invite_self_talk",
+            "text": text
+        }
 
-    # STEP 2 — NORMALIZE
-    if step == "normalize":
+    # -------------------------------------------------
+    # STEP 2 — INVITE SELF TALK
+    # -------------------------------------------------
+
+    if step == "invite_self_talk":
+
+        spiral_stage = classify_spiral(user_text)
 
         instruction = """
-Normalize gently that many people feel this way sometimes.
-Reduce isolation without minimizing.
+Invite them to imagine speaking to themselves gently.
+Ask:
+"If a close friend felt this way, what would you tell them?"
+Keep it soft.
 """
 
         text = gpt_reply(history, instruction, spiral_stage)
 
-        return {"step": "release", "text": text}
+        return {
+            "step": "reinforce",
+            "text": text
+        }
 
-    # STEP 3 — RELEASE FIXING PRESSURE
-    if step == "release":
+    # -------------------------------------------------
+    # STEP 3 — REINFORCE
+    # -------------------------------------------------
+
+    if step == "reinforce":
+
+        spiral_stage = classify_spiral(user_text)
+
+        instruction = f"""
+User said: "{user_text}"
+
+Reflect their compassionate words.
+Reinforce that offering that kindness to themselves matters.
+
+Then gently ask:
+"Would you like to stay with this softness for a moment?"
+Keep it optional.
+"""
+
+        text = gpt_reply(history, instruction, spiral_stage)
+
+        return {
+            "step": "continuation",
+            "text": text
+        }
+
+    # -------------------------------------------------
+    # STEP 4 — CONTINUATION
+    # -------------------------------------------------
+
+    if step == "continuation":
+
+        spiral_stage = classify_spiral(user_text)
+        decision = classify_yes_no(user_text)
+
+        if decision == "YES":
+
+            instruction = """
+Guide one slow breath.
+Encourage letting that self-kind tone stay.
+Keep it gentle.
+Close softly.
+"""
+
+            text = gpt_reply(history, instruction, spiral_stage)
+
+            return {
+                "step": "exit",
+                "text": text
+            }
 
         instruction = """
-Gently reassure them they don’t need to fix anything right now.
-Encourage self-kindness in this moment.
+Acknowledge gently.
+Reassure that even trying this matters.
 Close warmly.
 """
 
         text = gpt_reply(history, instruction, spiral_stage)
 
-        return {"step": "exit", "text": text}
+        return {
+            "step": "exit",
+            "text": text
+        }
 
-    return {"step": "exit", "text": "We can pause here."}
+    # -------------------------------------------------
+    # STEP 5 — EXIT
+    # -------------------------------------------------
+
+    return {
+        "step": "exit",
+        "text": "We can pause here."
+    }
