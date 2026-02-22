@@ -1,13 +1,14 @@
 """
 Low Mood Tool: Self Compassion
-Context-Aware + Last 6 Message Window
+Clean Version – No READY gate
+Context-aware (last 6 messages)
 """
 
 from openai import OpenAI
 
 client = OpenAI()
 
-HISTORY_LIMIT = 6  # 👈 IMPORTANT
+HISTORY_LIMIT = 6
 
 # =====================================================
 # SYSTEM PROMPT
@@ -17,31 +18,34 @@ BASE_PROMPT = """
 You are a calm, warm self-compassion guide.
 
 Rules:
-- Warm and human tone
+- Warm, human tone
 - No advice
 - No fixing
 - No problem solving
-- Keep responses short (3–5 lines max)
+- Keep responses short (3–5 lines)
 - Validate first
-- Encourage gentle self-talk
+- Encourage gentle inner tone
 """
 
 # =====================================================
-# GPT CALL (Only Last 6 Messages)
+# GPT CALL (last 6 messages only)
 # =====================================================
 
-def gpt_reply(history, instruction):
+def gpt_reply(history, user_text):
 
     messages = [
         {"role": "system", "content": BASE_PROMPT},
     ]
 
-    # 👇 Only take last 6 messages
+    # Only last 6 messages for emotional continuity
     if history:
-        recent_history = history[-HISTORY_LIMIT:]
-        messages.extend(recent_history)
+        recent = history[-HISTORY_LIMIT:]
+        messages.extend(recent)
 
-    messages.append({"role": "user", "content": instruction})
+    messages.append({
+        "role": "user",
+        "content": f'User just said: "{user_text}"\nRespond with warmth and self-compassion.'
+    })
 
     response = client.chat.completions.create(
         model="gpt-4.1",
@@ -53,7 +57,7 @@ def gpt_reply(history, instruction):
 
 
 # =====================================================
-# STATE MACHINE
+# HANDLE
 # =====================================================
 
 def handle(step=None, user_text=None, history=None):
@@ -61,122 +65,17 @@ def handle(step=None, user_text=None, history=None):
     history = history or []
     user_text = (user_text or "").strip()
 
-    if not step:
-        step = "await_activation"
-
-    # -------------------------------------------------
-    # ACTIVATION
-    # -------------------------------------------------
-
-    if step == "await_activation":
-
-        if user_text.upper() != "READY":
-            return {
-                "step": "await_activation",
-                "text": "This is a short self-compassion space.\nType READY when you want to begin."
-            }
-
+    # If user says nothing
+    if not user_text:
         return {
-            "step": "await_emotion",
-            "text": "What feels heavy right now?"
+            "step": "continue",
+            "text": "I’m here with you. What feels heavy right now?"
         }
 
-    # -------------------------------------------------
-    # USER SHARES EMOTION
-    # -------------------------------------------------
-
-    if step == "await_emotion":
-
-        instruction = f"""
-User said: "{user_text}"
-
-Reflect warmly.
-Use the recent conversation context if relevant.
-"""
-
-        text = gpt_reply(history, instruction)
-
-        return {
-            "step": "invite_self_talk",
-            "text": text
-        }
-
-    # -------------------------------------------------
-    # INVITE SELF TALK
-    # -------------------------------------------------
-
-    if step == "invite_self_talk":
-
-        instruction = """
-Ask gently:
-"If a close friend felt this way, what would you tell them?"
-"""
-
-        text = gpt_reply(history, instruction)
-
-        return {
-            "step": "reinforce",
-            "text": text
-        }
-
-    # -------------------------------------------------
-    # REINFORCE
-    # -------------------------------------------------
-
-    if step == "reinforce":
-
-        instruction = f"""
-User said: "{user_text}"
-
-Reflect their compassionate words.
-Then ask gently:
-"Would you like to stay with this softness for a moment?"
-"""
-
-        text = gpt_reply(history, instruction)
-
-        return {
-            "step": "continuation",
-            "text": text
-        }
-
-    # -------------------------------------------------
-    # CONTINUATION
-    # -------------------------------------------------
-
-    if step == "continuation":
-
-        normalized = user_text.lower()
-
-        if any(word in normalized for word in ["yes", "yeah", "okay", "sure"]):
-
-            instruction = """
-Guide one slow breath.
-Encourage that gentle tone to settle.
-Close softly.
-"""
-
-            text = gpt_reply(history, instruction)
-
-            return {
-                "step": "exit",
-                "text": text
-            }
-
-        instruction = """
-Acknowledge gently.
-Appreciate their effort.
-Close warmly.
-"""
-
-        text = gpt_reply(history, instruction)
-
-        return {
-            "step": "exit",
-            "text": text
-        }
+    # Generate warm reply based on history + input
+    text = gpt_reply(history, user_text)
 
     return {
-        "step": "exit",
-        "text": "We can pause here."
+        "step": "continue",
+        "text": text
     }
