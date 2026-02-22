@@ -1,6 +1,7 @@
 """
 Low Mood Tool: Self Compassion
 State-Safe + Activation Gated + History Aware
+Fully Fixed Version
 """
 
 from openai import OpenAI
@@ -101,6 +102,7 @@ Never mention stages.
 
     return response.choices[0].message.content.strip()
 
+
 # =====================================================
 # MAIN STATE MACHINE
 # =====================================================
@@ -108,15 +110,19 @@ Never mention stages.
 def handle(step=None, user_text=None, history=None):
 
     history = history or []
-    user_text = user_text or ""
+    user_text = (user_text or "").strip()
+
+    # Safety: if step missing, force activation state
+    if not step:
+        step = "await_activation"
 
     # -------------------------------------------------
-    # STEP 0 — ACTIVATION
+    # STEP 0 — ACTIVATION (ONLY if truly in activation)
     # -------------------------------------------------
 
-    if step is None or step == "await_activation":
+    if step == "await_activation":
 
-        if user_text.strip().upper() != "READY":
+        if user_text.upper() != "READY":
             return {
                 "step": "await_activation",
                 "text": "This is a short self-compassion moment.\nType READY when you're ready to begin."
@@ -173,7 +179,7 @@ Keep it soft.
         }
 
     # -------------------------------------------------
-    # STEP 3 — REINFORCE + ASK CONTINUATION
+    # STEP 3 — REINFORCE
     # -------------------------------------------------
 
     if step == "reinforce":
@@ -236,7 +242,7 @@ Close warmly.
         }
 
     # -------------------------------------------------
-    # STEP 5 — EXIT
+    # STEP 5 — EXIT (RESET SAFE)
     # -------------------------------------------------
 
     return {
