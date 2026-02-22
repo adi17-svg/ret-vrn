@@ -1,6 +1,6 @@
 """
 Low Mood Tool: Self Compassion
-Structured + Activation Gated + History Aware
+State-Safe + Activation Gated + History Aware
 """
 
 from openai import OpenAI
@@ -8,10 +8,10 @@ from openai import OpenAI
 client = OpenAI()
 
 # =====================================================
-# BASE SYSTEM PROMPT
+# SYSTEM PROMPT
 # =====================================================
 
-SYSTEM_PROMPT_BASE = """
+SYSTEM_PROMPT = """
 You are a calm, warm self-compassion guide.
 
 Rules:
@@ -28,6 +28,7 @@ Rules:
 # =====================================================
 
 def safe_classify(system_instruction, user_text, valid_options, default):
+
     if not user_text or len(user_text.strip()) < 2:
         return default
 
@@ -69,14 +70,13 @@ def classify_yes_no(user_text):
         "UNCLEAR"
     )
 
-
 # =====================================================
-# GPT REPLY (History Aware)
+# GPT REPLY
 # =====================================================
 
 def gpt_reply(history, instruction, spiral_stage=None):
 
-    system_prompt = SYSTEM_PROMPT_BASE
+    system_prompt = SYSTEM_PROMPT
 
     if spiral_stage:
         system_prompt += f"""
@@ -88,7 +88,6 @@ Never mention stages.
 
     messages = [{"role": "system", "content": system_prompt}]
 
-    # Include full previous chat history
     if history:
         messages.extend(history)
 
@@ -97,14 +96,13 @@ Never mention stages.
     response = client.chat.completions.create(
         model="gpt-4.1",
         messages=messages,
-        temperature=0.5,
+        temperature=0.5
     )
 
     return response.choices[0].message.content.strip()
 
-
 # =====================================================
-# MAIN HANDLER
+# MAIN STATE MACHINE
 # =====================================================
 
 def handle(step=None, user_text=None, history=None):
@@ -130,7 +128,7 @@ def handle(step=None, user_text=None, history=None):
         }
 
     # -------------------------------------------------
-    # STEP 1 — AWAIT EMOTION
+    # STEP 1 — USER SHARES EMOTION
     # -------------------------------------------------
 
     if step == "await_emotion":
@@ -175,7 +173,7 @@ Keep it soft.
         }
 
     # -------------------------------------------------
-    # STEP 3 — REINFORCE
+    # STEP 3 — REINFORCE + ASK CONTINUATION
     # -------------------------------------------------
 
     if step == "reinforce":
@@ -214,7 +212,6 @@ Keep it optional.
             instruction = """
 Guide one slow breath.
 Encourage letting that self-kind tone stay.
-Keep it gentle.
 Close softly.
 """
 
