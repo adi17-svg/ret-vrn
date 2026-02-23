@@ -1,60 +1,53 @@
 """
 Low Mood Tool: Getting Going With Action
-RETVRN Conversational Version
+Intent-Driven Conversational Version (RETVRN)
+
+Features:
+- Meaning extraction
+- Blocker type mapping
+- Spiral-aware micro action
+- Dynamic flow progression
+- No template repetition
 """
 
 from openai import OpenAI
 
 client = OpenAI()
-
 HISTORY_LIMIT = 6
 
-
-# ======================================
+# =====================================================
 # SYSTEM PROMPT
-# ======================================
+# =====================================================
 
 SYSTEM_PROMPT = """
 You are a calm, supportive mental health coach.
 
 Rules:
 - Keep responses short (2–4 lines)
-- Sound natural and human
-- Move gradually toward small action
-- Never rush into advice
-- Reinforce small steps
+- Move gently toward small action
+- No lecturing
+- No long analysis
+- Always shrink the task
 - Stay aligned with: "Start small. No pressure."
-- After suggesting action, gently keep conversation open
+- Keep conversation open after suggesting action
 """
 
-
-# ======================================
-# GPT HELPER (History Aware + Correct Roles)
-# ======================================
+# =====================================================
+# GPT HELPER
+# =====================================================
 
 def gpt_reply(history, instruction):
 
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-    ]
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    # Safe history mapping (last 6)
     if history:
-        recent = history[-HISTORY_LIMIT:]
-
-        for msg in recent:
+        for msg in history[-HISTORY_LIMIT:]:
             role = "assistant" if msg.get("type") == "assistant" else "user"
             content = msg.get("text", "")
             if content:
-                messages.append({
-                    "role": role,
-                    "content": content
-                })
+                messages.append({"role": role, "content": content})
 
-    messages.append({
-        "role": "user",
-        "content": instruction
-    })
+    messages.append({"role": "user", "content": instruction})
 
     resp = client.chat.completions.create(
         model="gpt-4.1",
@@ -64,47 +57,26 @@ def gpt_reply(history, instruction):
 
     return resp.choices[0].message.content.strip()
 
+# =====================================================
+# MEANING EXTRACTION
+# =====================================================
 
-# ======================================
-# STRUGGLE DETECTION
-# ======================================
-
-def looks_like_struggle(text):
-
-    if not text:
-        return False
-
-    keywords = [
-        "hard", "can't", "cannot", "difficult",
-        "stuck", "lazy", "tired", "avoid",
-        "procrastinate", "low", "no energy",
-        "heavy", "overwhelmed"
-    ]
-
-    return any(k in text.lower() for k in keywords)
-
-
-# ======================================
-# SPIRAL DETECTION (Background Only)
-# ======================================
-
-def detect_spiral_stage(text):
-
-    if not text:
-        return "Neutral"
+def extract_blocker_type(text):
 
     prompt = f"""
-Classify emotional tone into one:
+Analyze this message and classify the main blocker:
 
-Blue – guilt, responsibility focus
-Red – resistance, frustration
-Orange – productivity pressure
-Green – emotional overwhelm
-Neutral – unclear
+Options:
+INITIATION – trouble starting
+OVERWHELM – task feels too big
+DISTRACTION – attention drifting
+LOW_ENERGY – tired or drained
+FEAR – avoidance due to anxiety
+UNCLEAR – none of the above
 
-Message: {text}
+Message: "{text}"
 
-Return only one word.
+Return one word only.
 """
 
     resp = client.chat.completions.create(
@@ -115,31 +87,62 @@ Return only one word.
 
     return resp.choices[0].message.content.strip()
 
+# =====================================================
+# SPIRAL DETECTION
+# =====================================================
 
-# ======================================
-# MICRO ACTION BASED ON SPIRAL
-# ======================================
+def detect_spiral_stage(text):
 
-def get_micro_action(stage):
+    prompt = f"""
+Classify emotional tone into one:
 
-    if stage == "Blue":
-        return "Set a 2-minute timer and simply sit with the task in front of you."
+Blue – guilt/responsibility
+Red – resistance/frustration
+Orange – productivity pressure
+Green – emotional overwhelm
+Neutral – unclear
 
-    if stage == "Red":
-        return "Give yourself a 60-second challenge — just begin, no thinking."
+Message: "{text}"
 
-    if stage == "Orange":
-        return "Complete one very small measurable piece — just the first step."
+Return one word.
+"""
 
-    if stage == "Green":
-        return "Take one slow breath and gently start the smallest possible part."
+    resp = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
 
-    return "Begin with the smallest possible action — nothing more."
+    return resp.choices[0].message.content.strip()
 
+# =====================================================
+# DYNAMIC MICRO STEP
+# =====================================================
 
-# ======================================
+def generate_micro_step(task, blocker, spiral):
+
+    base_prompt = f"""
+Task: "{task}"
+Blocker: {blocker}
+Spiral tone: {spiral}
+
+Generate one extremely small first step.
+Make it tiny.
+No explanation.
+One action only.
+"""
+
+    resp = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=[{"role": "user", "content": base_prompt}],
+        temperature=0.3
+    )
+
+    return resp.choices[0].message.content.strip()
+
+# =====================================================
 # MAIN HANDLER
-# ======================================
+# =====================================================
 
 def handle(step=None, user_text=None, history=None, memory=None):
 
@@ -147,131 +150,51 @@ def handle(step=None, user_text=None, history=None, memory=None):
     memory = memory or {}
     user_text = (user_text or "").strip()
 
-    if not step:
-        step = "start"
+    if not user_text:
+        return {
+            "step": "continue",
+            "text": "What feels hard to start right now?",
+            "memory": memory
+        }
 
     # ----------------------------------
-    # STEP 0 — INTRO
+    # MEANING EXTRACTION
     # ----------------------------------
 
-    if step == "start":
+    blocker_type = extract_blocker_type(user_text)
+    spiral_stage = detect_spiral_stage(user_text)
 
-        text = gpt_reply(
-            history,
-            "Low energy happens. We’ll take just one small step. What feels hardest to begin right now?"
-        )
-
-        return {"step": "ack", "text": text, "memory": memory}
+    memory["blocker"] = blocker_type
+    memory["spiral"] = spiral_stage
+    memory["task"] = user_text
 
     # ----------------------------------
-    # STEP 1 — DETECT STRUGGLE
+    # DIRECT ACTION MODE (No Redundant Question)
     # ----------------------------------
 
-    if step == "ack":
+    micro_step = generate_micro_step(
+        task=user_text,
+        blocker=blocker_type,
+        spiral=spiral_stage
+    )
 
-        if not looks_like_struggle(user_text):
+    response_text = gpt_reply(
+        history,
+        f"""
+It sounds like the hard part is {blocker_type.lower()}.
 
-            text = gpt_reply(
-                history,
-                "Tell me something that feels hard to start. We’ll keep it light."
-            )
-
-            return {"step": "ack", "text": text, "memory": memory}
-
-        stage = detect_spiral_stage(user_text)
-        memory["spiral_stage"] = stage
-        memory["struggle"] = user_text
-
-        text = gpt_reply(
-            history,
-            """
-That sounds heavy.
-When you think about starting,
-is it more low energy, distraction, or pressure?
-"""
-        )
-
-        return {"step": "blocker", "text": text, "memory": memory}
-
-    # ----------------------------------
-    # STEP 2 — BLOCKER EXPLORE
-    # ----------------------------------
-
-    if step == "blocker":
-
-        memory["blocker"] = user_text
-
-        text = gpt_reply(
-            history,
-            "I hear that. Would you like to try a very small experiment?"
-        )
-
-        return {"step": "permission", "text": text, "memory": memory}
-
-    # ----------------------------------
-    # STEP 3 — PERMISSION
-    # ----------------------------------
-
-    if step == "permission":
-
-        if user_text.lower() in ["yes", "yeah", "yep", "ok", "okay", "sure", "let's", "i'll try"]:
-
-            stage = memory.get("spiral_stage", "Neutral")
-            micro_action = get_micro_action(stage)
-
-            text = gpt_reply(
-                history,
-                f"""
-Let’s keep it small.
+Let’s shrink it.
 
 Try this:
-{micro_action}
+{micro_step}
 
 No pressure.
+Tell me when it’s done.
 """
-            )
-
-            return {"step": "integrate", "text": text, "memory": memory}
-
-        text = gpt_reply(
-            history,
-            "That’s okay. No pressure at all. What feels manageable right now?"
-        )
-
-        return {"step": "continue", "text": text, "memory": memory}
-
-    # ----------------------------------
-    # STEP 4 — INTEGRATE
-    # ----------------------------------
-
-    if step == "integrate":
-
-        text = gpt_reply(
-            history,
-            "Even considering change counts. What feels possible from here?"
-        )
-
-        return {"step": "continue", "text": text, "memory": memory}
-
-    # ----------------------------------
-    # CONTINUE MODE
-    # ----------------------------------
-
-    if step == "continue":
-
-        text = gpt_reply(
-            history,
-            f'User said: "{user_text}"\nRespond supportively and stay aligned with small steps.'
-        )
-
-        return {"step": "continue", "text": text, "memory": memory}
-
-    # ----------------------------------
-    # FALLBACK
-    # ----------------------------------
+    )
 
     return {
         "step": "continue",
-        "text": "Start small. No pressure. What feels manageable right now?",
+        "text": response_text,
         "memory": memory
     }
