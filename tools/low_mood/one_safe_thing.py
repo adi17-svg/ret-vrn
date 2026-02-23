@@ -1,13 +1,12 @@
 """
-Low Mood Tool: One Safe Thing (Context + Spiral Aware)
-
-Design:
-- Independent GPT usage
-- Uses full chat history
+Low Mood Tool: One Safe Thing
+Fully Conversational Version
+- No READY gate
+- History-aware (last messages passed from runner)
 - Spiral-aware tone (internal only)
-- Safety anchoring only
-- No advice, no analysis
-- Gentle nervous system regulation
+- Nervous system anchoring
+- No abrupt exit
+- Continue flow
 """
 
 from openai import OpenAI
@@ -19,15 +18,16 @@ client = OpenAI()
 # =====================================================
 
 SYSTEM_PROMPT_BASE = """
-You guide safety anchoring gently.
+You are a calm grounding guide.
 
 Rules:
-- Calm tone
-- No fixing
+- Warm, steady tone
+- No advice
 - No analysis
 - No problem solving
-- Keep responses short (2–4 lines)
-- Focus only on safety and grounding
+- Short responses (2–4 lines)
+- Focus only on safety and nervous system settling
+- Always continue gently unless user wants to stop
 """
 
 # =====================================================
@@ -69,8 +69,16 @@ def classify_spiral(user_text):
     )
 
 
+def classify_continue(user_text):
+    return safe_classify(
+        "Classify into one word: STAY, SHIFT, STOP, or UNCLEAR.",
+        user_text,
+        ["STAY", "SHIFT", "STOP", "UNCLEAR"],
+        "UNCLEAR"
+    )
+
 # =====================================================
-# GPT REPLY (CONTEXT + SPIRAL AWARE)
+# GPT REPLY (History + Spiral Aware)
 # =====================================================
 
 def gpt_reply(history, instruction, spiral_stage=None):
@@ -80,14 +88,13 @@ def gpt_reply(history, instruction, spiral_stage=None):
     if spiral_stage:
         system_prompt += f"""
 
-User tendency appears closer to {spiral_stage}.
-Adjust tone subtly to match mindset.
+User emotional tendency appears closer to {spiral_stage}.
+Adjust tone subtly.
 Never mention stages.
 """
 
     messages = [{"role": "system", "content": system_prompt}]
 
-    # Include full previous conversation
     if history:
         messages.extend(history)
 
@@ -96,11 +103,10 @@ Never mention stages.
     response = client.chat.completions.create(
         model="gpt-4.1",
         messages=messages,
-        temperature=0.3,
+        temperature=0.4,
     )
 
     return response.choices[0].message.content.strip()
-
 
 # =====================================================
 # MAIN HANDLER
@@ -109,15 +115,19 @@ Never mention stages.
 def handle(step=None, user_text=None, history=None):
 
     history = history or []
+    user_text = (user_text or "").strip()
+
     spiral_stage = classify_spiral(user_text) if user_text else "GREEN"
 
     # =================================================
-    # STEP 0 — IDENTIFY SAFE THING
+    # STEP 0 — REFLECT + INVITE
     # =================================================
     if step is None or step == "start":
 
         instruction = """
-Gently invite them to name one thing that feels even slightly safe or steady right now.
+Briefly reflect that things feel heavy or intense.
+Then gently ask:
+Is there one thing around you that feels even slightly safe or steady right now?
 Keep it simple.
 """
 
@@ -126,7 +136,7 @@ Keep it simple.
         return {"step": "identify", "text": text}
 
     # =================================================
-    # STEP 1 — REST ATTENTION THERE
+    # STEP 1 — IDENTIFY SAFE THING
     # =================================================
     if step == "identify":
 
@@ -134,30 +144,88 @@ Keep it simple.
 User said: "{user_text}"
 
 Acknowledge the safe thing briefly.
-Invite resting attention there for a few moments.
-Keep tone calm and grounding.
+Invite resting attention there.
+Add one simple sensory cue (texture, temperature, weight).
+Keep tone calm.
 """
 
         text = gpt_reply(history, instruction, spiral_stage)
 
-        return {"step": "focus", "text": text}
+        return {"step": "deepen", "text": text}
 
     # =================================================
-    # STEP 2 — CONTAINMENT CLOSE
+    # STEP 2 — DEEPEN ANCHOR
     # =================================================
-    if step == "focus":
+    if step == "deepen":
 
         instruction = """
-Reinforce that even noticing one safe thing matters.
-Remind them they are here in this moment.
-Close gently.
+Gently reinforce that even one steady thing matters.
+Let them know their nervous system can settle a little here.
+Then ask softly:
+Would you like to stay with this for a moment, shift slightly, or stop?
 """
 
         text = gpt_reply(history, instruction, spiral_stage)
 
-        return {"step": "exit", "text": text}
+        return {"step": "continue_choice", "text": text}
+
+    # =================================================
+    # STEP 3 — CONTINUE FLOW
+    # =================================================
+    if step == "continue_choice":
+
+        decision = classify_continue(user_text)
+
+        if decision == "STAY":
+
+            instruction = """
+Encourage staying with the safe sensation.
+Add one slow breath.
+Keep it grounding.
+"""
+
+            text = gpt_reply(history, instruction, spiral_stage)
+
+            return {"step": "continue_choice", "text": text}
+
+        if decision == "SHIFT":
+
+            instruction = """
+Invite noticing one additional safe detail in the environment.
+Keep it simple and steady.
+"""
+
+            text = gpt_reply(history, instruction, spiral_stage)
+
+            return {"step": "continue_choice", "text": text}
+
+        if decision == "STOP":
+
+            instruction = """
+Acknowledge gently.
+Reinforce that even doing this much matters.
+Close calmly.
+"""
+
+            text = gpt_reply(history, instruction, spiral_stage)
+
+            return {"step": "exit", "text": text}
+
+        # UNCLEAR → stay gentle
+
+        instruction = """
+Reassure them they can stay with this steady point.
+No rush.
+"""
+
+        text = gpt_reply(history, instruction, spiral_stage)
+
+        return {"step": "continue_choice", "text": text}
 
     # =================================================
     # FALLBACK
     # =================================================
-    return {"step": "exit", "text": "You’re safe in this moment."}
+    return {
+        "step": "continue_choice",
+        "text": "You can rest in this steady moment."
+    }

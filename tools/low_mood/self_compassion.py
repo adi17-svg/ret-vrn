@@ -22,11 +22,12 @@ Rules:
 - No advice
 - No fixing
 - No problem solving
-- Keep responses short (3–5 lines)
+- Keep responses medium length (4–6 lines)
 - Validate first
 - Encourage gentle inner tone
+- Gently keep the conversation open instead of closing it
+- When appropriate, end with a soft reflective question
 """
-
 # =====================================================
 # GPT CALL (last 6 messages only)
 # =====================================================

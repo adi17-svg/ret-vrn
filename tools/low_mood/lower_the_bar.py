@@ -1,21 +1,21 @@
 """
-Low Mood Tool: Lower The Bar (Context + Spiral Aware)
-
-Design:
-- Independent GPT usage
-- Uses full chat history
-- Spiral-aware tone (internal only)
-- Reduces pressure gently
-- Encourages minimum viable effort
-- No advice, no pushing
+Low Mood Tool: Lower The Bar
+Conversational Version
+- History aware (last 6 messages)
+- Spiral-toned pressure reset
+- No abrupt exit
+- Continues conversation
 """
 
 from openai import OpenAI
 
 client = OpenAI()
 
+HISTORY_LIMIT = 6
+
+
 # =====================================================
-# BASE SYSTEM PROMPT
+# SYSTEM PROMPT
 # =====================================================
 
 SYSTEM_PROMPT_BASE = """
@@ -24,11 +24,14 @@ You gently reduce pressure.
 Rules:
 - Warm, calm tone
 - No pushing
-- No advice
 - No productivity coaching
-- Encourage minimum effort only
+- Encourage minimum viable effort only
 - Keep responses short (2–4 lines)
+- Help lower internal expectations safely
+- Never expand goals upward
+- Keep conversation open at the end
 """
+
 
 # =====================================================
 # SAFE CLASSIFIER
@@ -62,36 +65,94 @@ def safe_classify(system_instruction, user_text, valid_options, default):
 
 def classify_spiral(user_text):
     return safe_classify(
-        "Classify into one word only: BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.",
+        "Classify emotional tone into one word: BLUE, RED, ORANGE, GREEN, or NEUTRAL.",
         user_text,
-        ["BEIGE", "PURPLE", "RED", "BLUE", "ORANGE", "GREEN", "YELLOW"],
+        ["BLUE", "RED", "ORANGE", "GREEN", "NEUTRAL"],
         "GREEN"
     )
 
 
 # =====================================================
-# GPT REPLY (CONTEXT + SPIRAL AWARE)
+# SPIRAL LANGUAGE HELPERS
 # =====================================================
 
-def gpt_reply(history, instruction, spiral_stage=None):
+def spiral_pressure_line(stage):
 
-    system_prompt = SYSTEM_PROMPT_BASE
+    if stage == "BLUE":
+        return "When responsibility matters to you, slowing down can feel wrong."
 
-    if spiral_stage:
-        system_prompt += f"""
+    if stage == "ORANGE":
+        return "When progress and achievement matter, falling behind feels heavy."
 
-User tendency appears closer to {spiral_stage}.
-Adjust tone subtly to match mindset.
-Never mention stages.
-"""
+    if stage == "RED":
+        return "When energy feels restless, structure can feel irritating."
 
-    messages = [{"role": "system", "content": system_prompt}]
+    if stage == "GREEN":
+        return "When everything feels emotionally heavy, even simple things feel big."
 
-    # Include full previous conversation context
+    return "When energy is low, everything can feel bigger than it is."
+
+
+def spiral_minimum_question(stage):
+
+    if stage == "BLUE":
+        return "What would still feel responsible — but lighter?"
+
+    if stage == "ORANGE":
+        return "What’s the smallest measurable move that would still count?"
+
+    if stage == "RED":
+        return "What’s the smallest thing you wouldn’t mind doing?"
+
+    if stage == "GREEN":
+        return "What would feel kind to yourself today?"
+
+    return "What would be the absolute minimum that would still count?"
+
+
+def spiral_affirmation(stage):
+
+    if stage == "BLUE":
+        return "That still honors your sense of responsibility."
+
+    if stage == "ORANGE":
+        return "That still moves things forward."
+
+    if stage == "RED":
+        return "That keeps it simple."
+
+    if stage == "GREEN":
+        return "That feels gentle enough for today."
+
+    return "That’s enough for today."
+
+
+# =====================================================
+# GPT REPLY (History Aware)
+# =====================================================
+
+def gpt_reply(history, instruction):
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT_BASE},
+    ]
+
     if history:
-        messages.extend(history)
+        recent = history[-HISTORY_LIMIT:]
 
-    messages.append({"role": "user", "content": instruction})
+        for msg in recent:
+            role = "assistant" if msg.get("type") == "assistant" else "user"
+            content = msg.get("text", "")
+            if content:
+                messages.append({
+                    "role": role,
+                    "content": content
+                })
+
+    messages.append({
+        "role": "user",
+        "content": instruction
+    })
 
     response = client.chat.completions.create(
         model="gpt-4.1",
@@ -106,44 +167,95 @@ Never mention stages.
 # MAIN HANDLER
 # =====================================================
 
-def handle(step=None, user_text=None, history=None):
+def handle(step=None, user_text=None, history=None, memory=None):
 
     history = history or []
-    spiral_stage = classify_spiral(user_text) if user_text else "GREEN"
+    memory = memory or {}
+    user_text = (user_text or "").strip()
 
-    # =================================================
-    # STEP 0 — REFLECT PRESSURE
-    # =================================================
-    if step is None or step == "start":
+    spiral_stage = classify_spiral(user_text)
 
-        instruction = """
-Briefly reflect the pressure or heaviness they seem to be carrying.
-Normalize that when energy is low, everything feels bigger.
-Then gently ask:
-"If today didn't have to be perfect, what would be the absolute minimum that would be enough?"
+    # ---------------------------------------------
+    # STEP 1 — REFLECT PRESSURE
+    # ---------------------------------------------
+
+    if not step or step == "start":
+
+        memory["spiral_stage"] = spiral_stage
+
+        instruction = f"""
+User said: "{user_text}"
+
+1. Briefly reflect the pressure they seem to be carrying.
+2. Use this tone framing if helpful: "{spiral_pressure_line(spiral_stage)}"
+3. Normalize that low energy makes things feel bigger.
+4. Ask this question gently: "{spiral_minimum_question(spiral_stage)}"
+Keep it warm and simple.
 """
 
-        text = gpt_reply(history, instruction, spiral_stage)
+        text = gpt_reply(history, instruction)
 
-        return {"step": "minimum", "text": text}
+        return {
+            "step": "minimum",
+            "text": text,
+            "memory": memory
+        }
 
-    # =================================================
-    # STEP 1 — AFFIRM MINIMUM
-    # =================================================
+    # ---------------------------------------------
+    # STEP 2 — AFFIRM MINIMUM
+    # ---------------------------------------------
+
     if step == "minimum":
 
-        instruction = """
-Affirm that their chosen minimum is enough for today.
-Reinforce that small counts.
-Do not expand goals.
-Close gently.
+        stage = memory.get("spiral_stage", "GREEN")
+
+        instruction = f"""
+User said their minimum is: "{user_text}"
+
+1. Affirm that this is enough.
+2. Use this supportive framing if helpful: "{spiral_affirmation(stage)}"
+3. Reinforce that small counts.
+4. Ask gently: "How does it feel to lower the bar just a little?"
+Keep it grounded.
 """
 
-        text = gpt_reply(history, instruction, spiral_stage)
+        text = gpt_reply(history, instruction)
 
-        return {"step": "exit", "text": text}
+        return {
+            "step": "continue",
+            "text": text,
+            "memory": memory
+        }
 
-    # =================================================
+    # ---------------------------------------------
+    # CONTINUE MODE
+    # ---------------------------------------------
+
+    if step == "continue":
+
+        instruction = f"""
+User said: "{user_text}"
+
+Stay aligned with reduced pressure.
+Reinforce minimum effort.
+Keep tone soft.
+Do not increase expectations.
+"""
+
+        text = gpt_reply(history, instruction)
+
+        return {
+            "step": "continue",
+            "text": text,
+            "memory": memory
+        }
+
+    # ---------------------------------------------
     # FALLBACK
-    # =================================================
-    return {"step": "exit", "text": "We can stop here."}
+    # ---------------------------------------------
+
+    return {
+        "step": "continue",
+        "text": "Small is enough for now.",
+        "memory": memory
+    }

@@ -1,22 +1,21 @@
 """
-Low Mood Tool: It Makes Sense (Context + Spiral Aware)
-
-Design:
-- Independent GPT usage
-- Spiral-aware tone (internal only)
-- Uses full chat history
-- Shame detection
-- Self-compassion layering
-- Gentle optional transition
-- Clean exit logic
+Low Mood Tool: It Makes Sense
+Conversational Version
+- History aware (last 6 messages)
+- Spiral-toned validation
+- Shame softening
+- No abrupt exit
 """
 
 from openai import OpenAI
 
 client = OpenAI()
 
+HISTORY_LIMIT = 6
+
+
 # =====================================================
-# BASE SYSTEM PROMPT
+# SYSTEM PROMPT
 # =====================================================
 
 SYSTEM_PROMPT_BASE = """
@@ -25,11 +24,13 @@ You are a calm, validating mental health guide.
 Rules:
 - Keep responses short (2–4 lines)
 - Warm and natural tone
-- No advice
-- No fixing
-- No analysis
-- Just validate gently
+- Validate emotions, not harmful behavior
+- Never justify harmful actions
+- No advice unless user clearly asks
+- Create safety first
+- Gently invite reflection
 """
+
 
 # =====================================================
 # SAFE CLASSIFIER
@@ -63,19 +64,10 @@ def safe_classify(system_instruction, user_text, valid_options, default):
 
 def classify_spiral(user_text):
     return safe_classify(
-        "Classify into one word only: BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.",
+        "Classify emotional tone into one word: BLUE, RED, ORANGE, GREEN, or NEUTRAL.",
         user_text,
-        ["BEIGE", "PURPLE", "RED", "BLUE", "ORANGE", "GREEN", "YELLOW"],
+        ["BLUE", "RED", "ORANGE", "GREEN", "NEUTRAL"],
         "GREEN"
-    )
-
-
-def classify_yes_no(user_text):
-    return safe_classify(
-        "Classify into one word: YES, NO, or UNCLEAR.",
-        user_text,
-        ["YES", "NO", "UNCLEAR"],
-        "UNCLEAR"
     )
 
 
@@ -105,27 +97,86 @@ def detect_shame(user_text):
 
 
 # =====================================================
-# GPT REPLY (SPIRAL + CONTEXT AWARE)
+# SPIRAL-TONED LANGUAGE HELPERS
 # =====================================================
 
-def gpt_reply(history, instruction, spiral_stage=None):
+def spiral_validation_line(stage):
 
-    system_prompt = SYSTEM_PROMPT_BASE
+    if stage == "BLUE":
+        return "When doing the right thing matters to you, moments like this can sting."
 
-    if spiral_stage:
-        system_prompt += f"""
+    if stage == "ORANGE":
+        return "When you hold yourself to high standards, setbacks can feel heavy."
 
-User tendency appears closer to {spiral_stage}.
-Adjust validation tone subtly to match mindset.
-Never mention stages.
-"""
+    if stage == "RED":
+        return "When emotions run intense, reactions can come fast."
 
-    messages = [{"role": "system", "content": system_prompt}]
+    if stage == "GREEN":
+        return "When connection and meaning matter deeply, moments like this can hurt."
+
+    return "Given what you’ve been carrying, this reaction makes sense."
+
+
+def spiral_curiosity(stage):
+
+    if stage == "BLUE":
+        return "What part of this feels most misaligned for you?"
+
+    if stage == "ORANGE":
+        return "What part of this feels most frustrating right now?"
+
+    if stage == "RED":
+        return "What felt most intense in that moment?"
+
+    if stage == "GREEN":
+        return "What part of this still feels tender?"
+
+    return "What feels most present right now?"
+
+
+def spiral_micro_shift(stage):
+
+    if stage == "BLUE":
+        return "If you'd like, we can look at one small corrective step."
+
+    if stage == "ORANGE":
+        return "If you'd like, we can look at one very small next step."
+
+    if stage == "RED":
+        return "If you'd like, we can slow this down just a little."
+
+    if stage == "GREEN":
+        return "If you'd like, we can stay with this gently for a moment."
+
+    return "If you'd like, we can take a small step next."
+
+
+# =====================================================
+# GPT REPLY (History Aware)
+# =====================================================
+
+def gpt_reply(history, instruction):
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT_BASE},
+    ]
 
     if history:
-        messages.extend(history)
+        recent = history[-HISTORY_LIMIT:]
 
-    messages.append({"role": "user", "content": instruction})
+        for msg in recent:
+            role = "assistant" if msg.get("type") == "assistant" else "user"
+            content = msg.get("text", "")
+            if content:
+                messages.append({
+                    "role": role,
+                    "content": content
+                })
+
+    messages.append({
+        "role": "user",
+        "content": instruction
+    })
 
     response = client.chat.completions.create(
         model="gpt-4.1",
@@ -143,88 +194,35 @@ Never mention stages.
 def handle(step=None, user_text=None, history=None):
 
     history = history or []
+    user_text = (user_text or "").strip()
 
-    spiral_stage = classify_spiral(user_text) if user_text else "GREEN"
+    spiral_stage = classify_spiral(user_text)
     shame_detected = detect_shame(user_text)
 
-    # =================================================
-    # STEP 0 — VALIDATE
-    # =================================================
-    if step is None or step == "start":
+    # Always conversational mode
+    if not user_text:
+        return {
+            "step": "continue",
+            "text": "I'm here with you. What feels heavy right now?"
+        }
 
-        instruction = """
-Reflect their emotional experience briefly.
-Validate that their reaction makes sense given what they're facing.
-Keep it human and grounded.
-Add one gentle self-compassion line.
+    # Build layered validation instruction
+    instruction = f"""
+User said: "{user_text}"
+
+1. Briefly validate the emotional experience.
+2. Use this tone framing if helpful: "{spiral_validation_line(spiral_stage)}"
+3. If self-judgment is present, gently soften it.
+4. Add one safety-oriented line.
+5. Ask this reflective question: "{spiral_curiosity(spiral_stage)}"
+6. Optionally add: "{spiral_micro_shift(spiral_stage)}"
+Keep it natural and human.
+Do NOT justify harmful behavior.
 """
 
-        if shame_detected:
-            instruction += """
-Gently soften self-judgment.
-Reduce shame without arguing or correcting them.
-"""
+    text = gpt_reply(history, instruction)
 
-        instruction += """
-Close with:
-"If you'd like, we can take a small step next."
-Keep it optional.
-"""
-
-        text = gpt_reply(history, instruction, spiral_stage)
-
-        return {"step": "transition", "text": text}
-
-    # =================================================
-    # STEP 1 — TRANSITION HANDLER
-    # =================================================
-    if step == "transition":
-
-        decision = classify_yes_no(user_text or "")
-
-        if decision == "YES":
-
-            text = gpt_reply(
-                history,
-                """
-Acknowledge their openness warmly.
-Suggest one very small, optional next step
-(like one slow breath or noticing the room).
-Keep it gentle and brief.
-""",
-                spiral_stage
-            )
-
-            return {"step": "exit", "text": text}
-
-        if decision == "NO":
-
-            text = gpt_reply(
-                history,
-                """
-Acknowledge gently.
-Reinforce that just sharing this already matters.
-Close warmly.
-""",
-                spiral_stage
-            )
-
-            return {"step": "exit", "text": text}
-
-        # UNCLEAR → neutral close
-        text = gpt_reply(
-            history,
-            """
-Let them know it's okay to pause.
-Reassure them they're not alone in this.
-Close softly.
-""",
-            spiral_stage
-        )
-
-        return {"step": "exit", "text": text}
-
-    # =================================================
-    # FALLBACK
-    # =================================================
-    return {"step": "exit", "text": "We can pause here."}
+    return {
+        "step": "continue",
+        "text": text
+    }

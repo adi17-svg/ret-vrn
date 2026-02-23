@@ -1,22 +1,16 @@
 """
-Low Mood Tool: 5-4-3-2-1 Grounding (Context + Spiral Aware)
-
-Design:
-- Independent GPT usage
-- Spiral-aware tone (internal only)
-- Uses full chat history
-- Step-by-step progression
-- Implicit confirmation (waits for user reply)
-- Skip support
-- Gentle adaptive close
+Low Mood Tool: 5-4-3-2-1 Grounding
+Regulation + Soft Bridge Version
 """
 
 from openai import OpenAI
 
 client = OpenAI()
 
+HISTORY_LIMIT = 6
+
 # =====================================================
-# BASE SYSTEM PROMPT
+# SYSTEM PROMPT
 # =====================================================
 
 SYSTEM_PROMPT_BASE = """
@@ -29,7 +23,9 @@ Rules:
 - No analysis
 - No therapy explanations
 - Keep language simple
+- When closing, gently reopen space for reflection
 """
+
 
 # =====================================================
 # SAFE CLASSIFIER
@@ -61,27 +57,9 @@ def safe_classify(system_instruction, user_text, valid_options, default):
         return default
 
 
-def classify_spiral(user_text):
-    return safe_classify(
-        "Classify into one word only: BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.",
-        user_text,
-        ["BEIGE", "PURPLE", "RED", "BLUE", "ORANGE", "GREEN", "YELLOW"],
-        "GREEN"
-    )
-
-
-def classify_yes_no(user_text):
-    return safe_classify(
-        "Classify into one word: YES, NO, or STOP.",
-        user_text,
-        ["YES", "NO", "STOP"],
-        "YES"
-    )
-
-
 def classify_state_response(user_text):
     return safe_classify(
-        "Classify into one word: CALMER, SAME, UNSETTLED.",
+        "Classify into one word: CALMER, SAME, or UNSETTLED.",
         user_text,
         ["CALMER", "SAME", "UNSETTLED"],
         "SAME"
@@ -89,27 +67,31 @@ def classify_state_response(user_text):
 
 
 # =====================================================
-# GPT REPLY (SPIRAL + CONTEXT AWARE)
+# GPT REPLY (History Aware)
 # =====================================================
 
-def gpt_reply(history, instruction, spiral_stage=None):
+def gpt_reply(history, instruction):
 
-    system_prompt = SYSTEM_PROMPT_BASE
-
-    if spiral_stage:
-        system_prompt += f"""
-
-User tendency appears closer to {spiral_stage}.
-Adjust tone subtly.
-Never mention stages.
-"""
-
-    messages = [{"role": "system", "content": system_prompt}]
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT_BASE},
+    ]
 
     if history:
-        messages.extend(history)
+        recent = history[-HISTORY_LIMIT:]
 
-    messages.append({"role": "user", "content": instruction})
+        for msg in recent:
+            role = "assistant" if msg.get("type") == "assistant" else "user"
+            content = msg.get("text", "")
+            if content:
+                messages.append({
+                    "role": role,
+                    "content": content
+                })
+
+    messages.append({
+        "role": "user",
+        "content": instruction
+    })
 
     response = client.chat.completions.create(
         model="gpt-4.1",
@@ -127,144 +109,142 @@ Never mention stages.
 def handle(step=None, user_text=None, history=None):
 
     history = history or []
-    spiral_stage = classify_spiral(user_text) if user_text else "GREEN"
+    user_text = (user_text or "").strip()
+
+    if not step:
+        step = "start"
 
     # =================================================
-    # STEP 0 — PERMISSION
+    # PERMISSION
     # =================================================
-    if step is None or step == "start":
+
+    if step == "start":
 
         text = gpt_reply(
             history,
-            "Would it feel okay to try a short grounding exercise together?",
-            spiral_stage
+            "Would it feel okay to try a short grounding exercise together?"
         )
 
         return {"step": "permission", "text": text}
 
-    # =================================================
-    # STEP 1 — HANDLE PERMISSION
-    # =================================================
     if step == "permission":
 
-        decision = classify_yes_no(user_text or "")
+        if user_text.lower() not in ["yes", "yeah", "ok", "okay", "sure"]:
 
-        if decision == "YES":
-            text = gpt_reply(
-                history,
-                "Let’s begin. Name 5 things you can see around you.",
-                spiral_stage
-            )
-            return {"step": "five", "text": text}
+            return {
+                "step": "exit",
+                "text": "That’s completely okay. If you’d like, we can talk about what’s coming up instead."
+            }
 
-        return {
-            "step": "exit",
-            "text": "That's completely okay. We can pause here."
-        }
+        text = gpt_reply(
+            history,
+            "Let’s begin. Name 5 things you can see around you."
+        )
+
+        return {"step": "five", "text": text}
 
     # =================================================
-    # STEP 2 — 5 THINGS
+    # 5 → 4 → 3 → 2 → 1
     # =================================================
+
     if step == "five":
 
         text = gpt_reply(
             history,
-            "Good. Now notice 4 physical sensations — what you can feel right now.",
-            spiral_stage
+            "Good. Now notice 4 physical sensations — what you can feel right now."
         )
 
         return {"step": "four", "text": text}
 
-    # =================================================
-    # STEP 3 — 4 SENSATIONS
-    # =================================================
     if step == "four":
-
-        if user_text and user_text.lower().strip() in ["skip", "none", "can't"]:
-            pass
 
         text = gpt_reply(
             history,
-            "Now listen for 3 different sounds around you.",
-            spiral_stage
+            "Now listen for 3 different sounds around you."
         )
 
         return {"step": "three", "text": text}
 
-    # =================================================
-    # STEP 4 — 3 SOUNDS
-    # =================================================
     if step == "three":
 
         text = gpt_reply(
             history,
-            "Notice 2 smells. If you can’t find any, that’s okay.",
-            spiral_stage
+            "Notice 2 smells. If you can’t find any, that’s okay."
         )
 
         return {"step": "two", "text": text}
 
-    # =================================================
-    # STEP 5 — 2 SMELLS
-    # =================================================
     if step == "two":
-
-        if user_text and user_text.lower().strip() in ["skip", "none"]:
-            pass
 
         text = gpt_reply(
             history,
-            "Finally, notice 1 taste or small pleasant sensation.",
-            spiral_stage
+            "Finally, notice 1 taste or small pleasant sensation."
         )
 
         return {"step": "one", "text": text}
 
     # =================================================
-    # STEP 6 — CHECK STATE
+    # CHECK STATE
     # =================================================
+
     if step == "one":
 
         text = gpt_reply(
             history,
-            "Take a moment. How does your body feel now?",
-            spiral_stage
+            "Take a slow breath. How does your body feel now?"
         )
 
         return {"step": "check", "text": text}
 
-    # =================================================
-    # ADAPTIVE CLOSE
-    # =================================================
     if step == "check":
 
-        state = classify_state_response(user_text or "")
+        state = classify_state_response(user_text)
 
         if state == "CALMER":
-            text = gpt_reply(
-                history,
-                "Even a small sense of steadiness matters. Let’s pause here.",
-                spiral_stage
-            )
-            return {"step": "exit", "text": text}
 
-        if state == "SAME":
             text = gpt_reply(
                 history,
-                "Sometimes grounding works quietly. That’s okay.",
-                spiral_stage
+                """
+Even a small sense of steadiness matters.
+
+We can gently pause here —
+or, if you’d like, we can explore what was feeling heavy.
+"""
             )
+
             return {"step": "exit", "text": text}
 
         if state == "UNSETTLED":
+
             text = gpt_reply(
                 history,
-                "Let’s take one slow breath together before we stop.",
-                spiral_stage
+                """
+Thank you for staying with it.
+
+Let’s take one slow breath together.
+If you'd like, we can talk about what’s still unsettled.
+"""
             )
+
             return {"step": "exit", "text": text}
+
+        text = gpt_reply(
+            history,
+            """
+Sometimes grounding works quietly.
+
+You’re here.
+If you'd like, we can gently continue.
+"""
+        )
+
+        return {"step": "exit", "text": text}
 
     # =================================================
     # FALLBACK
     # =================================================
-    return {"step": "exit", "text": "You’re here. That’s enough for now."}
+
+    return {
+        "step": "exit",
+        "text": "You’re here. That matters."
+    }

@@ -1,39 +1,33 @@
 """
-Low Mood Tool: Breath Word (Smooth Multi-Step Flow)
-
-Design:
-- Independent GPT usage
-- Spiral-aware tone (internal only)
-- Smart start detection
-- 3 guided breath cycles (smooth rhythm)
-- Gentle body noticing
-- Soft containment close
-- No loops
-- No over-analysis
+Low Mood Tool: Breath Word
+Conversational + Regulation → Integration Flow
 """
 
 from openai import OpenAI
 
 client = OpenAI()
 
+HISTORY_LIMIT = 6
+
 # =====================================================
-# BASE SYSTEM PROMPT
+# SYSTEM PROMPT
 # =====================================================
 
 SYSTEM_PROMPT_BASE = """
 You are a calm breathing guide.
 
 Rules:
-- Keep responses short (1–3 lines)
+- Keep responses short (2–4 lines)
 - Gentle tone
 - Clear guidance
 - No analysis
 - No advice
 - Keep instructions simple
+- After breathing, gently keep the conversation open
 """
 
 # =====================================================
-# SAFE CLASSIFIER
+# SAFE CLASSIFIERS
 # =====================================================
 
 def safe_classify(system_instruction, user_text, valid_options, default):
@@ -62,15 +56,6 @@ def safe_classify(system_instruction, user_text, valid_options, default):
         return default
 
 
-def classify_spiral(user_text):
-    return safe_classify(
-        "Classify into one word: BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.",
-        user_text,
-        ["BEIGE", "PURPLE", "RED", "BLUE", "ORANGE", "GREEN", "YELLOW"],
-        "GREEN"
-    )
-
-
 def classify_yes_no(user_text):
     return safe_classify(
         "Classify into one word: YES, NO, or UNCLEAR.",
@@ -90,27 +75,31 @@ def classify_shift(user_text):
 
 
 # =====================================================
-# GPT REPLY
+# GPT REPLY (SAFE HISTORY MAPPING)
 # =====================================================
 
-def gpt_reply(history, instruction, spiral_stage=None):
+def gpt_reply(history, instruction):
 
-    system_prompt = SYSTEM_PROMPT_BASE
-
-    if spiral_stage:
-        system_prompt += f"""
-
-User tendency appears closer to {spiral_stage}.
-Adjust tone subtly.
-Never mention stages.
-"""
-
-    messages = [{"role": "system", "content": system_prompt}]
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT_BASE},
+    ]
 
     if history:
-        messages.extend(history)
+        recent = history[-HISTORY_LIMIT:]
 
-    messages.append({"role": "user", "content": instruction})
+        for msg in recent:
+            role = "assistant" if msg.get("type") == "assistant" else "user"
+            content = msg.get("text", "")
+            if content:
+                messages.append({
+                    "role": role,
+                    "content": content
+                })
+
+    messages.append({
+        "role": "user",
+        "content": instruction
+    })
 
     response = client.chat.completions.create(
         model="gpt-4.1",
@@ -128,131 +117,149 @@ Never mention stages.
 def handle(step=None, user_text=None, history=None):
 
     history = history or []
-    spiral_stage = classify_spiral(user_text) if user_text else "GREEN"
+    user_text = (user_text or "").strip()
+
+    if not step:
+        step = "start"
 
     # -------------------------------------------------
-    # STEP 0 — SMART START
+    # START
     # -------------------------------------------------
-    if step is None or step == "start":
 
-        if user_text and any(word in user_text.lower() for word in [
-            "yes", "sure", "okay", "let's", "breathe"
-        ]):
-            text = gpt_reply(
-                history,
-                "Let’s begin. Inhale slowly — here. Exhale gently — now.",
-                spiral_stage
-            )
-            return {"step": "cycle_2", "text": text}
+    if step == "start":
 
         text = gpt_reply(
             history,
-            "Would it feel okay to try three slow breaths together?",
-            spiral_stage
+            "Would it feel okay to take three slow breaths together?"
         )
+
         return {"step": "permission", "text": text}
 
     # -------------------------------------------------
-    # STEP 1 — PERMISSION
+    # PERMISSION
     # -------------------------------------------------
+
     if step == "permission":
 
         decision = classify_yes_no(user_text)
 
         if decision == "YES":
+
             text = gpt_reply(
                 history,
-                "Inhale slowly — here. Exhale gently — now.",
-                spiral_stage
+                "Inhale slowly… and exhale gently."
             )
+
             return {"step": "cycle_2", "text": text}
 
         if decision == "NO":
+
             return {
-                "step": "exit",
-                "text": "That's completely okay. We can pause here."
+                "step": "continue",
+                "text": "That’s completely okay. We can simply stay here together."
             }
 
         text = gpt_reply(
             history,
-            "Would you like to try just one slow breath together?",
-            spiral_stage
+            "Would you like to try just one slow breath instead?"
         )
+
         return {"step": "permission", "text": text}
 
     # -------------------------------------------------
     # BREATH CYCLE 2
     # -------------------------------------------------
+
     if step == "cycle_2":
 
         text = gpt_reply(
             history,
-            "Again… Inhale — here. Exhale — now.",
-            spiral_stage
+            "Again… inhale slowly… and exhale."
         )
+
         return {"step": "cycle_3", "text": text}
 
     # -------------------------------------------------
     # BREATH CYCLE 3
     # -------------------------------------------------
+
     if step == "cycle_3":
 
         text = gpt_reply(
             history,
             """
 One last time…
-Inhale — here.
-Exhale — now.
+Inhale gently…
+Exhale slowly…
 
 Let your breath return to its own rhythm.
-""",
-            spiral_stage
+"""
         )
+
         return {"step": "notice", "text": text}
 
     # -------------------------------------------------
-    # GENTLE NOTICE
+    # NOTICE AFTER BREATH
     # -------------------------------------------------
+
     if step == "notice":
 
         text = gpt_reply(
             history,
-            "What do you notice in your body now?",
-            spiral_stage
+            "Now that your breath has slowed a little, what do you notice in your body?"
         )
+
         return {"step": "check_state", "text": text}
 
     # -------------------------------------------------
     # CHECK STATE
     # -------------------------------------------------
+
     if step == "check_state":
 
         result = classify_shift(user_text)
 
         if result == "SUCCESS":
-            text = gpt_reply(
-                history,
-                "Even a small shift matters. Let’s pause here.",
-                spiral_stage
-            )
-            return {"step": "exit", "text": text}
 
-        if result == "NO_CHANGE":
             text = gpt_reply(
                 history,
-                "Sometimes breath just creates a little space. That’s enough for now.",
-                spiral_stage
+                "Even a small shift matters. What feels slightly different now?"
             )
-            return {"step": "exit", "text": text}
+
+        elif result == "NO_CHANGE":
+
+            text = gpt_reply(
+                history,
+                "Sometimes breath simply creates a little space. What feels most present right now?"
+            )
+
+        else:
+
+            text = gpt_reply(
+                history,
+                "Just noticing is enough. What stands out in your body at this moment?"
+            )
+
+        return {"step": "continue", "text": text}
+
+    # -------------------------------------------------
+    # CONTINUE MODE
+    # -------------------------------------------------
+
+    if step == "continue":
 
         text = gpt_reply(
             history,
-            "Just noticing is enough. We can pause here.",
-            spiral_stage
+            f'User said: "{user_text}"\nRespond gently and stay with grounded awareness.'
         )
-        return {"step": "exit", "text": text}
+
+        return {"step": "continue", "text": text}
 
     # -------------------------------------------------
     # FALLBACK
     # -------------------------------------------------
-    return {"step": "exit", "text": "We can pause here."}
+
+    return {
+        "step": "continue",
+        "text": "I’m here. What feels most present for you right now?"
+    }

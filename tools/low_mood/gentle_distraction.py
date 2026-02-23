@@ -1,21 +1,16 @@
 """
-Low Mood Tool: Gentle Distraction (Spiral + Context Aware)
-
-Design:
-- Independent GPT usage
-- Spiral-aware tone (internal only)
-- Uses full chat history
-- Clean structured flow
-- No cross-tool mixing
-- Safe retry logic
+Low Mood Tool: Gentle Distraction
+Conversational + Context Aware + No Hard Exit
 """
 
 from openai import OpenAI
 
 client = OpenAI()
 
+HISTORY_LIMIT = 6
+
 # =====================================================
-# BASE SYSTEM PROMPT
+# SYSTEM PROMPT
 # =====================================================
 
 SYSTEM_PROMPT_BASE = """
@@ -28,6 +23,7 @@ Rules:
 - No deep analysis
 - Activities must be safe and low-effort
 - Keep responses short (2–4 lines)
+- After activity, gently keep conversation open
 """
 
 # =====================================================
@@ -60,15 +56,6 @@ def safe_classify(system_instruction, user_text, valid_options, default):
         return default
 
 
-def classify_spiral(user_text):
-    return safe_classify(
-        "Classify into one word: BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.",
-        user_text,
-        ["BEIGE", "PURPLE", "RED", "BLUE", "ORANGE", "GREEN", "YELLOW"],
-        "GREEN"
-    )
-
-
 def classify_activity_type(user_text):
     return safe_classify(
         "Classify into one word: MOVEMENT, SENSORY, or MENTAL.",
@@ -97,27 +84,31 @@ def classify_yes_no(user_text):
 
 
 # =====================================================
-# GPT REPLY (Context + Spiral Aware)
+# GPT REPLY (SAFE HISTORY MAPPING)
 # =====================================================
 
-def gpt_reply(history, instruction, spiral_stage=None):
+def gpt_reply(history, instruction):
 
-    system_prompt = SYSTEM_PROMPT_BASE
-
-    if spiral_stage:
-        system_prompt += f"""
-
-User tendency appears closer to {spiral_stage}.
-Adjust tone subtly.
-Never mention stages.
-"""
-
-    messages = [{"role": "system", "content": system_prompt}]
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT_BASE},
+    ]
 
     if history:
-        messages.extend(history)
+        recent = history[-HISTORY_LIMIT:]
 
-    messages.append({"role": "user", "content": instruction})
+        for msg in recent:
+            role = "assistant" if msg.get("type") == "assistant" else "user"
+            content = msg.get("text", "")
+            if content:
+                messages.append({
+                    "role": role,
+                    "content": content
+                })
+
+    messages.append({
+        "role": "user",
+        "content": instruction
+    })
 
     response = client.chat.completions.create(
         model="gpt-4.1",
@@ -135,74 +126,67 @@ Never mention stages.
 def handle(step=None, user_text=None, history=None):
 
     history = history or []
-    spiral_stage = classify_spiral(user_text) if user_text else "GREEN"
+    user_text = (user_text or "").strip()
+
+    if not step:
+        step = "start"
 
     # -------------------------------------------------
-    # STEP 0 — START (Choose)
+    # STEP 0 — CHOOSE TYPE
     # -------------------------------------------------
-    if step is None or step == "start":
+
+    if step == "start":
 
         text = gpt_reply(
             history,
             """
-Invite gently.
-Ask what feels easier right now:
+Ask gently:
+Would something light feel helpful right now?
+You could choose:
 - Light movement
 - Something sensory
 - A simple mental task
-""",
-            spiral_stage
+"""
         )
 
         return {"step": "choose_type", "text": text}
 
     # -------------------------------------------------
-    # STEP 1 — CHOOSE TYPE
+    # STEP 1 — SUGGEST ACTIVITY
     # -------------------------------------------------
+
     if step == "choose_type":
 
         activity_type = classify_activity_type(user_text)
 
         if activity_type == "MOVEMENT":
-            instruction = """
-Suggest one very light two-minute movement activity.
-Keep it simple.
-"""
+            instruction = "Suggest one very light two-minute movement activity."
         elif activity_type == "SENSORY":
-            instruction = """
-Suggest one gentle sensory activity.
-Keep it grounding.
-"""
+            instruction = "Suggest one gentle sensory grounding activity."
         else:
-            instruction = """
-Suggest one simple mental task.
-Very low effort.
-"""
+            instruction = "Suggest one very simple low-effort mental task."
 
-        text = gpt_reply(history, instruction, spiral_stage)
+        text = gpt_reply(history, instruction)
 
         return {"step": "try_activity", "text": text}
 
     # -------------------------------------------------
-    # STEP 2 — CHECK
+    # STEP 2 — CHECK SHIFT
     # -------------------------------------------------
+
     if step == "try_activity":
 
         text = gpt_reply(
             history,
-            """
-After the activity, ask:
-"Did that shift anything, even slightly?"
-Keep tone soft.
-""",
-            spiral_stage
+            "After trying that, did anything shift, even slightly?"
         )
 
         return {"step": "check_mood", "text": text}
 
     # -------------------------------------------------
-    # STEP 3 — MOOD CHECK
+    # STEP 3 — PROCESS RESPONSE
     # -------------------------------------------------
+
     if step == "check_mood":
 
         result = classify_shift(user_text)
@@ -213,23 +197,22 @@ Keep tone soft.
                 history,
                 """
 Acknowledge the small shift warmly.
-Reinforce that even slight change counts.
-Close gently.
-""",
-                spiral_stage
+Reinforce that even slight change matters.
+Ask what feels different now.
+"""
             )
 
-            return {"step": "exit", "text": text}
+            return {"step": "continue", "text": text}
 
         if result == "SAME":
 
             text = gpt_reply(
                 history,
                 """
-Normalize that sometimes the first activity doesn’t shift much.
-Ask gently if they'd like to try one different small activity.
-""",
-                spiral_stage
+Normalize that sometimes first attempts don't shift much.
+Ask gently if they'd like to try something different,
+or return to what was feeling heavy.
+"""
             )
 
             return {"step": "retry_permission", "text": text}
@@ -240,18 +223,17 @@ Ask gently if they'd like to try one different small activity.
                 history,
                 """
 Acknowledge gently.
-Suggest stopping.
-Reassure it's okay if it didn’t help.
-Close softly.
-""",
-                spiral_stage
+Reassure stopping is okay.
+Ask what feels most supportive right now.
+"""
             )
 
-            return {"step": "exit", "text": text}
+            return {"step": "continue", "text": text}
 
     # -------------------------------------------------
-    # STEP 4 — RETRY
+    # STEP 4 — RETRY OPTION
     # -------------------------------------------------
+
     if step == "retry_permission":
 
         decision = classify_yes_no(user_text)
@@ -260,27 +242,36 @@ Close softly.
 
             text = gpt_reply(
                 history,
-                """
-Suggest a different small activity than before.
-Keep it simple.
-""",
-                spiral_stage
+                "Suggest a different very small activity than before."
             )
 
             return {"step": "try_activity", "text": text}
 
         text = gpt_reply(
             history,
-            """
-Reassure stopping anytime is okay.
-Close gently.
-""",
-            spiral_stage
+            "That’s okay. We don’t have to force anything. What feels most present now?"
         )
 
-        return {"step": "exit", "text": text}
+        return {"step": "continue", "text": text}
+
+    # -------------------------------------------------
+    # CONTINUE MODE
+    # -------------------------------------------------
+
+    if step == "continue":
+
+        text = gpt_reply(
+            history,
+            f'User said: "{user_text}"\nRespond gently and keep the conversation open.'
+        )
+
+        return {"step": "continue", "text": text}
 
     # -------------------------------------------------
     # FALLBACK
     # -------------------------------------------------
-    return {"step": "exit", "text": "Pausing here is okay."}
+
+    return {
+        "step": "continue",
+        "text": "I’m here. What feels most present for you right now?"
+    }

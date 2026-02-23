@@ -1,38 +1,33 @@
 """
-Low Mood Tool: Body Check-In (Spiral + Gentle Resistance Handling)
-
-Design:
-- Independent GPT usage
-- Spiral-aware tone (internal only)
-- Permission asked once
-- If NO → offer softer alternative
-- Linear progression
-- No looping permission
-- Short, grounding responses
+Low Mood Tool: Body Check-In
+Conversational + Context Aware + No Abrupt Exit
 """
 
 from openai import OpenAI
 
 client = OpenAI()
 
+HISTORY_LIMIT = 6
+
 # =====================================================
-# BASE SYSTEM PROMPT
+# SYSTEM PROMPT
 # =====================================================
 
 SYSTEM_PROMPT_BASE = """
 You are a calm, grounding mental health guide.
 
 Rules:
-- Keep responses short (1–3 lines)
+- Keep responses short (2–4 lines)
 - Gentle tone
 - No advice
-- No analysis
 - No fixing
+- No analysis
 - Guide awareness simply
+- Keep the conversation softly open
 """
 
 # =====================================================
-# SAFE CLASSIFIER
+# SAFE CLASSIFIERS
 # =====================================================
 
 def safe_classify(system_instruction, user_text, valid_options, default):
@@ -61,15 +56,6 @@ def safe_classify(system_instruction, user_text, valid_options, default):
         return default
 
 
-def classify_spiral(user_text):
-    return safe_classify(
-        "Classify into one word: BEIGE, PURPLE, RED, BLUE, ORANGE, GREEN, or YELLOW.",
-        user_text,
-        ["BEIGE", "PURPLE", "RED", "BLUE", "ORANGE", "GREEN", "YELLOW"],
-        "GREEN"
-    )
-
-
 def classify_yes_no(user_text):
     return safe_classify(
         "Classify into one word: YES or NO.",
@@ -89,27 +75,31 @@ def classify_shift(user_text):
 
 
 # =====================================================
-# GPT REPLY
+# GPT REPLY (SAFE HISTORY MAPPING)
 # =====================================================
 
-def gpt_reply(history, instruction, spiral_stage=None):
+def gpt_reply(history, instruction):
 
-    system_prompt = SYSTEM_PROMPT_BASE
-
-    if spiral_stage:
-        system_prompt += f"""
-
-User tendency appears closer to {spiral_stage}.
-Adjust tone subtly.
-Never mention stages.
-"""
-
-    messages = [{"role": "system", "content": system_prompt}]
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT_BASE},
+    ]
 
     if history:
-        messages.extend(history)
+        recent = history[-HISTORY_LIMIT:]
 
-    messages.append({"role": "user", "content": instruction})
+        for msg in recent:
+            role = "assistant" if msg.get("type") == "assistant" else "user"
+            content = msg.get("text", "")
+            if content:
+                messages.append({
+                    "role": role,
+                    "content": content
+                })
+
+    messages.append({
+        "role": "user",
+        "content": instruction
+    })
 
     response = client.chat.completions.create(
         model="gpt-4.1",
@@ -127,24 +117,28 @@ Never mention stages.
 def handle(step=None, user_text=None, history=None):
 
     history = history or []
-    spiral_stage = classify_spiral(user_text) if user_text else "GREEN"
+    user_text = (user_text or "").strip()
+
+    if not step:
+        step = "start"
 
     # -------------------------------------------------
-    # STEP 0 — START
+    # START
     # -------------------------------------------------
-    if step is None or step == "start":
+
+    if step == "start":
 
         text = gpt_reply(
             history,
-            "Would it feel okay to gently notice how your body feels right now?",
-            spiral_stage
+            "Would it feel okay to gently notice how your body feels right now?"
         )
 
         return {"step": "permission", "text": text}
 
     # -------------------------------------------------
-    # STEP 1 — PERMISSION
+    # PERMISSION
     # -------------------------------------------------
+
     if step == "permission":
 
         decision = classify_yes_no(user_text)
@@ -153,28 +147,22 @@ def handle(step=None, user_text=None, history=None):
 
             text = gpt_reply(
                 history,
-                "When you feel low like this, does your body feel heavy, tight, or tired anywhere?",
-                spiral_stage
+                "When things feel heavy, does your body feel tight, tired, or heavy anywhere?"
             )
 
             return {"step": "scan", "text": text}
 
-        # If NO → Offer softer alternative
         text = gpt_reply(
             history,
-            """
-That's completely okay.
-Would it feel easier to just take one slow breath together instead?
-Only if you'd like.
-""",
-            spiral_stage
+            "That's completely okay. Would taking one slow breath together feel easier?"
         )
 
         return {"step": "alt_option", "text": text}
 
     # -------------------------------------------------
-    # STEP ALT OPTION (If they said NO)
+    # ALT OPTION
     # -------------------------------------------------
+
     if step == "alt_option":
 
         decision = classify_yes_no(user_text)
@@ -183,20 +171,20 @@ Only if you'd like.
 
             text = gpt_reply(
                 history,
-                "Let’s take one slow breath together. Inhale gently… and exhale slowly.",
-                spiral_stage
+                "Let’s take one slow breath together. Inhale gently… and exhale slowly."
             )
 
-            return {"step": "exit", "text": text}
+            return {"step": "continue", "text": text}
 
         return {
-            "step": "exit",
-            "text": "That's completely fine. We can pause here."
+            "step": "continue",
+            "text": "That’s completely fine. We can simply stay here."
         }
 
     # -------------------------------------------------
-    # STEP 2 — SCAN
+    # SCAN
     # -------------------------------------------------
+
     if step == "scan":
 
         text = gpt_reply(
@@ -204,31 +192,30 @@ Only if you'd like.
             f"""
 User said: "{user_text}"
 
-Briefly acknowledge.
-Invite simply noticing that area for a few moments.
-No changing.
-""",
-            spiral_stage
+Acknowledge briefly.
+Invite them to gently notice that area without trying to change it.
+"""
         )
 
         return {"step": "soften", "text": text}
 
     # -------------------------------------------------
-    # STEP 3 — SOFTEN
+    # SOFTEN
     # -------------------------------------------------
+
     if step == "soften":
 
         text = gpt_reply(
             history,
-            "If it feels okay, see if that area can soften just 5%.",
-            spiral_stage
+            "If it feels okay, see if that area could soften just 5%. No forcing."
         )
 
         return {"step": "check", "text": text}
 
     # -------------------------------------------------
-    # STEP 4 — CHECK SHIFT
+    # CHECK SHIFT
     # -------------------------------------------------
+
     if step == "check":
 
         result = classify_shift(user_text)
@@ -237,31 +224,43 @@ No changing.
 
             text = gpt_reply(
                 history,
-                "That small shift matters. Let's stay with that for a moment.",
-                spiral_stage
+                "Acknowledge the small shift gently and ask what they notice now."
             )
 
-            return {"step": "exit", "text": text}
-
-        if result == "NO_CHANGE":
+        elif result == "NO_CHANGE":
 
             text = gpt_reply(
                 history,
-                "Sometimes nothing shifts right away. That's okay.",
-                spiral_stage
+                "Acknowledge that nothing shifted and gently ask what feels most present now."
             )
 
-            return {"step": "exit", "text": text}
+        else:
+
+            text = gpt_reply(
+                history,
+                "Affirm that simply noticing is enough and ask what stands out in the body now."
+            )
+
+        return {"step": "continue", "text": text}
+
+    # -------------------------------------------------
+    # CONTINUE MODE (Open Conversation)
+    # -------------------------------------------------
+
+    if step == "continue":
 
         text = gpt_reply(
             history,
-            "Even just noticing is enough for now.",
-            spiral_stage
+            f'User said: "{user_text}"\nRespond gently and stay with body awareness.'
         )
 
-        return {"step": "exit", "text": text}
+        return {"step": "continue", "text": text}
 
     # -------------------------------------------------
     # FALLBACK
     # -------------------------------------------------
-    return {"step": "exit", "text": "We can pause here."}
+
+    return {
+        "step": "continue",
+        "text": "I'm here with you. What do you notice in your body right now?"
+    }
