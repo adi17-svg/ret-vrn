@@ -1,12 +1,13 @@
 """
 Low Mood Tool: Getting Going With Action
-Intent-Driven Conversational Version (RETVRN)
+Intent-Driven Conversational Version (RETVRN - Adaptive Flow)
 
 Features:
 - Meaning extraction
 - Blocker type mapping
-- Spiral-aware micro action
-- Dynamic flow progression
+- Spiral-aware step sizing
+- Progress detection
+- Adaptive expansion after movement
 - No template repetition
 """
 
@@ -24,12 +25,14 @@ You are a calm, supportive mental health coach.
 
 Rules:
 - Keep responses short (2–4 lines)
-- Move gently toward small action
+- Be natural, not robotic
+- If user hasn't started → shrink task
+- If user made progress → gently expand step
 - No lecturing
 - No long analysis
-- Always shrink the task
+- Keep tone warm and steady
 - Stay aligned with: "Start small. No pressure."
-- Keep conversation open after suggesting action
+- Keep conversation open
 """
 
 # =====================================================
@@ -52,13 +55,14 @@ def gpt_reply(history, instruction):
     resp = client.chat.completions.create(
         model="gpt-4.1",
         messages=messages,
-        temperature=0.4,
+        temperature=0.5,
     )
 
     return resp.choices[0].message.content.strip()
 
+
 # =====================================================
-# MEANING EXTRACTION
+# BLOCKER DETECTION
 # =====================================================
 
 def extract_blocker_type(text):
@@ -86,6 +90,7 @@ Return one word only.
     )
 
     return resp.choices[0].message.content.strip()
+
 
 # =====================================================
 # SPIRAL DETECTION
@@ -115,30 +120,59 @@ Return one word.
 
     return resp.choices[0].message.content.strip()
 
+
 # =====================================================
-# DYNAMIC MICRO STEP
+# PROGRESS DETECTION (NEW)
 # =====================================================
 
-def generate_micro_step(task, blocker, spiral):
+def detect_progress(text):
 
-    base_prompt = f"""
+    prompt = f"""
+Does this message indicate the user completed a suggested action?
+
+Message: "{text}"
+
+Answer YES or NO only.
+"""
+
+    resp = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
+
+    return resp.choices[0].message.content.strip()
+
+
+# =====================================================
+# STEP GENERATOR (ADAPTIVE)
+# =====================================================
+
+def generate_step(task, blocker, spiral, expand=False):
+
+    if not expand:
+        size_instruction = "Generate one extremely small first step."
+    else:
+        size_instruction = "Generate one slightly bigger but still manageable next step (5–10 min max)."
+
+    prompt = f"""
 Task: "{task}"
 Blocker: {blocker}
 Spiral tone: {spiral}
 
-Generate one extremely small first step.
-Make it tiny.
+{size_instruction}
 No explanation.
 One action only.
 """
 
     resp = client.chat.completions.create(
         model="gpt-4.1",
-        messages=[{"role": "user", "content": base_prompt}],
-        temperature=0.3
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.4
     )
 
     return resp.choices[0].message.content.strip()
+
 
 # =====================================================
 # MAIN HANDLER
@@ -158,7 +192,44 @@ def handle(step=None, user_text=None, history=None, memory=None):
         }
 
     # ----------------------------------
-    # MEANING EXTRACTION
+    # Detect Progress First
+    # ----------------------------------
+
+    progress = detect_progress(user_text)
+
+    # ----------------------------------
+    # If user made progress → expand gently
+    # ----------------------------------
+
+    if progress == "YES" and memory.get("task"):
+
+        next_step = generate_step(
+            task=memory.get("task"),
+            blocker=memory.get("blocker", "UNCLEAR"),
+            spiral=memory.get("spiral", "Neutral"),
+            expand=True
+        )
+
+        response_text = gpt_reply(
+            history,
+            f"""
+Acknowledge progress warmly.
+
+Then suggest this next step:
+{next_step}
+
+Keep it gentle.
+"""
+        )
+
+        return {
+            "step": "continue",
+            "text": response_text,
+            "memory": memory
+        }
+
+    # ----------------------------------
+    # Otherwise → Fresh Detection
     # ----------------------------------
 
     blocker_type = extract_blocker_type(user_text)
@@ -168,14 +239,11 @@ def handle(step=None, user_text=None, history=None, memory=None):
     memory["spiral"] = spiral_stage
     memory["task"] = user_text
 
-    # ----------------------------------
-    # DIRECT ACTION MODE (No Redundant Question)
-    # ----------------------------------
-
-    micro_step = generate_micro_step(
+    micro_step = generate_step(
         task=user_text,
         blocker=blocker_type,
-        spiral=spiral_stage
+        spiral=spiral_stage,
+        expand=False
     )
 
     response_text = gpt_reply(
@@ -183,13 +251,12 @@ def handle(step=None, user_text=None, history=None, memory=None):
         f"""
 It sounds like the hard part is {blocker_type.lower()}.
 
-Let’s shrink it.
+Let’s make it easier.
 
 Try this:
 {micro_step}
 
 No pressure.
-Tell me when it’s done.
 """
     )
 

@@ -1,266 +1,192 @@
 """
 Low Mood Tool: Body Check-In
-Conversational + Context Aware + No Abrupt Exit
+Intent-Driven + Spiral Aware + No Abrupt Exit
 """
 
 from openai import OpenAI
 
 client = OpenAI()
-
 HISTORY_LIMIT = 6
 
 # =====================================================
 # SYSTEM PROMPT
 # =====================================================
 
-SYSTEM_PROMPT_BASE = """
-You are a calm, grounding mental health guide.
+SYSTEM_PROMPT = """
+You are a calm nervous-system regulation guide.
 
 Rules:
-- Keep responses short (2–4 lines)
-- Gentle tone
+- Short responses (2–4 lines)
+- No therapy explanations
 - No advice
-- No fixing
-- No analysis
-- Guide awareness simply
-- Keep the conversation softly open
+- Guide body awareness gently
+- Adjust tone based on emotional intensity
+- Keep conversation softly open
 """
 
 # =====================================================
-# SAFE CLASSIFIERS
-# =====================================================
-
-def safe_classify(system_instruction, user_text, valid_options, default):
-
-    if not user_text or len(user_text.strip()) < 2:
-        return default
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4.1",
-            messages=[
-                {"role": "system", "content": system_instruction},
-                {"role": "user", "content": user_text}
-            ],
-            temperature=0
-        )
-
-        result = response.choices[0].message.content.strip().upper()
-
-        if result in valid_options:
-            return result
-
-        return default
-
-    except:
-        return default
-
-
-def classify_yes_no(user_text):
-    return safe_classify(
-        "Classify into one word: YES or NO.",
-        user_text,
-        ["YES", "NO"],
-        "NO"
-    )
-
-
-def classify_shift(user_text):
-    return safe_classify(
-        "Classify into one word: SUCCESS, NO_CHANGE, or UNCLEAR.",
-        user_text,
-        ["SUCCESS", "NO_CHANGE", "UNCLEAR"],
-        "UNCLEAR"
-    )
-
-
-# =====================================================
-# GPT REPLY (SAFE HISTORY MAPPING)
+# GPT HELPER (History Aware)
 # =====================================================
 
 def gpt_reply(history, instruction):
 
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT_BASE},
-    ]
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     if history:
-        recent = history[-HISTORY_LIMIT:]
-
-        for msg in recent:
+        for msg in history[-HISTORY_LIMIT:]:
             role = "assistant" if msg.get("type") == "assistant" else "user"
             content = msg.get("text", "")
             if content:
-                messages.append({
-                    "role": role,
-                    "content": content
-                })
+                messages.append({"role": role, "content": content})
 
-    messages.append({
-        "role": "user",
-        "content": instruction
-    })
+    messages.append({"role": "user", "content": instruction})
 
-    response = client.chat.completions.create(
+    resp = client.chat.completions.create(
         model="gpt-4.1",
         messages=messages,
         temperature=0.4,
     )
 
-    return response.choices[0].message.content.strip()
+    return resp.choices[0].message.content.strip()
 
+# =====================================================
+# MEANING EXTRACTION (BODY STATE)
+# =====================================================
+
+def detect_body_state(text):
+
+    prompt = f"""
+Classify the dominant body state in this message.
+
+Options:
+TENSION – tight, clenched, pressure
+NUMB – blank, disconnected
+RESTLESS – agitated, jittery
+FATIGUE – heavy, drained
+ANXIOUS – racing heart, shallow breath
+UNCLEAR – none obvious
+
+Message: "{text}"
+
+Return one word.
+"""
+
+    resp = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
+
+    return resp.choices[0].message.content.strip()
+
+# =====================================================
+# SPIRAL DETECTION
+# =====================================================
+
+def detect_spiral(text):
+
+    prompt = f"""
+Classify emotional tone:
+
+Blue – guilt/duty
+Red – frustration/intensity
+Orange – performance pressure
+Green – emotional overwhelm
+Neutral – unclear
+
+Message: "{text}"
+
+Return one word.
+"""
+
+    resp = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
+
+    return resp.choices[0].message.content.strip()
+
+# =====================================================
+# DYNAMIC MICRO REGULATION STEP
+# =====================================================
+
+def generate_body_step(body_state, spiral):
+
+    prompt = f"""
+Body state: {body_state}
+Spiral tone: {spiral}
+
+Generate one tiny nervous-system regulation step.
+Very small.
+No explanation.
+One instruction only.
+"""
+
+    resp = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3
+    )
+
+    return resp.choices[0].message.content.strip()
 
 # =====================================================
 # MAIN HANDLER
 # =====================================================
 
-def handle(step=None, user_text=None, history=None):
+def handle(step=None, user_text=None, history=None, memory=None):
 
     history = history or []
+    memory = memory or {}
     user_text = (user_text or "").strip()
 
-    if not step:
-        step = "start"
+    # ----------------------------------
+    # FIRST ENTRY
+    # ----------------------------------
 
-    # -------------------------------------------------
-    # START
-    # -------------------------------------------------
-
-    if step == "start":
+    if not user_text:
 
         text = gpt_reply(
             history,
-            "Would it feel okay to gently notice how your body feels right now?"
+            "Pause for a moment. What do you notice in your body right now?"
         )
 
-        return {"step": "permission", "text": text}
+        return {"step": "continue", "text": text, "memory": memory}
 
-    # -------------------------------------------------
-    # PERMISSION
-    # -------------------------------------------------
+    # ----------------------------------
+    # MEANING EXTRACTION
+    # ----------------------------------
 
-    if step == "permission":
+    body_state = detect_body_state(user_text)
+    spiral_stage = detect_spiral(user_text)
 
-        decision = classify_yes_no(user_text)
+    memory["body_state"] = body_state
+    memory["spiral"] = spiral_stage
 
-        if decision == "YES":
+    # ----------------------------------
+    # DIRECT REGULATION MODE
+    # ----------------------------------
 
-            text = gpt_reply(
-                history,
-                "When things feel heavy, does your body feel tight, tired, or heavy anywhere?"
-            )
+    micro_step = generate_body_step(body_state, spiral_stage)
 
-            return {"step": "scan", "text": text}
+    response_text = gpt_reply(
+        history,
+        f"""
+It sounds like your body is holding {body_state.lower()}.
 
-        text = gpt_reply(
-            history,
-            "That's completely okay. Would taking one slow breath together feel easier?"
-        )
+Let’s keep it gentle.
 
-        return {"step": "alt_option", "text": text}
+Try this:
+{micro_step}
 
-    # -------------------------------------------------
-    # ALT OPTION
-    # -------------------------------------------------
-
-    if step == "alt_option":
-
-        decision = classify_yes_no(user_text)
-
-        if decision == "YES":
-
-            text = gpt_reply(
-                history,
-                "Let’s take one slow breath together. Inhale gently… and exhale slowly."
-            )
-
-            return {"step": "continue", "text": text}
-
-        return {
-            "step": "continue",
-            "text": "That’s completely fine. We can simply stay here."
-        }
-
-    # -------------------------------------------------
-    # SCAN
-    # -------------------------------------------------
-
-    if step == "scan":
-
-        text = gpt_reply(
-            history,
-            f"""
-User said: "{user_text}"
-
-Acknowledge briefly.
-Invite them to gently notice that area without trying to change it.
+No forcing.
+Tell me what shifts, even slightly.
 """
-        )
-
-        return {"step": "soften", "text": text}
-
-    # -------------------------------------------------
-    # SOFTEN
-    # -------------------------------------------------
-
-    if step == "soften":
-
-        text = gpt_reply(
-            history,
-            "If it feels okay, see if that area could soften just 5%. No forcing."
-        )
-
-        return {"step": "check", "text": text}
-
-    # -------------------------------------------------
-    # CHECK SHIFT
-    # -------------------------------------------------
-
-    if step == "check":
-
-        result = classify_shift(user_text)
-
-        if result == "SUCCESS":
-
-            text = gpt_reply(
-                history,
-                "Acknowledge the small shift gently and ask what they notice now."
-            )
-
-        elif result == "NO_CHANGE":
-
-            text = gpt_reply(
-                history,
-                "Acknowledge that nothing shifted and gently ask what feels most present now."
-            )
-
-        else:
-
-            text = gpt_reply(
-                history,
-                "Affirm that simply noticing is enough and ask what stands out in the body now."
-            )
-
-        return {"step": "continue", "text": text}
-
-    # -------------------------------------------------
-    # CONTINUE MODE (Open Conversation)
-    # -------------------------------------------------
-
-    if step == "continue":
-
-        text = gpt_reply(
-            history,
-            f'User said: "{user_text}"\nRespond gently and stay with body awareness.'
-        )
-
-        return {"step": "continue", "text": text}
-
-    # -------------------------------------------------
-    # FALLBACK
-    # -------------------------------------------------
+    )
 
     return {
         "step": "continue",
-        "text": "I'm here with you. What do you notice in your body right now?"
+        "text": response_text,
+        "memory": memory
     }
