@@ -1,14 +1,15 @@
 """
 Low Mood Tool: Getting Going With Action
-Intent-Driven Conversational Version (RETVRN - Adaptive Flow)
+Intent-Driven Conversational Version (RETVRN - Adaptive Flow v2)
 
 Features:
 - Meaning extraction
 - Blocker type mapping
 - Spiral-aware step sizing
 - Progress detection
+- Rotating validation (no repetition)
 - Adaptive expansion after movement
-- No template repetition
+- Natural tone (no robotic praise)
 """
 
 from openai import OpenAI
@@ -21,19 +22,37 @@ HISTORY_LIMIT = 6
 # =====================================================
 
 SYSTEM_PROMPT = """
-You are a calm, supportive mental health coach.
+You are a calm, grounded mental health coach.
 
 Rules:
-- Keep responses short (2–4 lines)
-- Be natural, not robotic
-- If user hasn't started → shrink task
-- If user made progress → gently expand step
+- Keep responses short (2–4 lines max)
+- Be natural and human
+- Never use repetitive praise phrases like:
+  "That’s a great start"
+  "That’s a great way to start"
+  "Good job"
+- Keep validation subtle
 - No lecturing
 - No long analysis
-- Keep tone warm and steady
-- Stay aligned with: "Start small. No pressure."
+- If user hasn't started → shrink task
+- If user made progress → gently expand step
 - Keep conversation open
 """
+
+# =====================================================
+# ROTATING VALIDATION POOL
+# =====================================================
+
+PROGRESS_VALIDATIONS = [
+    "Alright. You moved.",
+    "Okay — that’s something.",
+    "Good. We’re in motion.",
+    "Nice. You didn’t avoid it.",
+    "Hmm. That shifts things a bit.",
+    "Got it. You showed up.",
+    "There we go.",
+    "That counts."
+]
 
 # =====================================================
 # GPT HELPER
@@ -59,7 +78,6 @@ def gpt_reply(history, instruction):
     )
 
     return resp.choices[0].message.content.strip()
-
 
 # =====================================================
 # BLOCKER DETECTION
@@ -91,7 +109,6 @@ Return one word only.
 
     return resp.choices[0].message.content.strip()
 
-
 # =====================================================
 # SPIRAL DETECTION
 # =====================================================
@@ -120,9 +137,8 @@ Return one word.
 
     return resp.choices[0].message.content.strip()
 
-
 # =====================================================
-# PROGRESS DETECTION (NEW)
+# PROGRESS DETECTION
 # =====================================================
 
 def detect_progress(text):
@@ -143,9 +159,8 @@ Answer YES or NO only.
 
     return resp.choices[0].message.content.strip()
 
-
 # =====================================================
-# STEP GENERATOR (ADAPTIVE)
+# STEP GENERATOR
 # =====================================================
 
 def generate_step(task, blocker, spiral, expand=False):
@@ -153,7 +168,7 @@ def generate_step(task, blocker, spiral, expand=False):
     if not expand:
         size_instruction = "Generate one extremely small first step."
     else:
-        size_instruction = "Generate one slightly bigger but still manageable next step (5–10 min max)."
+        size_instruction = "Generate one slightly bigger but still manageable next step (5–10 minutes max)."
 
     prompt = f"""
 Task: "{task}"
@@ -173,7 +188,6 @@ One action only.
 
     return resp.choices[0].message.content.strip()
 
-
 # =====================================================
 # MAIN HANDLER
 # =====================================================
@@ -192,13 +206,13 @@ def handle(step=None, user_text=None, history=None, memory=None):
         }
 
     # ----------------------------------
-    # Detect Progress First
+    # Detect Progress
     # ----------------------------------
 
     progress = detect_progress(user_text)
 
     # ----------------------------------
-    # If user made progress → expand gently
+    # PROGRESS BRANCH (Expand Step)
     # ----------------------------------
 
     if progress == "YES" and memory.get("task"):
@@ -210,15 +224,21 @@ def handle(step=None, user_text=None, history=None, memory=None):
             expand=True
         )
 
+        # Rotate validation deterministically
+        index = memory.get("validation_index", 0)
+        validation_line = PROGRESS_VALIDATIONS[index % len(PROGRESS_VALIDATIONS)]
+        memory["validation_index"] = index + 1
+
         response_text = gpt_reply(
             history,
             f"""
-Acknowledge progress warmly.
+Start with this line exactly:
+"{validation_line}"
 
 Then suggest this next step:
 {next_step}
 
-Keep it gentle.
+Keep it calm and grounded.
 """
         )
 
@@ -229,7 +249,7 @@ Keep it gentle.
         }
 
     # ----------------------------------
-    # Otherwise → Fresh Detection
+    # FRESH START BRANCH (Shrink Step)
     # ----------------------------------
 
     blocker_type = extract_blocker_type(user_text)
@@ -249,14 +269,12 @@ Keep it gentle.
     response_text = gpt_reply(
         history,
         f"""
-It sounds like the hard part is {blocker_type.lower()}.
+Reflect briefly on what feels hard.
 
-Let’s make it easier.
-
-Try this:
+Then suggest this:
 {micro_step}
 
-No pressure.
+Keep it gentle.
 """
     )
 

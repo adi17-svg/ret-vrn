@@ -1,6 +1,18 @@
 """
 Low Mood Tool: Body Check-In
-Intent-Driven + Spiral Aware + No Abrupt Exit
+RETVRN Adaptive Version (v3)
+
+Features:
+✔ Meaning extraction (semantic)
+✔ Blocker detection
+✔ Body-state detection
+✔ Spiral-aware regulation
+✔ Progress detection
+✔ Adaptive progression toward gentle action
+✔ Rotating validation (no repetition)
+✔ History-aware
+✔ No abrupt exit
+✔ Natural tone
 """
 
 from openai import OpenAI
@@ -16,16 +28,32 @@ SYSTEM_PROMPT = """
 You are a calm nervous-system regulation guide.
 
 Rules:
-- Short responses (2–4 lines)
+- Short responses (2–4 lines max)
 - No therapy explanations
-- No advice
+- No lecturing
+- No repeated phrases
+- Validation should be subtle and varied
 - Guide body awareness gently
-- Adjust tone based on emotional intensity
-- Keep conversation softly open
+- If user shifts or progresses → gently expand
+- Never abruptly end conversation
+- Keep tone grounded and natural
 """
 
 # =====================================================
-# GPT HELPER (History Aware)
+# ROTATING VALIDATION POOL
+# =====================================================
+
+PROGRESS_LINES = [
+    "Okay. Something shifted.",
+    "Hmm. That’s a change.",
+    "Alright. Stay with that.",
+    "There’s movement there.",
+    "Got it. Notice that.",
+    "That’s something."
+]
+
+# =====================================================
+# GPT HELPER
 # =====================================================
 
 def gpt_reply(history, instruction):
@@ -44,27 +72,77 @@ def gpt_reply(history, instruction):
     resp = client.chat.completions.create(
         model="gpt-4.1",
         messages=messages,
-        temperature=0.4,
+        temperature=0.5,
     )
 
     return resp.choices[0].message.content.strip()
 
 # =====================================================
-# MEANING EXTRACTION (BODY STATE)
+# SEMANTIC MEANING EXTRACTION
+# =====================================================
+
+def extract_meaning(text):
+
+    prompt = f"""
+Summarize in one short phrase what the person is experiencing.
+
+Message: "{text}"
+
+Return only the short phrase.
+"""
+
+    resp = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
+
+    return resp.choices[0].message.content.strip()
+
+# =====================================================
+# BLOCKER DETECTION
+# =====================================================
+
+def detect_blocker(text):
+
+    prompt = f"""
+Classify the main blocker:
+
+INITIATION
+OVERWHELM
+DISTRACTION
+LOW_ENERGY
+FEAR
+UNCLEAR
+
+Message: "{text}"
+
+Return one word.
+"""
+
+    resp = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
+
+    return resp.choices[0].message.content.strip()
+
+# =====================================================
+# BODY STATE DETECTION
 # =====================================================
 
 def detect_body_state(text):
 
     prompt = f"""
-Classify the dominant body state in this message.
+Classify dominant body state:
 
-Options:
-TENSION – tight, clenched, pressure
-NUMB – blank, disconnected
-RESTLESS – agitated, jittery
-FATIGUE – heavy, drained
-ANXIOUS – racing heart, shallow breath
-UNCLEAR – none obvious
+TENSION
+NUMB
+RESTLESS
+FATIGUE
+ANXIOUS
+UNCLEAR
 
 Message: "{text}"
 
@@ -89,9 +167,9 @@ def detect_spiral(text):
 Classify emotional tone:
 
 Blue – guilt/duty
-Red – frustration/intensity
+Red – frustration
 Orange – performance pressure
-Green – emotional overwhelm
+Green – overwhelm
 Neutral – unclear
 
 Message: "{text}"
@@ -108,7 +186,29 @@ Return one word.
     return resp.choices[0].message.content.strip()
 
 # =====================================================
-# DYNAMIC MICRO REGULATION STEP
+# PROGRESS DETECTION
+# =====================================================
+
+def detect_progress(text):
+
+    prompt = f"""
+Did the user describe a shift, relief, action, or completion?
+
+Message: "{text}"
+
+Answer YES or NO only.
+"""
+
+    resp = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
+
+    return resp.choices[0].message.content.strip()
+
+# =====================================================
+# BODY MICRO STEP
 # =====================================================
 
 def generate_body_step(body_state, spiral):
@@ -119,6 +219,30 @@ Spiral tone: {spiral}
 
 Generate one tiny nervous-system regulation step.
 Very small.
+No explanation.
+One instruction only.
+"""
+
+    resp = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3
+    )
+
+    return resp.choices[0].message.content.strip()
+
+# =====================================================
+# ACTION SHIFT STEP
+# =====================================================
+
+def generate_action_step(blocker, spiral):
+
+    prompt = f"""
+Blocker: {blocker}
+Spiral tone: {spiral}
+
+Generate one very small action step.
+5 minutes max.
 No explanation.
 One instruction only.
 """
@@ -146,47 +270,73 @@ def handle(step=None, user_text=None, history=None, memory=None):
     # ----------------------------------
 
     if not user_text:
-
         text = gpt_reply(
             history,
-            "Pause for a moment. What do you notice in your body right now?"
+            "Pause for a moment. What are you noticing in your body right now?"
         )
-
         return {"step": "continue", "text": text, "memory": memory}
 
     # ----------------------------------
-    # MEANING EXTRACTION
+    # PROGRESS BRANCH
     # ----------------------------------
 
+    progress = detect_progress(user_text)
+
+    if progress == "YES" and memory.get("body_state"):
+
+        index = memory.get("validation_index", 0)
+        line = PROGRESS_LINES[index % len(PROGRESS_LINES)]
+        memory["validation_index"] = index + 1
+
+        action_step = generate_action_step(
+            memory.get("blocker", "UNCLEAR"),
+            memory.get("spiral", "Neutral")
+        )
+
+        response = gpt_reply(
+            history,
+            f"""
+Start with this line exactly:
+"{line}"
+
+Then gently move toward action:
+{action_step}
+
+Keep it calm.
+"""
+        )
+
+        return {"step": "continue", "text": response, "memory": memory}
+
+    # ----------------------------------
+    # NEW DETECTION
+    # ----------------------------------
+
+    meaning = extract_meaning(user_text)
+    blocker = detect_blocker(user_text)
     body_state = detect_body_state(user_text)
-    spiral_stage = detect_spiral(user_text)
+    spiral = detect_spiral(user_text)
 
+    memory["meaning"] = meaning
+    memory["blocker"] = blocker
     memory["body_state"] = body_state
-    memory["spiral"] = spiral_stage
+    memory["spiral"] = spiral
 
-    # ----------------------------------
-    # DIRECT REGULATION MODE
-    # ----------------------------------
+    body_step = generate_body_step(body_state, spiral)
 
-    micro_step = generate_body_step(body_state, spiral_stage)
-
-    response_text = gpt_reply(
+    response = gpt_reply(
         history,
         f"""
-It sounds like your body is holding {body_state.lower()}.
+Reflect briefly on: {meaning}.
 
-Let’s keep it gentle.
+Guide attention to the body gently.
 
 Try this:
-{micro_step}
+{body_step}
 
 No forcing.
-Tell me what shifts, even slightly.
+Tell me what you notice.
 """
     )
 
-    return {
-        "step": "continue",
-        "text": response_text,
-        "memory": memory
-    }
+    return {"step": "continue", "text": response, "memory": memory}

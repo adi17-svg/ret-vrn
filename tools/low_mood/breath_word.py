@@ -1,42 +1,92 @@
 """
 Low Mood Tool: Breath Word
-Conversational + Regulation → Integration Flow
+RETVRN Adaptive Version (v3)
+
+Features:
+✔ Meaning extraction
+✔ Blocker detection
+✔ Spiral detection
+✔ Breath → Body → Action progression
+✔ Progress detection
+✔ Rotating subtle validations
+✔ No repeated phrasing
+✔ History-aware
+✔ Natural flow
+✔ No abrupt exit
 """
 
 from openai import OpenAI
 
 client = OpenAI()
-
 HISTORY_LIMIT = 6
 
 # =====================================================
 # SYSTEM PROMPT
 # =====================================================
 
-SYSTEM_PROMPT_BASE = """
-You are a calm breathing guide.
+SYSTEM_PROMPT = """
+You are a calm breathing and regulation guide.
 
 Rules:
-- Keep responses short (2–4 lines)
-- Gentle tone
-- Clear guidance
-- No analysis
-- No advice
-- Keep instructions simple
-- After breathing, gently keep the conversation open
+- Short responses (2–4 lines max)
+- Gentle and grounded tone
+- No analysis or lecturing
+- No repeated phrases
+- Validation must be subtle and varied
+- Gradually move from breath → awareness → small action
+- Never abruptly end the conversation
+- Keep things natural and human
 """
 
 # =====================================================
-# SAFE CLASSIFIERS
+# ROTATING VALIDATION POOL
 # =====================================================
 
-def safe_classify(system_instruction, user_text, valid_options, default):
+PROGRESS_LINES = [
+    "Alright. Stay with that.",
+    "Okay. There’s a slight shift.",
+    "Hmm. Notice that.",
+    "That’s something.",
+    "Got it. Let’s keep it steady.",
+    "There’s a bit of space now."
+]
+
+# =====================================================
+# GPT REPLY
+# =====================================================
+
+def gpt_reply(history, instruction):
+
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    if history:
+        for msg in history[-HISTORY_LIMIT:]:
+            role = "assistant" if msg.get("type") == "assistant" else "user"
+            content = msg.get("text", "")
+            if content:
+                messages.append({"role": role, "content": content})
+
+    messages.append({"role": "user", "content": instruction})
+
+    response = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=messages,
+        temperature=0.5,
+    )
+
+    return response.choices[0].message.content.strip()
+
+# =====================================================
+# SAFE CLASSIFIER
+# =====================================================
+
+def safe_classify(system_instruction, user_text, valid, default):
 
     if not user_text or len(user_text.strip()) < 2:
         return default
 
     try:
-        response = client.chat.completions.create(
+        resp = client.chat.completions.create(
             model="gpt-4.1",
             messages=[
                 {"role": "system", "content": system_instruction},
@@ -45,78 +95,91 @@ def safe_classify(system_instruction, user_text, valid_options, default):
             temperature=0
         )
 
-        result = response.choices[0].message.content.strip().upper()
-
-        if result in valid_options:
-            return result
-
-        return default
+        result = resp.choices[0].message.content.strip().upper()
+        return result if result in valid else default
 
     except:
         return default
 
+# =====================================================
+# SEMANTIC MEANING
+# =====================================================
 
-def classify_yes_no(user_text):
+def extract_meaning(text):
     return safe_classify(
-        "Classify into one word: YES, NO, or UNCLEAR.",
-        user_text,
-        ["YES", "NO", "UNCLEAR"],
+        "Summarize core experience in 3-5 words.",
+        text,
+        [],
+        text
+    )
+
+# =====================================================
+# BLOCKER
+# =====================================================
+
+def detect_blocker(text):
+    return safe_classify(
+        "Return one: INITIATION, OVERWHELM, DISTRACTION, LOW_ENERGY, FEAR, UNCLEAR.",
+        text,
+        ["INITIATION","OVERWHELM","DISTRACTION","LOW_ENERGY","FEAR","UNCLEAR"],
         "UNCLEAR"
     )
 
+# =====================================================
+# SPIRAL
+# =====================================================
 
-def classify_shift(user_text):
+def detect_spiral(text):
     return safe_classify(
-        "Classify into one word: SUCCESS, NO_CHANGE, or UNCLEAR.",
-        user_text,
-        ["SUCCESS", "NO_CHANGE", "UNCLEAR"],
-        "UNCLEAR"
+        "Return one: BLUE, RED, ORANGE, GREEN, NEUTRAL.",
+        text,
+        ["BLUE","RED","ORANGE","GREEN","NEUTRAL"],
+        "NEUTRAL"
     )
 
+# =====================================================
+# PROGRESS DETECTION
+# =====================================================
+
+def detect_progress(text):
+    return safe_classify(
+        "Did the user describe relief, shift, action, or completion? YES or NO.",
+        text,
+        ["YES","NO"],
+        "NO"
+    )
 
 # =====================================================
-# GPT REPLY (SAFE HISTORY MAPPING)
+# MICRO ACTION
 # =====================================================
 
-def gpt_reply(history, instruction):
+def generate_micro_action(blocker, spiral):
 
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT_BASE},
-    ]
+    prompt = f"""
+Blocker: {blocker}
+Spiral tone: {spiral}
 
-    if history:
-        recent = history[-HISTORY_LIMIT:]
+Generate one very small action (5 min max).
+No explanation.
+One instruction only.
+"""
 
-        for msg in recent:
-            role = "assistant" if msg.get("type") == "assistant" else "user"
-            content = msg.get("text", "")
-            if content:
-                messages.append({
-                    "role": role,
-                    "content": content
-                })
-
-    messages.append({
-        "role": "user",
-        "content": instruction
-    })
-
-    response = client.chat.completions.create(
+    resp = client.chat.completions.create(
         model="gpt-4.1",
-        messages=messages,
-        temperature=0.3,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.4
     )
 
-    return response.choices[0].message.content.strip()
-
+    return resp.choices[0].message.content.strip()
 
 # =====================================================
 # MAIN HANDLER
 # =====================================================
 
-def handle(step=None, user_text=None, history=None):
+def handle(step=None, user_text=None, history=None, memory=None):
 
     history = history or []
+    memory = memory or {}
     user_text = (user_text or "").strip()
 
     if not step:
@@ -130,130 +193,107 @@ def handle(step=None, user_text=None, history=None):
 
         text = gpt_reply(
             history,
-            "Would it feel okay to take three slow breaths together?"
+            "Let’s take one slow breath together. Inhale… and exhale gently."
         )
 
-        return {"step": "permission", "text": text}
+        return {"step": "breath_2", "text": text, "memory": memory}
 
     # -------------------------------------------------
-    # PERMISSION
+    # SECOND BREATH
     # -------------------------------------------------
 
-    if step == "permission":
-
-        decision = classify_yes_no(user_text)
-
-        if decision == "YES":
-
-            text = gpt_reply(
-                history,
-                "Inhale slowly… and exhale gently."
-            )
-
-            return {"step": "cycle_2", "text": text}
-
-        if decision == "NO":
-
-            return {
-                "step": "continue",
-                "text": "That’s completely okay. We can simply stay here together."
-            }
+    if step == "breath_2":
 
         text = gpt_reply(
             history,
-            "Would you like to try just one slow breath instead?"
+            "Again. Slow inhale… long exhale."
         )
 
-        return {"step": "permission", "text": text}
+        return {"step": "notice", "text": text, "memory": memory}
 
     # -------------------------------------------------
-    # BREATH CYCLE 2
-    # -------------------------------------------------
-
-    if step == "cycle_2":
-
-        text = gpt_reply(
-            history,
-            "Again… inhale slowly… and exhale."
-        )
-
-        return {"step": "cycle_3", "text": text}
-
-    # -------------------------------------------------
-    # BREATH CYCLE 3
-    # -------------------------------------------------
-
-    if step == "cycle_3":
-
-        text = gpt_reply(
-            history,
-            """
-One last time…
-Inhale gently…
-Exhale slowly…
-
-Let your breath return to its own rhythm.
-"""
-        )
-
-        return {"step": "notice", "text": text}
-
-    # -------------------------------------------------
-    # NOTICE AFTER BREATH
+    # NOTICE
     # -------------------------------------------------
 
     if step == "notice":
 
         text = gpt_reply(
             history,
-            "Now that your breath has slowed a little, what do you notice in your body?"
+            "Let your breath settle. What feels slightly different, if anything?"
         )
 
-        return {"step": "check_state", "text": text}
+        return {"step": "process", "text": text, "memory": memory}
 
     # -------------------------------------------------
-    # CHECK STATE
+    # PROCESS USER RESPONSE
     # -------------------------------------------------
 
-    if step == "check_state":
+    if step == "process":
 
-        result = classify_shift(user_text)
+        meaning = user_text
+        blocker = detect_blocker(user_text)
+        spiral = detect_spiral(user_text)
+        progress = detect_progress(user_text)
 
-        if result == "SUCCESS":
+        memory["meaning"] = meaning
+        memory["blocker"] = blocker
+        memory["spiral"] = spiral
+
+        # ----------------------------------
+        # If shift happened → move toward action
+        # ----------------------------------
+
+        if progress == "YES":
+
+            index = memory.get("validation_index", 0)
+            line = PROGRESS_LINES[index % len(PROGRESS_LINES)]
+            memory["validation_index"] = index + 1
+
+            micro_action = generate_micro_action(blocker, spiral)
 
             text = gpt_reply(
                 history,
-                "Even a small shift matters. What feels slightly different now?"
+                f"""
+Start with this line exactly:
+"{line}"
+
+Then gently move toward this:
+{micro_action}
+
+Keep it grounded.
+"""
             )
 
-        elif result == "NO_CHANGE":
+            return {"step": "continue", "text": text, "memory": memory}
 
-            text = gpt_reply(
-                history,
-                "Sometimes breath simply creates a little space. What feels most present right now?"
-            )
+        # ----------------------------------
+        # If no shift → regulate gently
+        # ----------------------------------
 
-        else:
+        text = gpt_reply(
+            history,
+            """
+Stay with the breath for one more slow cycle.
+No forcing.
 
-            text = gpt_reply(
-                history,
-                "Just noticing is enough. What stands out in your body at this moment?"
-            )
+Then tell me what feels most present.
+"""
+        )
 
-        return {"step": "continue", "text": text}
+        return {"step": "process", "text": text, "memory": memory}
 
     # -------------------------------------------------
-    # CONTINUE MODE
+    # CONTINUE
     # -------------------------------------------------
 
     if step == "continue":
 
         text = gpt_reply(
             history,
-            f'User said: "{user_text}"\nRespond gently and stay with grounded awareness.'
+            f'User said: "{user_text}". Stay grounded. If stable, gently move toward small doable action.'
         )
 
-        return {"step": "continue", "text": text}
+        return {"step": "continue", "text": text, "memory": memory}
 
     # -------------------------------------------------
     # FALLBACK
@@ -261,5 +301,6 @@ Let your breath return to its own rhythm.
 
     return {
         "step": "continue",
-        "text": "I’m here. What feels most present for you right now?"
+        "text": "I’m here. Stay with one slow breath and tell me what feels present.",
+        "memory": memory
     }
