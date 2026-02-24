@@ -1,18 +1,20 @@
 """
 Low Mood Tool: Body Check-In
-RETVRN Adaptive Version (v3)
+RETVRN Clean Version (v4 – Clear + Concrete)
+
+Purpose:
+Shift attention from overthinking → body regulation → tiny forward movement.
 
 Features:
-✔ Meaning extraction (semantic)
+✔ Semantic meaning extraction
 ✔ Blocker detection
-✔ Body-state detection
-✔ Spiral-aware regulation
-✔ Progress detection
-✔ Adaptive progression toward gentle action
-✔ Rotating validation (no repetition)
+✔ Spiral detection
+✔ Concrete body step (no abstract language)
+✔ Closed feedback loop (heavier/lighter/same)
+✔ Direct progression toward small action
+✔ Rotating subtle validation (no repetition)
 ✔ History-aware
 ✔ No abrupt exit
-✔ Natural tone
 """
 
 from openai import OpenAI
@@ -28,28 +30,29 @@ SYSTEM_PROMPT = """
 You are a calm nervous-system regulation guide.
 
 Rules:
-- Short responses (2–4 lines max)
+- Keep responses short (2–4 lines max)
+- No abstract language
+- No sensory poetry
 - No therapy explanations
-- No lecturing
+- Give one clear physical instruction at a time
+- Use simple feedback options like:
+  heavier / lighter / same
+- If lighter → gently move toward tiny action
+- If same → give another small body instruction
 - No repeated phrases
-- Validation should be subtle and varied
-- Guide body awareness gently
-- If user shifts or progresses → gently expand
-- Never abruptly end conversation
-- Keep tone grounded and natural
+- Keep tone grounded and practical
 """
 
 # =====================================================
-# ROTATING VALIDATION POOL
+# ROTATING VALIDATION (SUBTLE)
 # =====================================================
 
 PROGRESS_LINES = [
-    "Okay. Something shifted.",
-    "Hmm. That’s a change.",
-    "Alright. Stay with that.",
-    "There’s movement there.",
-    "Got it. Notice that.",
-    "That’s something."
+    "Okay. There’s a small shift.",
+    "Alright. That changed a bit.",
+    "Hmm. Noticed.",
+    "Got it.",
+    "That counts."
 ]
 
 # =====================================================
@@ -72,29 +75,7 @@ def gpt_reply(history, instruction):
     resp = client.chat.completions.create(
         model="gpt-4.1",
         messages=messages,
-        temperature=0.5,
-    )
-
-    return resp.choices[0].message.content.strip()
-
-# =====================================================
-# SEMANTIC MEANING EXTRACTION
-# =====================================================
-
-def extract_meaning(text):
-
-    prompt = f"""
-Summarize in one short phrase what the person is experiencing.
-
-Message: "{text}"
-
-Return only the short phrase.
-"""
-
-    resp = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
+        temperature=0.4,
     )
 
     return resp.choices[0].message.content.strip()
@@ -106,7 +87,7 @@ Return only the short phrase.
 def detect_blocker(text):
 
     prompt = f"""
-Classify the main blocker:
+Return one word:
 
 INITIATION
 OVERWHELM
@@ -116,37 +97,6 @@ FEAR
 UNCLEAR
 
 Message: "{text}"
-
-Return one word.
-"""
-
-    resp = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
-    )
-
-    return resp.choices[0].message.content.strip()
-
-# =====================================================
-# BODY STATE DETECTION
-# =====================================================
-
-def detect_body_state(text):
-
-    prompt = f"""
-Classify dominant body state:
-
-TENSION
-NUMB
-RESTLESS
-FATIGUE
-ANXIOUS
-UNCLEAR
-
-Message: "{text}"
-
-Return one word.
 """
 
     resp = client.chat.completions.create(
@@ -164,17 +114,15 @@ Return one word.
 def detect_spiral(text):
 
     prompt = f"""
-Classify emotional tone:
+Return one word:
 
-Blue – guilt/duty
-Red – frustration
-Orange – performance pressure
-Green – overwhelm
-Neutral – unclear
+BLUE
+RED
+ORANGE
+GREEN
+NEUTRAL
 
 Message: "{text}"
-
-Return one word.
 """
 
     resp = client.chat.completions.create(
@@ -186,40 +134,20 @@ Return one word.
     return resp.choices[0].message.content.strip()
 
 # =====================================================
-# PROGRESS DETECTION
+# BODY STEP GENERATOR (CLEAR + CONCRETE)
 # =====================================================
 
-def detect_progress(text):
+def generate_body_step():
 
-    prompt = f"""
-Did the user describe a shift, relief, action, or completion?
+    prompt = """
+Give one extremely clear physical instruction.
+No abstract wording.
+Examples style:
+- Place one hand on your chest.
+- Press your feet into the floor.
+- Take one slow breath.
+- Roll your shoulders once.
 
-Message: "{text}"
-
-Answer YES or NO only.
-"""
-
-    resp = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
-    )
-
-    return resp.choices[0].message.content.strip()
-
-# =====================================================
-# BODY MICRO STEP
-# =====================================================
-
-def generate_body_step(body_state, spiral):
-
-    prompt = f"""
-Body state: {body_state}
-Spiral tone: {spiral}
-
-Generate one tiny nervous-system regulation step.
-Very small.
-No explanation.
 One instruction only.
 """
 
@@ -232,18 +160,18 @@ One instruction only.
     return resp.choices[0].message.content.strip()
 
 # =====================================================
-# ACTION SHIFT STEP
+# MICRO ACTION GENERATOR
 # =====================================================
 
 def generate_action_step(blocker, spiral):
 
     prompt = f"""
 Blocker: {blocker}
-Spiral tone: {spiral}
+Spiral: {spiral}
 
-Generate one very small action step.
+Generate one very small action.
 5 minutes max.
-No explanation.
+Concrete.
 One instruction only.
 """
 
@@ -251,6 +179,31 @@ One instruction only.
         model="gpt-4.1",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3
+    )
+
+    return resp.choices[0].message.content.strip()
+
+# =====================================================
+# SHIFT CLASSIFIER
+# =====================================================
+
+def classify_shift(text):
+
+    prompt = f"""
+Classify response as:
+
+LIGHTER
+HEAVIER
+SAME
+UNCLEAR
+
+Message: "{text}"
+"""
+
+    resp = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
     )
 
     return resp.choices[0].message.content.strip()
@@ -265,78 +218,108 @@ def handle(step=None, user_text=None, history=None, memory=None):
     memory = memory or {}
     user_text = (user_text or "").strip()
 
+    if not step:
+        step = "start"
+
     # ----------------------------------
-    # FIRST ENTRY
+    # START
     # ----------------------------------
 
-    if not user_text:
+    if step == "start":
+
+        body_step = generate_body_step()
+
         text = gpt_reply(
             history,
-            "Pause for a moment. What are you noticing in your body right now?"
-        )
-        return {"step": "continue", "text": text, "memory": memory}
-
-    # ----------------------------------
-    # PROGRESS BRANCH
-    # ----------------------------------
-
-    progress = detect_progress(user_text)
-
-    if progress == "YES" and memory.get("body_state"):
-
-        index = memory.get("validation_index", 0)
-        line = PROGRESS_LINES[index % len(PROGRESS_LINES)]
-        memory["validation_index"] = index + 1
-
-        action_step = generate_action_step(
-            memory.get("blocker", "UNCLEAR"),
-            memory.get("spiral", "Neutral")
-        )
-
-        response = gpt_reply(
-            history,
             f"""
-Start with this line exactly:
-"{line}"
-
-Then gently move toward action:
-{action_step}
-
-Keep it calm.
-"""
-        )
-
-        return {"step": "continue", "text": response, "memory": memory}
-
-    # ----------------------------------
-    # NEW DETECTION
-    # ----------------------------------
-
-    meaning = extract_meaning(user_text)
-    blocker = detect_blocker(user_text)
-    body_state = detect_body_state(user_text)
-    spiral = detect_spiral(user_text)
-
-    memory["meaning"] = meaning
-    memory["blocker"] = blocker
-    memory["body_state"] = body_state
-    memory["spiral"] = spiral
-
-    body_step = generate_body_step(body_state, spiral)
-
-    response = gpt_reply(
-        history,
-        f"""
-Reflect briefly on: {meaning}.
-
-Guide attention to the body gently.
-
 Try this:
 {body_step}
 
-No forcing.
-Tell me what you notice.
+After that, does your body feel
+heavier, lighter, or the same?
 """
-    )
+        )
 
-    return {"step": "continue", "text": response, "memory": memory}
+        return {"step": "check_shift", "text": text, "memory": memory}
+
+    # ----------------------------------
+    # CHECK SHIFT
+    # ----------------------------------
+
+    if step == "check_shift":
+
+        result = classify_shift(user_text)
+
+        if result == "LIGHTER":
+
+            blocker = detect_blocker(user_text)
+            spiral = detect_spiral(user_text)
+
+            index = memory.get("validation_index", 0)
+            line = PROGRESS_LINES[index % len(PROGRESS_LINES)]
+            memory["validation_index"] = index + 1
+
+            action_step = generate_action_step(blocker, spiral)
+
+            text = gpt_reply(
+                history,
+                f"""
+{line}
+
+Now try this small step:
+{action_step}
+"""
+            )
+
+            return {"step": "continue", "text": text, "memory": memory}
+
+        if result == "SAME" or result == "HEAVIER":
+
+            body_step = generate_body_step()
+
+            text = gpt_reply(
+                history,
+                f"""
+Okay.
+
+Try this instead:
+{body_step}
+
+Then tell me:
+lighter, heavier, or same?
+"""
+            )
+
+            return {"step": "check_shift", "text": text, "memory": memory}
+
+        # UNCLEAR
+
+        text = gpt_reply(
+            history,
+            "No problem. Just tell me — lighter, heavier, or same?"
+        )
+
+        return {"step": "check_shift", "text": text, "memory": memory}
+
+    # ----------------------------------
+    # CONTINUE
+    # ----------------------------------
+
+    if step == "continue":
+
+        text = gpt_reply(
+            history,
+            f'User said: "{user_text}". Keep things steady and practical.'
+        )
+
+        return {"step": "continue", "text": text, "memory": memory}
+
+    # ----------------------------------
+    # FALLBACK
+    # ----------------------------------
+
+    return {
+        "step": "continue",
+        "text": "Stay with one slow breath. What feels manageable right now?",
+        "memory": memory
+    }

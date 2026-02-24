@@ -1,17 +1,21 @@
 """
 Low Mood Tool: Gentle Distraction
-RETVRN Adaptive Version (v3)
+RETVRN Adaptive Version (v4 – Fatigue Aware)
+
+Purpose:
+Offer light, safe distraction aligned with energy state.
+LOW_ENERGY ≠ movement.
+Move gently toward doable micro action.
 
 Features:
-✔ Meaning extraction (semantic)
+✔ Meaning extraction
 ✔ Blocker detection
 ✔ Spiral detection
-✔ Spiral-aware micro-step
+✔ Fatigue-aware activity selection
+✔ Rotating subtle validation
 ✔ Direct progression toward action
-✔ Progress detection
-✔ Rotating validation (no repetition)
 ✔ History-aware
-✔ Natural conversational flow
+✔ No repeated phrasing
 ✔ No abrupt exit
 """
 
@@ -28,27 +32,27 @@ SYSTEM_PROMPT = """
 You suggest small, safe, neutral activities.
 
 Rules:
-- Short responses (2–4 lines max)
-- Natural and grounded tone
-- No deep analysis
+- 2–4 lines max
+- Natural tone
+- No motivational language
 - No repetitive praise
 - No repeated phrasing
-- Subtle validation only
-- Gradually move toward gentle action
-- Never abruptly end conversation
+- Match activity to energy level
+- If tired → restorative, not active
+- Keep it practical
+- Never abruptly end
 """
 
 # =====================================================
-# ROTATING VALIDATION POOL
+# ROTATING VALIDATION
 # =====================================================
 
 PROGRESS_LINES = [
-    "Alright. That shifted something.",
-    "Okay. There’s a slight change.",
-    "Hmm. Notice that.",
-    "That counts.",
-    "Got it. Stay with that.",
-    "There’s a bit of movement."
+    "Okay. That shifted a little.",
+    "Alright. Noted.",
+    "Hmm. That’s something.",
+    "Got it.",
+    "There’s a small change."
 ]
 
 # =====================================================
@@ -68,13 +72,13 @@ def gpt_reply(history, instruction):
 
     messages.append({"role": "user", "content": instruction})
 
-    response = client.chat.completions.create(
+    resp = client.chat.completions.create(
         model="gpt-4.1",
         messages=messages,
-        temperature=0.5,
+        temperature=0.4,
     )
 
-    return response.choices[0].message.content.strip()
+    return resp.choices[0].message.content.strip()
 
 # =====================================================
 # SAFE CLASSIFIER
@@ -102,17 +106,15 @@ def safe_classify(system_instruction, user_text, valid, default):
         return default
 
 # =====================================================
-# SEMANTIC MEANING
+# MEANING EXTRACTION
 # =====================================================
 
 def extract_meaning(text):
 
     prompt = f"""
-Summarize in 3-5 words what the person is experiencing.
+Summarize what the person is feeling in 3-5 words.
 
 Message: "{text}"
-
-Return only the short phrase.
 """
 
     resp = client.chat.completions.create(
@@ -124,7 +126,7 @@ Return only the short phrase.
     return resp.choices[0].message.content.strip()
 
 # =====================================================
-# BLOCKER
+# BLOCKER DETECTION
 # =====================================================
 
 def detect_blocker(text):
@@ -136,7 +138,7 @@ def detect_blocker(text):
     )
 
 # =====================================================
-# SPIRAL
+# SPIRAL DETECTION
 # =====================================================
 
 def detect_spiral(text):
@@ -148,19 +150,19 @@ def detect_spiral(text):
     )
 
 # =====================================================
-# PROGRESS
+# PROGRESS DETECTION
 # =====================================================
 
 def detect_progress(text):
     return safe_classify(
-        "Did the user describe improvement, shift, or action? YES or NO.",
+        "Did the user describe improvement or shift? YES or NO.",
         text,
         ["YES","NO"],
         "NO"
     )
 
 # =====================================================
-# MICRO ACTIVITY GENERATOR
+# ACTIVITY GENERATOR (FATIGUE-AWARE)
 # =====================================================
 
 def generate_activity(blocker, spiral):
@@ -169,10 +171,24 @@ def generate_activity(blocker, spiral):
 Blocker: {blocker}
 Spiral tone: {spiral}
 
-Generate one very small, safe distraction activity.
-Low effort.
-2-5 minutes.
+If blocker is LOW_ENERGY:
+Suggest something restorative (sit back, drink water, close eyes briefly, loosen shoulders).
+No walking or active movement.
+
+If OVERWHELM:
+Suggest one small organizing or grounding task.
+
+If DISTRACTION:
+Suggest short 2-minute focus reset.
+
+If INITIATION:
+Suggest tiny starter action (2 minutes).
+
+If FEAR:
+Suggest calming grounding (slow breathing, hand on chest).
+
 One instruction only.
+Very small.
 No explanation.
 """
 
@@ -205,13 +221,13 @@ def handle(step=None, user_text=None, history=None, memory=None):
 
         text = gpt_reply(
             history,
-            "Would something light and simple help create a little space right now?"
+            "Would a small, low-effort reset help right now?"
         )
 
         return {"step": "process", "text": text, "memory": memory}
 
     # -------------------------------------------------
-    # PROCESS USER INPUT
+    # PROCESS INPUT
     # -------------------------------------------------
 
     if step == "process":
@@ -226,7 +242,7 @@ def handle(step=None, user_text=None, history=None, memory=None):
         memory["spiral"] = spiral
 
         # ----------------------------------
-        # IF SHIFT ALREADY HAPPENED
+        # If already shifted → build forward
         # ----------------------------------
 
         if progress == "YES":
@@ -235,36 +251,33 @@ def handle(step=None, user_text=None, history=None, memory=None):
             line = PROGRESS_LINES[index % len(PROGRESS_LINES)]
             memory["validation_index"] = index + 1
 
-            micro_activity = generate_activity(blocker, spiral)
+            micro = generate_activity(blocker, spiral)
 
             text = gpt_reply(
                 history,
                 f"""
-Start with this line exactly:
-"{line}"
+{line}
 
-Then gently move toward this:
-{micro_activity}
-
-Keep tone steady.
+Try this small next step:
+{micro}
 """
             )
 
             return {"step": "continue", "text": text, "memory": memory}
 
         # ----------------------------------
-        # OTHERWISE OFFER SMALL ACTIVITY
+        # Otherwise suggest aligned activity
         # ----------------------------------
 
-        micro_activity = generate_activity(blocker, spiral)
+        micro = generate_activity(blocker, spiral)
 
         text = gpt_reply(
             history,
             f"""
-Reflect briefly on: {meaning}.
+You mentioned {meaning}.
 
-Offer this small option:
-{micro_activity}
+Here’s something small:
+{micro}
 
 No pressure.
 """
@@ -273,7 +286,7 @@ No pressure.
         return {"step": "continue", "text": text, "memory": memory}
 
     # -------------------------------------------------
-    # CONTINUE MODE
+    # CONTINUE
     # -------------------------------------------------
 
     if step == "continue":
@@ -288,14 +301,14 @@ No pressure.
 
             text = gpt_reply(
                 history,
-                f'Start with "{line}" then gently build small forward momentum.'
+                f"{line} We can build gently from here."
             )
 
             return {"step": "continue", "text": text, "memory": memory}
 
         text = gpt_reply(
             history,
-            f'User said: "{user_text}". Stay grounded and gently guide toward doable small action.'
+            f'User said: "{user_text}". Stay practical and keep suggestions energy-appropriate.'
         )
 
         return {"step": "continue", "text": text, "memory": memory}
@@ -306,6 +319,6 @@ No pressure.
 
     return {
         "step": "continue",
-        "text": "I’m here. We can keep it light. What feels manageable right now?",
+        "text": "We can keep it very small. What feels manageable right now?",
         "memory": memory
     }
