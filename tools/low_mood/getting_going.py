@@ -1,21 +1,19 @@
 """
 Low Mood Tool: Getting Going With Action
-Intent-Driven Conversational Version (RETVRN - Adaptive Flow v2)
+Adaptive Context-Aware Version (RETVRN v3)
 
-Features:
-- Meaning extraction
-- Blocker type mapping
-- Spiral-aware step sizing
-- Progress detection
-- Rotating validation (no repetition)
-- Adaptive expansion after movement
-- Natural tone (no robotic praise)
+Upgrades:
+- Context-based detection (history aware)
+- Previous step aware progress detection
+- Confusion / distress branching
+- Adaptive flow engine
 """
 
 from openai import OpenAI
 
 client = OpenAI()
 HISTORY_LIMIT = 6
+
 
 # =====================================================
 # SYSTEM PROMPT
@@ -27,32 +25,12 @@ You are a calm, grounded mental health coach.
 Rules:
 - Keep responses short (2–4 lines max)
 - Be natural and human
-- Never use repetitive praise phrases like:
-  "That’s a great start"
-  "That’s a great way to start"
-  "Good job"
-- Keep validation subtle
+- No repetitive praise
+- Subtle validation only
 - No lecturing
-- No long analysis
-- If user hasn't started → shrink task
-- If user made progress → gently expand step
-- Keep conversation open
+- Keep tone grounded
 """
 
-# =====================================================
-# ROTATING VALIDATION POOL
-# =====================================================
-
-PROGRESS_VALIDATIONS = [
-    "Alright. You moved.",
-    "Okay — that’s something.",
-    "Good. We’re in motion.",
-    "Nice. You didn’t avoid it.",
-    "Hmm. That shifts things a bit.",
-    "Got it. You showed up.",
-    "There we go.",
-    "That counts."
-]
 
 # =====================================================
 # GPT HELPER
@@ -62,12 +40,11 @@ def gpt_reply(history, instruction):
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    if history:
-        for msg in history[-HISTORY_LIMIT:]:
-            role = "assistant" if msg.get("type") == "assistant" else "user"
-            content = msg.get("text", "")
-            if content:
-                messages.append({"role": role, "content": content})
+    for msg in history[-HISTORY_LIMIT:]:
+        role = "assistant" if msg.get("type") == "assistant" else "user"
+        content = msg.get("text", "")
+        if content:
+            messages.append({"role": role, "content": content})
 
     messages.append({"role": "user", "content": instruction})
 
@@ -79,24 +56,38 @@ def gpt_reply(history, instruction):
 
     return resp.choices[0].message.content.strip()
 
+
 # =====================================================
-# BLOCKER DETECTION
+# CONTEXT BUILDER
 # =====================================================
 
-def extract_blocker_type(text):
+def build_context(history, user_text):
+    recent = " ".join([msg.get("text", "") for msg in history[-3:]])
+    return f"{recent} {user_text}".strip()
+
+
+# =====================================================
+# STATE SIGNAL DETECTION
+# =====================================================
+
+def detect_state_signal(context, last_step=None):
 
     prompt = f"""
-Analyze this message and classify the main blocker:
+Analyze the emotional state in this conversation:
 
-Options:
-INITIATION – trouble starting
-OVERWHELM – task feels too big
-DISTRACTION – attention drifting
-LOW_ENERGY – tired or drained
-FEAR – avoidance due to anxiety
-UNCLEAR – none of the above
+Context:
+"{context}"
 
-Message: "{text}"
+If last step exists:
+"{last_step}"
+
+Classify into ONE:
+
+PROGRESS – user attempted/completed step
+CONFUSION – unclear reaction (e.g., weird, unsure)
+DISTRESS – emotional spike or overwhelm
+RESISTANCE – avoidance or pushback
+NEUTRAL – none of above
 
 Return one word only.
 """
@@ -109,24 +100,28 @@ Return one word only.
 
     return resp.choices[0].message.content.strip()
 
+
 # =====================================================
-# SPIRAL DETECTION
+# BLOCKER DETECTION (Context Aware)
 # =====================================================
 
-def detect_spiral_stage(text):
+def extract_blocker_type(context):
 
     prompt = f"""
-Classify emotional tone into one:
+Classify the main blocker in this context:
 
-Blue – guilt/responsibility
-Red – resistance/frustration
-Orange – productivity pressure
-Green – emotional overwhelm
-Neutral – unclear
+Options:
+INITIATION
+OVERWHELM
+DISTRACTION
+LOW_ENERGY
+FEAR
+UNCLEAR
 
-Message: "{text}"
+Context:
+"{context}"
 
-Return one word.
+Return one word only.
 """
 
     resp = client.chat.completions.create(
@@ -137,43 +132,22 @@ Return one word.
 
     return resp.choices[0].message.content.strip()
 
-# =====================================================
-# PROGRESS DETECTION
-# =====================================================
-
-def detect_progress(text):
-
-    prompt = f"""
-Does this message indicate the user completed a suggested action?
-
-Message: "{text}"
-
-Answer YES or NO only.
-"""
-
-    resp = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
-    )
-
-    return resp.choices[0].message.content.strip()
 
 # =====================================================
 # STEP GENERATOR
 # =====================================================
 
-def generate_step(task, blocker, spiral, expand=False):
+def generate_step(task, blocker, expand=False):
 
-    if not expand:
-        size_instruction = "Generate one extremely small first step."
-    else:
-        size_instruction = "Generate one slightly bigger but still manageable next step (5–10 minutes max)."
+    size_instruction = (
+        "Generate one slightly bigger but manageable next step (5–10 minutes max)."
+        if expand
+        else "Generate one extremely small first step."
+    )
 
     prompt = f"""
 Task: "{task}"
 Blocker: {blocker}
-Spiral tone: {spiral}
 
 {size_instruction}
 No explanation.
@@ -187,6 +161,7 @@ One action only.
     )
 
     return resp.choices[0].message.content.strip()
+
 
 # =====================================================
 # MAIN HANDLER
@@ -206,80 +181,137 @@ def handle(step=None, user_text=None, history=None, memory=None):
         }
 
     # ----------------------------------
-    # Detect Progress
+    # Build context
     # ----------------------------------
 
-    progress = detect_progress(user_text)
+    context = build_context(history, user_text)
+    last_step = memory.get("last_step")
+
+    state = detect_state_signal(context, last_step)
 
     # ----------------------------------
-    # PROGRESS BRANCH (Expand Step)
+    # PROGRESS BRANCH
     # ----------------------------------
 
-    if progress == "YES" and memory.get("task"):
+    if state == "PROGRESS" and memory.get("task"):
 
         next_step = generate_step(
             task=memory.get("task"),
             blocker=memory.get("blocker", "UNCLEAR"),
-            spiral=memory.get("spiral", "Neutral"),
             expand=True
         )
 
-        # Rotate validation deterministically
-        index = memory.get("validation_index", 0)
-        validation_line = PROGRESS_VALIDATIONS[index % len(PROGRESS_VALIDATIONS)]
-        memory["validation_index"] = index + 1
+        memory["last_step"] = next_step
 
-        response_text = gpt_reply(
+        response = gpt_reply(
             history,
             f"""
-Start with this line exactly:
-"{validation_line}"
+Brief subtle validation.
 
-Then suggest this next step:
+Then suggest:
 {next_step}
-
-Keep it calm and grounded.
 """
         )
 
         return {
             "step": "continue",
-            "text": response_text,
+            "text": response,
             "memory": memory
         }
 
     # ----------------------------------
-    # FRESH START BRANCH (Shrink Step)
+    # CONFUSION BRANCH
     # ----------------------------------
 
-    blocker_type = extract_blocker_type(user_text)
-    spiral_stage = detect_spiral_stage(user_text)
+    if state == "CONFUSION":
+
+        response = gpt_reply(
+            history,
+            """
+Acknowledge gently.
+
+Ask what felt strange or uncomfortable about it.
+Keep it short.
+"""
+        )
+
+        return {
+            "step": "continue",
+            "text": response,
+            "memory": memory
+        }
+
+    # ----------------------------------
+    # DISTRESS BRANCH
+    # ----------------------------------
+
+    if state == "DISTRESS":
+
+        response = gpt_reply(
+            history,
+            """
+Validate the heaviness briefly.
+
+Ask if they'd prefer an even smaller step or pause.
+"""
+        )
+
+        return {
+            "step": "continue",
+            "text": response,
+            "memory": memory
+        }
+
+    # ----------------------------------
+    # RESISTANCE BRANCH
+    # ----------------------------------
+
+    if state == "RESISTANCE":
+
+        response = gpt_reply(
+            history,
+            """
+Acknowledge resistance without pushing.
+
+Ask what feels hardest about doing it.
+"""
+        )
+
+        return {
+            "step": "continue",
+            "text": response,
+            "memory": memory
+        }
+
+    # ----------------------------------
+    # DEFAULT / FRESH START
+    # ----------------------------------
+
+    blocker_type = extract_blocker_type(context)
 
     memory["blocker"] = blocker_type
-    memory["spiral"] = spiral_stage
     memory["task"] = user_text
 
     micro_step = generate_step(
         task=user_text,
         blocker=blocker_type,
-        spiral=spiral_stage,
         expand=False
     )
 
-    response_text = gpt_reply(
+    memory["last_step"] = micro_step
+
+    response = gpt_reply(
         history,
         f"""
 Reflect briefly on what feels hard.
 
-Then suggest this:
+Then suggest:
 {micro_step}
-
-Keep it gentle.
 """
     )
 
     return {
         "step": "continue",
-        "text": response_text,
+        "text": response,
         "memory": memory
     }

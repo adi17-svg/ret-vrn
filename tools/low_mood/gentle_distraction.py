@@ -1,28 +1,20 @@
 """
 Low Mood Tool: Gentle Distraction
-RETVRN Adaptive Version (v4 – Fatigue Aware)
+RETVRN Adaptive Version (v5 – Context + Fatigue Aware)
 
-Purpose:
-Offer light, safe distraction aligned with energy state.
-LOW_ENERGY ≠ movement.
-Move gently toward doable micro action.
-
-Features:
-✔ Meaning extraction
-✔ Blocker detection
-✔ Spiral detection
-✔ Fatigue-aware activity selection
-✔ Rotating subtle validation
-✔ Direct progression toward action
-✔ History-aware
-✔ No repeated phrasing
-✔ No abrupt exit
+Upgrades:
+- Context-based state detection
+- Repeated no-shift protection
+- Distress override
+- Energy drift detection
+- Avoid repeated activity
 """
 
 from openai import OpenAI
 
 client = OpenAI()
 HISTORY_LIMIT = 6
+
 
 # =====================================================
 # SYSTEM PROMPT
@@ -35,25 +27,12 @@ Rules:
 - 2–4 lines max
 - Natural tone
 - No motivational language
-- No repetitive praise
 - No repeated phrasing
 - Match activity to energy level
-- If tired → restorative, not active
+- If tired → restorative only
 - Keep it practical
-- Never abruptly end
 """
 
-# =====================================================
-# ROTATING VALIDATION
-# =====================================================
-
-PROGRESS_LINES = [
-    "Okay. That shifted a little.",
-    "Alright. Noted.",
-    "Hmm. That’s something.",
-    "Got it.",
-    "There’s a small change."
-]
 
 # =====================================================
 # GPT HELPER
@@ -63,12 +42,11 @@ def gpt_reply(history, instruction):
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    if history:
-        for msg in history[-HISTORY_LIMIT:]:
-            role = "assistant" if msg.get("type") == "assistant" else "user"
-            content = msg.get("text", "")
-            if content:
-                messages.append({"role": role, "content": content})
+    for msg in history[-HISTORY_LIMIT:]:
+        role = "assistant" if msg.get("type") == "assistant" else "user"
+        content = msg.get("text", "")
+        if content:
+            messages.append({"role": role, "content": content})
 
     messages.append({"role": "user", "content": instruction})
 
@@ -80,41 +58,37 @@ def gpt_reply(history, instruction):
 
     return resp.choices[0].message.content.strip()
 
-# =====================================================
-# SAFE CLASSIFIER
-# =====================================================
-
-def safe_classify(system_instruction, user_text, valid, default):
-
-    if not user_text or len(user_text.strip()) < 2:
-        return default
-
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4.1",
-            messages=[
-                {"role": "system", "content": system_instruction},
-                {"role": "user", "content": user_text}
-            ],
-            temperature=0
-        )
-
-        result = resp.choices[0].message.content.strip().upper()
-        return result if result in valid else default
-
-    except:
-        return default
 
 # =====================================================
-# MEANING EXTRACTION
+# CONTEXT BUILDER
 # =====================================================
 
-def extract_meaning(text):
+def build_context(history, user_text):
+    recent = " ".join([m.get("text", "") for m in history[-3:]])
+    return f"{recent} {user_text}".strip()
+
+
+# =====================================================
+# STATE DETECTION (Context Aware)
+# =====================================================
+
+def detect_state(context):
 
     prompt = f"""
-Summarize what the person is feeling in 3-5 words.
+Analyze this conversation:
 
-Message: "{text}"
+"{context}"
+
+Classify into ONE:
+
+SHIFT – improvement or relief
+NO_SHIFT – little change
+DISTRESS – spike in heaviness/anxiety
+LOW_ENERGY – tired/foggy
+ACTION – user completed activity
+UNCLEAR
+
+Return one word only.
 """
 
     resp = client.chat.completions.create(
@@ -125,67 +99,25 @@ Message: "{text}"
 
     return resp.choices[0].message.content.strip()
 
-# =====================================================
-# BLOCKER DETECTION
-# =====================================================
-
-def detect_blocker(text):
-    return safe_classify(
-        "Return one: INITIATION, OVERWHELM, DISTRACTION, LOW_ENERGY, FEAR, UNCLEAR.",
-        text,
-        ["INITIATION","OVERWHELM","DISTRACTION","LOW_ENERGY","FEAR","UNCLEAR"],
-        "UNCLEAR"
-    )
 
 # =====================================================
-# SPIRAL DETECTION
+# ACTIVITY GENERATOR (Avoid Repeat)
 # =====================================================
 
-def detect_spiral(text):
-    return safe_classify(
-        "Return one: BLUE, RED, ORANGE, GREEN, NEUTRAL.",
-        text,
-        ["BLUE","RED","ORANGE","GREEN","NEUTRAL"],
-        "NEUTRAL"
-    )
-
-# =====================================================
-# PROGRESS DETECTION
-# =====================================================
-
-def detect_progress(text):
-    return safe_classify(
-        "Did the user describe improvement or shift? YES or NO.",
-        text,
-        ["YES","NO"],
-        "NO"
-    )
-
-# =====================================================
-# ACTIVITY GENERATOR (FATIGUE-AWARE)
-# =====================================================
-
-def generate_activity(blocker, spiral):
+def generate_activity(context, previous_activity=None):
 
     prompt = f"""
-Blocker: {blocker}
-Spiral tone: {spiral}
+Based on this context:
 
-If blocker is LOW_ENERGY:
-Suggest something restorative (sit back, drink water, close eyes briefly, loosen shoulders).
-No walking or active movement.
+"{context}"
 
-If OVERWHELM:
-Suggest one small organizing or grounding task.
+Avoid repeating this:
+"{previous_activity}"
 
-If DISTRACTION:
-Suggest short 2-minute focus reset.
-
-If INITIATION:
-Suggest tiny starter action (2 minutes).
-
-If FEAR:
-Suggest calming grounding (slow breathing, hand on chest).
+If LOW_ENERGY → restorative only.
+If OVERWHELM → tiny organizing step.
+If DISTRESS → calming grounding.
+Otherwise → small neutral reset.
 
 One instruction only.
 Very small.
@@ -199,6 +131,7 @@ No explanation.
     )
 
     return resp.choices[0].message.content.strip()
+
 
 # =====================================================
 # MAIN HANDLER
@@ -221,63 +154,125 @@ def handle(step=None, user_text=None, history=None, memory=None):
 
         text = gpt_reply(
             history,
-            "Would a small, low-effort reset help right now?"
+            "Would a very small reset help right now?"
         )
+
+        memory["no_shift_count"] = 0
 
         return {"step": "process", "text": text, "memory": memory}
 
     # -------------------------------------------------
-    # PROCESS INPUT
+    # PROCESS
     # -------------------------------------------------
 
     if step == "process":
 
-        meaning = extract_meaning(user_text)
-        blocker = detect_blocker(user_text)
-        spiral = detect_spiral(user_text)
-        progress = detect_progress(user_text)
+        context = build_context(history, user_text)
+        state = detect_state(context)
 
-        memory["meaning"] = meaning
-        memory["blocker"] = blocker
-        memory["spiral"] = spiral
+        # ---------- DISTRESS OVERRIDE ----------
 
-        # ----------------------------------
-        # If already shifted → build forward
-        # ----------------------------------
+        if state == "DISTRESS":
 
-        if progress == "YES":
+            text = gpt_reply(
+                history,
+                """
+Pause.
 
-            index = memory.get("validation_index", 0)
-            line = PROGRESS_LINES[index % len(PROGRESS_LINES)]
-            memory["validation_index"] = index + 1
+Place one hand on your chest.
+Take one slow breath.
+"""
+            )
 
-            micro = generate_activity(blocker, spiral)
+            return {"step": "process", "text": text, "memory": memory}
+
+        # ---------- SHIFT OR ACTION ----------
+
+        if state in ["SHIFT", "ACTION"]:
+
+            activity = generate_activity(
+                context,
+                memory.get("last_activity")
+            )
+
+            memory["last_activity"] = activity
+            memory["no_shift_count"] = 0
 
             text = gpt_reply(
                 history,
                 f"""
-{line}
+Okay. There’s a small shift.
 
-Try this small next step:
-{micro}
+Next gentle step:
+{activity}
 """
             )
 
             return {"step": "continue", "text": text, "memory": memory}
 
-        # ----------------------------------
-        # Otherwise suggest aligned activity
-        # ----------------------------------
+        # ---------- LOW ENERGY ----------
 
-        micro = generate_activity(blocker, spiral)
+        if state == "LOW_ENERGY":
+
+            activity = generate_activity(
+                context,
+                memory.get("last_activity")
+            )
+
+            memory["last_activity"] = activity
+
+            text = gpt_reply(
+                history,
+                f"""
+Let’s keep it restorative.
+
+Try this:
+{activity}
+"""
+            )
+
+            return {"step": "continue", "text": text, "memory": memory}
+
+        # ---------- NO SHIFT ----------
+
+        memory["no_shift_count"] = memory.get("no_shift_count", 0) + 1
+
+        # If repeated no shift → change direction
+        if memory["no_shift_count"] >= 2:
+
+            activity = generate_activity(
+                context,
+                memory.get("last_activity")
+            )
+
+            memory["last_activity"] = activity
+            memory["no_shift_count"] = 0
+
+            text = gpt_reply(
+                history,
+                f"""
+Let’s try a slightly different reset.
+
+{activity}
+"""
+            )
+
+            return {"step": "continue", "text": text, "memory": memory}
+
+        # Normal suggestion
+
+        activity = generate_activity(
+            context,
+            memory.get("last_activity")
+        )
+
+        memory["last_activity"] = activity
 
         text = gpt_reply(
             history,
             f"""
-You mentioned {meaning}.
-
 Here’s something small:
-{micro}
+{activity}
 
 No pressure.
 """
@@ -291,24 +286,20 @@ No pressure.
 
     if step == "continue":
 
-        progress = detect_progress(user_text)
+        context = build_context(history, user_text)
+        state = detect_state(context)
 
-        if progress == "YES":
-
-            index = memory.get("validation_index", 0)
-            line = PROGRESS_LINES[index % len(PROGRESS_LINES)]
-            memory["validation_index"] = index + 1
+        if state == "SHIFT":
 
             text = gpt_reply(
                 history,
-                f"{line} We can build gently from here."
+                "Alright. Stay with that. We can build slowly from here."
             )
-
             return {"step": "continue", "text": text, "memory": memory}
 
         text = gpt_reply(
             history,
-            f'User said: "{user_text}". Stay practical and keep suggestions energy-appropriate.'
+            f'User said: "{user_text}". Keep suggestions small and energy-appropriate.'
         )
 
         return {"step": "continue", "text": text, "memory": memory}
